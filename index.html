@@ -3,50 +3,124 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WhereToApply — Universities &amp; Social Science Fields</title>
+<title>WhereToApply — Find Your Bachelor's Program</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header class="site-header">
     <div class="header-inner">
       <h1>WhereToApply</h1>
-      <p class="tagline">A library of the world's top 100 universities, paired with a bachelor's field guide built around the social sciences.</p>
+      <p class="tagline">Enter your IB profile and interests to find the best-fit social science bachelor's programs at the world's top 100 universities.</p>
     </div>
   </header>
 
-  <nav class="tabs" role="tablist">
-    <button class="tab-btn active" data-tab="universities" role="tab" aria-selected="true">Universities</button>
-    <button class="tab-btn" data-tab="bachelors" role="tab" aria-selected="false">Social Science Fields</button>
-  </nav>
-
   <main class="container">
-    <section id="universities" class="tab-panel active">
-      <div class="controls">
-        <input type="search" id="uni-search" placeholder="Search universities by name...">
-        <select id="uni-country-filter">
-          <option value="">All countries</option>
-        </select>
+
+    <section id="wizard-view">
+      <div class="wizard-steps" id="wizard-steps">
+        <span class="wizard-step-dot active" data-step="1">1. Subjects</span>
+        <span class="wizard-step-dot" data-step="2">2. Core Points</span>
+        <span class="wizard-step-dot" data-step="3">3. Interests</span>
+        <span class="wizard-step-dot" data-step="4">4. Filters</span>
       </div>
-      <p class="result-count" id="uni-count"></p>
-      <div class="card-grid" id="uni-list"></div>
+
+      <div class="wizard-panel active" id="wizard-step-1">
+        <h2 class="wizard-title">Your IB subjects</h2>
+        <p class="wizard-help">Enter your six IB Diploma subjects and your predicted (or actual) grade for each, 1&ndash;7.</p>
+        <div class="subject-grid" id="subject-grid"></div>
+      </div>
+
+      <div class="wizard-panel" id="wizard-step-2">
+        <h2 class="wizard-title">TOK / Extended Essay core points</h2>
+        <p class="wizard-help">Your combined Theory of Knowledge and Extended Essay score, out of 3 bonus points.</p>
+        <select id="core-points">
+          <option value="0">0 out of 3</option>
+          <option value="1">1 out of 3</option>
+          <option value="2">2 out of 3</option>
+          <option value="3">3 out of 3</option>
+        </select>
+        <p class="wizard-total" id="wizard-total"></p>
+      </div>
+
+      <div class="wizard-panel" id="wizard-step-3">
+        <h2 class="wizard-title">What are you interested in?</h2>
+        <p class="wizard-help">Pick one or more fields. Leave all unchecked to see every field.</p>
+        <div class="interest-grid" id="interest-grid"></div>
+      </div>
+
+      <div class="wizard-panel" id="wizard-step-4">
+        <h2 class="wizard-title">Filters</h2>
+        <p class="wizard-help">Optional — narrow the results. Leave blank to include everything.</p>
+        <div class="filter-grid">
+          <label class="filter-field">
+            <span>Continent</span>
+            <select id="filter-continent">
+              <option value="">Any continent</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Country</span>
+            <select id="filter-country">
+              <option value="">Any country</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>QS World Ranking</span>
+            <select id="filter-rank">
+              <option value="">Any ranking</option>
+              <option value="10">Top 10</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+              <option value="100">Top 100 (all)</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Tuition ceiling (USD/year)</span>
+            <input type="number" id="filter-tuition" placeholder="e.g. 40000" min="0" step="1000">
+          </label>
+        </div>
+      </div>
+
+      <div class="wizard-nav">
+        <button class="btn-secondary" id="wizard-back" hidden>Back</button>
+        <button class="btn-secondary" id="wizard-skip">Skip &amp; browse all programs</button>
+        <button class="btn-primary" id="wizard-next">Next</button>
+      </div>
     </section>
 
-    <section id="bachelors" class="tab-panel">
+    <section id="results-view" hidden>
+      <div class="results-bar">
+        <div>
+          <p class="results-summary" id="results-summary"></p>
+          <p class="results-total" id="results-total-points"></p>
+        </div>
+        <button class="btn-secondary" id="edit-preferences">Edit preferences</button>
+      </div>
       <div class="controls">
-        <input type="search" id="deg-search" placeholder="Search social science fields...">
-        <select id="deg-type-filter">
-          <option value="">All degree types</option>
+        <input type="search" id="results-search" placeholder="Search programs or universities...">
+        <select id="results-sort">
+          <option value="relevance">Sort by relevance</option>
+          <option value="rank">Sort by university ranking</option>
+          <option value="name">Sort alphabetically</option>
         </select>
       </div>
-      <p class="result-count" id="deg-count"></p>
-      <div class="card-grid" id="deg-list"></div>
+      <p class="result-count" id="results-count"></p>
+      <div class="card-grid" id="results-list"></div>
     </section>
+
   </main>
 
   <footer class="site-footer">
     <p>University rankings sourced from the <a href="https://www.topuniversities.com/world-university-rankings/2026" target="_blank" rel="noopener">QS World University Rankings 2026</a>, official results, ranks 1&ndash;100.
-    Social science field definitions drawn from common discipline classifications used by university social science departments and the <a href="https://nces.ed.gov/fastfacts/display.asp?id=37" target="_blank" rel="noopener">National Center for Education Statistics</a>.</p>
+    Program competitiveness and IB entry requirements are individually sourced per university (cited on each program's page) where a university publishes them; where not published, this is stated plainly and a labeled estimate is shown instead. Tuition figures are approximate annual international-student sticker prices, sourced per university.</p>
   </footer>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button id="modal-close" class="modal-close" aria-label="Close">&times;</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
