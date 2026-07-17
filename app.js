@@ -5696,6 +5696,43 @@ function effectiveIBRange(u) {
   return null;
 }
 
+// ---------- IB subject list ----------
+
+const IB_SUBJECT_GROUPS = [
+  {
+    group: "Studies in Language & Literature",
+    subjects: ["English A: Literature", "English A: Language and Literature", "Spanish A: Literature", "French A: Literature", "Literature and Performance", "Other Language A"],
+  },
+  {
+    group: "Language Acquisition",
+    subjects: ["English B", "French B", "Spanish B", "German B", "Mandarin B", "English Ab Initio", "French Ab Initio", "Spanish Ab Initio", "Other Language B"],
+  },
+  {
+    group: "Individuals & Societies",
+    subjects: ["Business Management", "Economics", "Geography", "History", "Philosophy", "Psychology", "Global Politics", "Social and Cultural Anthropology", "Digital Society", "World Religions"],
+  },
+  {
+    group: "Sciences",
+    subjects: ["Biology", "Chemistry", "Physics", "Computer Science", "Design Technology", "Environmental Systems and Societies", "Sports, Exercise and Health Science"],
+  },
+  {
+    group: "Mathematics",
+    subjects: ["Mathematics: Analysis and Approaches", "Mathematics: Applications and Interpretation"],
+  },
+  {
+    group: "The Arts",
+    subjects: ["Visual Arts", "Music", "Theatre", "Film", "Dance"],
+  },
+];
+
+function subjectOptionsHtml(selected) {
+  return `<option value="">Choose a subject</option>` + IB_SUBJECT_GROUPS.map(g => `
+    <optgroup label="${g.group}">
+      ${g.subjects.map(s => `<option value="${s}" ${selected === s ? "selected" : ""}>${s}</option>`).join("")}
+    </optgroup>
+  `).join("");
+}
+
 // ---------- Wizard state ----------
 
 const wizardState = {
@@ -5719,36 +5756,36 @@ function hasIBProfile() {
 
 // ---------- Wizard: subjects step ----------
 
+function renderSubjectColumn(container, index, level) {
+  if (!wizardState.subjects[index]) wizardState.subjects[index] = { name: "", level, grade: null };
+  const s = wizardState.subjects[index];
+  s.level = level;
+  const col = document.createElement("div");
+  col.className = "subject-column";
+  col.innerHTML = `
+    <select class="subject-name">${subjectOptionsHtml(s.name)}</select>
+    <select class="subject-grade">
+      <option value="">Grade</option>
+      ${[7, 6, 5, 4, 3, 2, 1].map(g => `<option value="${g}" ${s.grade === g ? "selected" : ""}>${g}</option>`).join("")}
+    </select>
+  `;
+  const nameSelect = col.querySelector(".subject-name");
+  const gradeSelect = col.querySelector(".subject-grade");
+  nameSelect.addEventListener("change", () => { wizardState.subjects[index].name = nameSelect.value; });
+  gradeSelect.addEventListener("change", () => {
+    wizardState.subjects[index].grade = gradeSelect.value ? Number(gradeSelect.value) : null;
+    updateWizardTotal();
+  });
+  container.appendChild(col);
+}
+
 function renderSubjectGrid() {
-  const grid = document.getElementById("subject-grid");
-  grid.innerHTML = "";
-  for (let i = 0; i < 6; i++) {
-    if (!wizardState.subjects[i]) wizardState.subjects[i] = { name: "", level: "HL", grade: null };
-    const s = wizardState.subjects[i];
-    const row = document.createElement("div");
-    row.className = "subject-row";
-    row.innerHTML = `
-      <input type="text" class="subject-name" placeholder="Subject ${i + 1} (e.g. Economics)" value="${s.name}">
-      <select class="subject-level">
-        <option value="HL" ${s.level === "HL" ? "selected" : ""}>HL</option>
-        <option value="SL" ${s.level === "SL" ? "selected" : ""}>SL</option>
-      </select>
-      <select class="subject-grade">
-        <option value="">Grade</option>
-        ${[7, 6, 5, 4, 3, 2, 1].map(g => `<option value="${g}" ${s.grade === g ? "selected" : ""}>${g}</option>`).join("")}
-      </select>
-    `;
-    const nameInput = row.querySelector(".subject-name");
-    const levelSelect = row.querySelector(".subject-level");
-    const gradeSelect = row.querySelector(".subject-grade");
-    nameInput.addEventListener("input", () => { wizardState.subjects[i].name = nameInput.value; });
-    levelSelect.addEventListener("change", () => { wizardState.subjects[i].level = levelSelect.value; });
-    gradeSelect.addEventListener("change", () => {
-      wizardState.subjects[i].grade = gradeSelect.value ? Number(gradeSelect.value) : null;
-      updateWizardTotal();
-    });
-    grid.appendChild(row);
-  }
+  const hlGrid = document.getElementById("subject-grid-hl");
+  const slGrid = document.getElementById("subject-grid-sl");
+  hlGrid.innerHTML = "";
+  slGrid.innerHTML = "";
+  for (let i = 0; i < 3; i++) renderSubjectColumn(hlGrid, i, "HL");
+  for (let i = 3; i < 6; i++) renderSubjectColumn(slGrid, i, "SL");
   updateWizardTotal();
 }
 

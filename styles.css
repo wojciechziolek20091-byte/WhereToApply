@@ -118,26 +118,50 @@ body {
   line-height: 1.5;
 }
 
+.subject-section-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  margin: 0 0 0.6rem;
+}
+
+.subject-section-title-sl {
+  margin-top: 1.5rem;
+  color: var(--text-muted);
+}
+
 .subject-grid {
   display: grid;
-  gap: 0.6rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
 }
 
-.subject-row {
-  display: grid;
-  grid-template-columns: 1fr 90px 100px;
-  gap: 0.6rem;
+.subject-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
 }
 
-.subject-row input[type="text"],
-.subject-row select {
+.subject-column select {
   padding: 0.55rem 0.7rem;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 0.92rem;
+  font-size: 0.88rem;
+  width: 100%;
+}
+
+.subject-column .subject-grade { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) {
+  .subject-grid { grid-template-columns: 1fr; }
 }
 
 #core-points {
