@@ -6101,6 +6101,13 @@ function setupModal() {
 
 // ---------- Init ----------
 
+function setupWelcome() {
+  document.getElementById("welcome-start").addEventListener("click", () => {
+    document.getElementById("welcome-view").hidden = true;
+    document.getElementById("wizard-view").hidden = false;
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   renderSubjectGrid();
   renderInterestGrid();
@@ -6109,6 +6116,7 @@ document.addEventListener("DOMContentLoaded", () => {
     wizardState.corePoints = Number(e.target.value);
     updateWizardTotal();
   });
+  setupWelcome();
   setupWizardNav();
   setupResultsListeners();
   setupModal();
@@ -6116,6 +6124,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const initialMatch = location.hash.match(/^#program\/(.+)$/);
   if (initialMatch && programEntryBySlug.has(initialMatch[1])) {
+    document.getElementById("welcome-view").hidden = true;
     showResults();
     openProgramModal(initialMatch[1], false);
   }

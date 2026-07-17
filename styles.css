@@ -101,6 +101,30 @@ body {
   padding: 0 1.5rem;
 }
 
+/* ---- Welcome ---- */
+
+.welcome-view {
+  padding: 3rem 0 3.5rem;
+  max-width: 640px;
+}
+
+.welcome-title {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 2.4rem;
+  line-height: 1.15;
+  margin: 0 0 1.1rem;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.welcome-copy {
+  font-size: 1.05rem;
+  line-height: 1.65;
+  color: var(--text-muted);
+  margin: 0 0 2rem;
+}
+
 /* ---- Wizard ---- */
 
 .wizard-steps {
