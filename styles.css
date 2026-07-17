@@ -1,29 +1,61 @@
 /*
-  WhereToApply — deliberately single-theme (no dark mode).
-  Palette: white ground, deep navy ink, a muted brass accent for
-  rank/type badges — a classic library card-catalogue register.
-    --bg      #ffffff
-    --text    #14213d
-    --accent  #14213d (navy, primary)
-    --gold    #96773a (brass, secondary — badges only)
-  Type: a high-contrast display serif (Didot/Bodoni register) for
-  headings, paired with a humanist sans (Optima register) for body
-  copy and UI chrome — a classic editorial pairing.
+  WhereToApply: deliberately single-theme (no dark mode).
+  Palette (from brand mood board): white ground, deep teal ink, a
+  bright teal accent, sage and slate-blue tints for secondary surfaces.
+    --bg             #ffffff
+    --text           #2A505A (deep teal ink)
+    --text-muted     #505052 (neutral grey)
+    --accent         #015A76 (bright teal, primary)
+    --accent-soft    #C9D9DD (pale slate-blue tint)
+    --secondary-soft #C9D6D0 (pale sage tint)
+  Type: Alfa Slab One as the display face, used sparingly for the
+  wordmark and major headings; Montserrat for everything else.
 */
+
+@font-face {
+  font-family: "Alfa Slab One";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/alfaslabone-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/montserrat-400.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/montserrat-600.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Montserrat";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/montserrat-700.woff2") format("woff2");
+}
 
 :root {
   --bg: #ffffff;
   --surface: #ffffff;
-  --text: #14213d;
-  --text-muted: #545f7d;
-  --border: #dadfec;
-  --accent: #14213d;
-  --accent-soft: #eef1f8;
-  --gold: #96773a;
-  --gold-soft: #f5efe1;
+  --text: #2A505A;
+  --text-muted: #505052;
+  --border: rgba(42, 80, 90, 0.18);
+  --accent: #015A76;
+  --accent-soft: #C9D9DD;
+  --secondary-soft: #C9D6D0;
   --radius: 6px;
-  --font-display: Didot, "Bodoni MT", "Big Caslon", "Hoefler Text", Georgia, "Times New Roman", serif;
-  --font-body: Optima, Candara, "Century Gothic", "Segoe UI", "Trebuchet MS", sans-serif;
+  --font-display: "Alfa Slab One", "Arial Black", sans-serif;
+  --font-body: "Montserrat", "Helvetica Neue", Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -95,9 +127,9 @@ body {
 }
 
 .wizard-step-dot.done {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--secondary-soft);
 }
 
 .wizard-panel { display: none; }
@@ -123,7 +155,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--gold);
+  color: var(--accent);
   margin: 0 0 0.6rem;
 }
 
@@ -289,7 +321,7 @@ body {
 
 .results-total {
   margin: 0;
-  color: var(--gold);
+  color: var(--accent);
   font-weight: 600;
   font-size: 0.88rem;
   font-variant-numeric: tabular-nums;
@@ -404,18 +436,18 @@ body {
 
 .card h3 {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  font-weight: 400;
-  line-height: 1.3;
+  font-family: var(--font-body);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.35;
   text-wrap: balance;
   color: var(--text);
 }
 
 .badge {
   flex-shrink: 0;
-  background: var(--gold-soft);
-  color: var(--gold);
+  background: var(--secondary-soft);
+  color: var(--accent);
   font-family: var(--font-body);
   font-size: 0.72rem;
   font-weight: 700;
@@ -489,13 +521,13 @@ select:focus-visible {
 
 .card.clickable:hover {
   border-color: var(--text);
-  box-shadow: 0 2px 10px rgba(20, 33, 61, 0.08);
+  box-shadow: 0 2px 10px rgba(42, 80, 90, 0.08);
 }
 
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(20, 33, 61, 0.45);
+  background: rgba(42, 80, 90, 0.45);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -513,7 +545,7 @@ select:focus-visible {
   max-width: 720px;
   width: 100%;
   padding: 2.25rem 2.25rem 2.5rem;
-  box-shadow: 0 20px 60px rgba(20, 33, 61, 0.25);
+  box-shadow: 0 20px 60px rgba(42, 80, 90, 0.25);
 }
 
 .modal-close {

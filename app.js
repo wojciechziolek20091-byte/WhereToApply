@@ -164,7 +164,7 @@ const universities = [
       {
         "field": "Sociology",
         "programName": "Human Sciences",
-        "competitiveness": "13% acceptance rate (193 applicants, 26 accepted, 2023 entry) — Oxford's only route to undergraduate Sociology",
+        "competitiveness": "13% acceptance rate (193 applicants, 26 accepted, 2023 entry); Oxford's only route to undergraduate Sociology",
         "sourceUrl": "https://oxbridgeapplications.com/resource/oxford-success-rates/"
       },
       {
@@ -284,7 +284,7 @@ const universities = [
       {
         "field": "Political Science",
         "programName": "Human, Social, and Political Sciences (HSPS)",
-        "competitiveness": "15.25% offer rate (1,436 applications, 219 offers, 2023/24) — combined route also covering Sociology, Anthropology, International Relations",
+        "competitiveness": "15.25% offer rate (1,436 applications, 219 offers, 2023/24); combined route also covering Sociology, Anthropology, International Relations",
         "sourceUrl": "https://www.savemyexams.com/learning-hub/university-acceptance-rates/uoc/sociology-and-anthropology/human-social-and-political-scis/"
       },
       {
@@ -511,19 +511,19 @@ const universities = [
       {
         "field": "History",
         "programName": "Bachelor of Arts (JS6054)",
-        "competitiveness": "JUPAS expected score 28 (2025) — also houses Linguistics and Gender Studies majors, chosen after Year 1",
+        "competitiveness": "JUPAS expected score 28 (2025); also houses Linguistics and Gender Studies majors, chosen after Year 1",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
         "field": "Linguistics",
         "programName": "Bachelor of Arts (JS6054)",
-        "competitiveness": "JUPAS expected score 28 (2025) — shared BA entry point",
+        "competitiveness": "JUPAS expected score 28 (2025); shared BA entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
         "field": "Gender, Sexuality & Women's Studies",
         "programName": "Bachelor of Arts (JS6054)",
-        "competitiveness": "JUPAS expected score 28 (2025) — shared BA entry point",
+        "competitiveness": "JUPAS expected score 28 (2025); shared BA entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
@@ -541,25 +541,25 @@ const universities = [
       {
         "field": "Political Science",
         "programName": "Bachelor of Social Sciences (BSocSc)",
-        "competitiveness": "JUPAS expected score 24 (2025) — shared entry point, majors chosen after Year 1",
+        "competitiveness": "JUPAS expected score 24 (2025); shared entry point, majors chosen after Year 1",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
         "field": "Sociology",
         "programName": "Bachelor of Social Sciences (BSocSc)",
-        "competitiveness": "JUPAS expected score 24 (2025) — shared entry point",
+        "competitiveness": "JUPAS expected score 24 (2025); shared entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
         "field": "Public Administration & Policy",
         "programName": "Bachelor of Social Sciences (BSocSc)",
-        "competitiveness": "JUPAS expected score 24 (2025) — shared entry point",
+        "competitiveness": "JUPAS expected score 24 (2025); shared entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
         "field": "Human Geography",
         "programName": "Bachelor of Social Sciences (BSocSc)",
-        "competitiveness": "JUPAS expected score 24 (2025) — shared entry point",
+        "competitiveness": "JUPAS expected score 24 (2025); shared entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
@@ -841,7 +841,7 @@ const universities = [
     "tuitionDisplay": "$73,946/yr (endowed colleges incl. Arts & Sciences)",
     "tuitionUSD": 73946,
     "tuitionSource": "https://bursar.cornell.edu/students-parents/tuition-rates-and-fees",
-    "ibDisplay": "Not published — Cornell states there is no minimum score and uses fully holistic review",
+    "ibDisplay": "Not published: Cornell states there is no minimum score and uses fully holistic review",
     "ibMin": null,
     "ibMax": null,
     "ibOfficial": true,
@@ -947,7 +947,7 @@ const universities = [
     "country": "United States",
     "site": "https://www.berkeley.edu",
     "slug": "university-of-california-berkeley-ucb",
-    "description": "The public flagship of the University of California system, founded in 1868 in Berkeley. Consistently ranked the top public university in the US, globally renowned across sciences, engineering, and social sciences — notably economics.",
+    "description": "The public flagship of the University of California system, founded in 1868 in Berkeley. Consistently ranked the top public university in the US, globally renowned across sciences, engineering, and social sciences, notably economics.",
     "competitivenessScope": "university-wide",
     "overallAcceptanceRate": "11.4% (Fall 2024, official)",
     "overallAcceptanceSource": "https://admission.universityofcalifornia.edu/campuses-majors/berkeley/first-year-admit-data.html",
@@ -1010,7 +1010,7 @@ const universities = [
     "country": "Australia",
     "site": "https://www.unimelb.edu.au",
     "slug": "the-university-of-melbourne",
-    "description": "A public research university in Melbourne, Australia, founded in 1853 — the country's second-oldest university. Consistently ranked #1 in Australia, known for the \"Melbourne Model\" of broad undergraduate degrees feeding into professional and graduate study.",
+    "description": "A public research university in Melbourne, Australia, founded in 1853, the country's second-oldest university. Consistently ranked #1 in Australia, known for the \"Melbourne Model\" of broad undergraduate degrees feeding into professional and graduate study.",
     "competitivenessScope": "per-program",
     "tuitionDisplay": "Bachelor of Arts ~AUD 40,000-44,000/yr (~$26,000-29,000); Bachelor of Commerce ~AUD 54,463-63,316/yr (~$36,000-42,000)",
     "tuitionUSD": 30000,
@@ -1030,7 +1030,7 @@ const universities = [
       {
         "field": "Political Science",
         "programName": "Politics and International Studies (via BA)",
-        "competitiveness": "Guaranteed ATAR 88.0 (2026; one source cites a lower 83.0 — unresolved discrepancy)",
+        "competitiveness": "Guaranteed ATAR 88.0 (2026; one source cites a lower, unresolved figure of 83.0)",
         "sourceUrl": "https://study.unimelb.edu.au/find/courses/undergraduate/bachelor-of-arts/entry-requirements/"
       },
       {
@@ -1131,13 +1131,13 @@ const universities = [
       },
       {
         "field": "International Relations",
-        "programName": "Arts — Politics and International Relations major",
+        "programName": "Arts (Politics and International Relations major)",
         "competitiveness": "IB 28 / ATAR 75",
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
       },
       {
         "field": "Sociology",
-        "programName": "Arts — Sociology major",
+        "programName": "Arts (Sociology major)",
         "competitiveness": "IB 28 / ATAR 75",
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
       },
@@ -1538,7 +1538,7 @@ const universities = [
     "country": "France",
     "site": "https://psl.eu",
     "slug": "psl-university",
-    "description": "PSL (Paris Sciences & Lettres) is a federal university formed in 2010 uniting Parisian grandes écoles and research institutes, including École Normale Supérieure and Université Paris-Dauphine. Social science offerings vary sharply by constituent school — strongest in economics and management at Dauphine and the humanities at ENS.",
+    "description": "PSL (Paris Sciences & Lettres) is a federal university formed in 2010 uniting Parisian grandes écoles and research institutes, including École Normale Supérieure and Université Paris-Dauphine. Social science offerings vary sharply by constituent school, strongest in economics and management at Dauphine and the humanities at ENS.",
     "programs": [
       {
         "field": "Economics"
@@ -2327,7 +2327,7 @@ const universities = [
     "country": "France",
     "site": "https://www.ip-paris.fr",
     "slug": "institut-polytechnique-de-paris",
-    "description": "Institut Polytechnique de Paris is a federation of elite French engineering grandes écoles — including École Polytechnique, Télécom Paris, and ENSTA Paris — formed in 2019. Its bachelor's-level offerings are almost entirely engineering and applied science, with economics taught mainly as a component of the engineering curriculum.",
+    "description": "Institut Polytechnique de Paris is a federation of elite French engineering grandes écoles (including École Polytechnique, Télécom Paris, and ENSTA Paris) formed in 2019. Its bachelor's-level offerings are almost entirely engineering and applied science, with economics taught mainly as a component of the engineering curriculum.",
     "programs": [
       {
         "field": "Economics"
@@ -3041,7 +3041,7 @@ const universities = [
     "country": "United Kingdom",
     "site": "https://www.lse.ac.uk",
     "slug": "london-school-of-economics-and-political-science-lse",
-    "description": "Founded in 1895 and part of the University of London, LSE is a university built specifically around the social sciences — it has no engineering or natural science faculty. Its economics, political science, and social policy departments are among the most influential in the world.",
+    "description": "Founded in 1895 and part of the University of London, LSE is a university built specifically around the social sciences: it has no engineering or natural science faculty. Its economics, political science, and social policy departments are among the most influential in the world.",
     "programs": [
       {
         "field": "Economics"
@@ -5578,15 +5578,15 @@ const universities = [
 
 const bachelorFields = [
   { name: "Economics", type: "BA/BS", note: "Core discipline", description: "The study of production, markets, and decision-making under scarcity; the most quantitative of the core social sciences." },
-  { name: "Political Science", type: "BA", note: "Core discipline", description: "Government institutions, political behavior, and power — from local policy to comparative and international systems." },
+  { name: "Political Science", type: "BA", note: "Core discipline", description: "Government institutions, political behavior, and power, from local policy to comparative and international systems." },
   { name: "Sociology", type: "BA/BS", note: "Core discipline", description: "How social structures, institutions, and group life shape human behavior and inequality." },
   { name: "Psychology", type: "BA/BS", note: "Core discipline", description: "The scientific study of mind and behavior; consistently one of the most-enrolled social science majors." },
   { name: "Anthropology", type: "BA", note: "Core discipline", description: "Human societies and cultures across time, studied through ethnography, archaeology, and biological anthropology." },
   { name: "International Relations", type: "BA", note: "Applied field", description: "Diplomacy, conflict, and cooperation between states, often paired with economics or regional studies." },
   { name: "Criminology & Criminal Justice", type: "BA/BS", note: "Applied field", description: "Causes of crime, policing, and the justice system, drawing on sociology, law, and psychology." },
-  { name: "Human Geography", type: "BA/BS", note: "Core discipline", description: "How people, cities, and economies are distributed across space — distinct from physical geography." },
+  { name: "Human Geography", type: "BA/BS", note: "Core discipline", description: "How people, cities, and economies are distributed across space, distinct from physical geography." },
   { name: "Social Work", type: "BSW", note: "Applied field", description: "Direct practice supporting individuals, families, and communities; the licensed, practice-facing wing of the social sciences." },
-  { name: "Public Administration & Policy", type: "BA", note: "Applied field", description: "How governments design, fund, and evaluate policy — a common bridge into public-sector and NGO careers." },
+  { name: "Public Administration & Policy", type: "BA", note: "Applied field", description: "How governments design, fund, and evaluate policy; a common bridge into public-sector and NGO careers." },
   { name: "Communication Studies", type: "BA", note: "Applied field", description: "Media, persuasion, and interpersonal communication, from mass media theory to organizational communication." },
   { name: "Urban Studies & Planning", type: "BA/BS", note: "Applied field", description: "How cities grow, are governed, and are designed, combining geography, sociology, and policy." },
   { name: "International Development", type: "BA", note: "Applied field", description: "Global poverty, aid, and growth, drawing on economics, political science, and area studies." },
@@ -5962,7 +5962,7 @@ function renderResultsSummary() {
     : "Showing all social science programs";
   document.getElementById("results-total-points").textContent = hasProfile
     ? `Your IB total: ${totalIB} / 45`
-    : "No IB profile entered — results are unranked by fit";
+    : "No IB profile entered: results are unranked by fit";
 }
 
 function programCardHtml(entry) {
@@ -6017,15 +6017,15 @@ function programModalHtml(entry) {
     : "";
 
   const reqHtml = ib
-    ? `<p class="modal-admission-line">${ib.official ? "Published requirement" : "Estimated equivalent — not officially published"}: <strong>${ib.min}${ib.max && ib.max !== ib.min ? `–${ib.max}` : ""} / 45 points</strong>${ib.source ? ` — <a href="${ib.source}" target="_blank" rel="noopener">source</a>` : ""}</p>`
+    ? `<p class="modal-admission-line">${ib.official ? "Published requirement" : "Estimated equivalent (unofficial)"}: <strong>${ib.min}${ib.max && ib.max !== ib.min ? `–${ib.max}` : ""} / 45 points</strong>${ib.source ? ` · <a href="${ib.source}" target="_blank" rel="noopener">source</a>` : ""}</p>`
     : `<p class="modal-admission-line">Insufficient published data to estimate a required IB score for this university.</p>`;
 
   const compHtml = entry.competitiveness
-    ? `<p class="modal-admission-line">Program-specific competitiveness: ${entry.competitiveness}${entry.sourceUrl ? ` — <a href="${entry.sourceUrl}" target="_blank" rel="noopener">source</a>` : ""}</p>`
+    ? `<p class="modal-admission-line">Program-specific competitiveness: ${entry.competitiveness}${entry.sourceUrl ? ` · <a href="${entry.sourceUrl}" target="_blank" rel="noopener">source</a>` : ""}</p>`
     : "";
 
   const tuitionHtml = u.tuitionDisplay
-    ? `<p class="modal-admission-line">Tuition (international, annual): ${u.tuitionDisplay}${u.tuitionSource ? ` — <a href="${u.tuitionSource}" target="_blank" rel="noopener">source</a>` : ""}</p>`
+    ? `<p class="modal-admission-line">Tuition (international, annual): ${u.tuitionDisplay}${u.tuitionSource ? ` · <a href="${u.tuitionSource}" target="_blank" rel="noopener">source</a>` : ""}</p>`
     : "";
 
   return `
