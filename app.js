@@ -5672,8 +5672,9 @@ function estimateIBFromAcceptanceRate(rateStr) {
 }
 
 function effectiveIBRange(u) {
+  let range;
   if (u.ibMin != null) {
-    return {
+    range = {
       min: u.ibMin,
       max: u.ibMax != null ? u.ibMax : u.ibMin,
       official: !!u.ibOfficial,
@@ -5681,10 +5682,10 @@ function effectiveIBRange(u) {
       display: u.ibDisplay,
       estimated: false,
     };
-  }
-  const est = estimateIBFromAcceptanceRate(u.overallAcceptanceRate);
-  if (est) {
-    return {
+  } else {
+    const est = estimateIBFromAcceptanceRate(u.overallAcceptanceRate);
+    if (!est) return null;
+    range = {
       min: est.min,
       max: est.max,
       official: false,
@@ -5693,7 +5694,19 @@ function effectiveIBRange(u) {
       estimated: true,
     };
   }
-  return null;
+
+  if (u.recommendedScore != null) {
+    range.recommended = u.recommendedScore;
+    range.recommendedBasis = u.recommendedBasis || (u.recommendedOfficial ? "Published requirement" : "Sourced admitted-student data");
+    range.recommendedSource = u.recommendedSource || range.source;
+  } else {
+    range.recommended = range.max;
+    range.recommendedBasis = range.official
+      ? "Upper end of the published requirement"
+      : (range.estimated ? "Inferred from overall acceptance rate" : "Upper end of a sourced estimate");
+    range.recommendedSource = range.source;
+  }
+  return range;
 }
 
 // ---------- IB subject list ----------
@@ -5872,6 +5885,22 @@ function goToStep(step) {
   document.getElementById("wizard-next").textContent = step === 4 ? "Show my matches" : "Next";
 }
 
+function clearInterestsAndFilters() {
+  wizardState.interests = new Set();
+  wizardState.filters = { continent: "", country: "", rankMax: "", tuition: "" };
+  document.querySelectorAll(".interest-chip input[type=checkbox]").forEach(cb => { cb.checked = false; });
+  document.getElementById("filter-continent").value = "";
+  document.getElementById("filter-rank").value = "";
+  document.getElementById("filter-tuition").value = "";
+  populateCountrySelect();
+  document.getElementById("filter-country").value = "";
+}
+
+function showAllPrograms() {
+  clearInterestsAndFilters();
+  showResults();
+}
+
 function setupWizardNav() {
   document.getElementById("wizard-next").addEventListener("click", () => {
     if (wizardState.step < 4) {
@@ -5884,7 +5913,7 @@ function setupWizardNav() {
     if (wizardState.step > 1) goToStep(wizardState.step - 1);
   });
   document.getElementById("wizard-skip").addEventListener("click", () => {
-    showResults();
+    showAllPrograms();
   });
 }
 
@@ -5907,23 +5936,20 @@ function computeMatches() {
 
   return results.map(entry => {
     const ib = effectiveIBRange(entry.university);
-    let fitScore = null;
-    let fitLabel = "Enter your IB profile to see a fit score";
+    let confidenceScore = null;
+    let confidenceLabel = "Enter your IB profile to see an admission confidence estimate";
     if (hasProfile) {
       if (!ib) {
-        fitScore = 60;
-        fitLabel = "Not enough admissions data published to estimate fit";
-      } else if (totalIB >= ib.min) {
-        fitScore = 100;
-        const rangeText = ib.max && ib.max !== ib.min ? `${ib.min}–${ib.max}` : `${ib.min}`;
-        fitLabel = `Meets the ${ib.estimated ? "estimated" : "published"} requirement (${rangeText} pts)`;
+        confidenceLabel = "Not enough admissions data published to estimate confidence";
       } else {
-        const gap = ib.min - totalIB;
-        fitScore = Math.max(0, 100 - gap * 12);
-        fitLabel = `${gap} point${gap === 1 ? "" : "s"} below the ${ib.estimated ? "estimated" : "published"} requirement (${ib.min} pts)`;
+        const gap = totalIB - ib.recommended;
+        confidenceScore = Math.max(5, Math.min(95, Math.round(70 + gap * 8)));
+        confidenceLabel = gap >= 0
+          ? `Your ${totalIB} meets the recommended ${ib.recommended} pts (${ib.recommendedBasis})`
+          : `${Math.abs(gap)} point${Math.abs(gap) === 1 ? "" : "s"} below the recommended ${ib.recommended} pts (${ib.recommendedBasis})`;
       }
     }
-    return { ...entry, ib, fitScore, fitLabel, totalIB, hasProfile };
+    return { ...entry, ib, confidenceScore, confidenceLabel, totalIB, hasProfile };
   });
 }
 
@@ -5935,8 +5961,8 @@ function sortResults(results, sortBy) {
     arr.sort((a, b) => a.programName.localeCompare(b.programName));
   } else {
     arr.sort((a, b) => {
-      const fa = a.fitScore == null ? 50 : a.fitScore;
-      const fb = b.fitScore == null ? 50 : b.fitScore;
+      const fa = a.confidenceScore == null ? 50 : a.confidenceScore;
+      const fb = b.confidenceScore == null ? 50 : b.confidenceScore;
       if (fb !== fa) return fb - fa;
       return a.university.rank - b.university.rank;
     });
@@ -5962,11 +5988,17 @@ function renderResultsSummary() {
     : "Showing all social science programs";
   document.getElementById("results-total-points").textContent = hasProfile
     ? `Your IB total: ${totalIB} / 45`
-    : "No IB profile entered: results are unranked by fit";
+    : "No IB profile entered: results are unranked by confidence";
+}
+
+function confidenceBand(score) {
+  if (score >= 75) return "High";
+  if (score >= 40) return "Moderate";
+  return "Low";
 }
 
 function programCardHtml(entry) {
-  const badge = entry.fitScore == null ? "" : `<span class="badge match-badge">${Math.round(entry.fitScore)}% fit</span>`;
+  const badge = entry.confidenceScore == null ? "" : `<span class="badge confidence-badge confidence-${confidenceBand(entry.confidenceScore).toLowerCase()}">${Math.round(entry.confidenceScore)}% confidence</span>`;
   return `
     <div class="card clickable" data-slug="${entry.slug}" role="button" tabindex="0" aria-haspopup="dialog">
       <div class="card-top">
@@ -6004,6 +6036,9 @@ function setupResultsListeners() {
     document.getElementById("wizard-view").hidden = false;
     goToStep(1);
   });
+  document.getElementById("see-all-programs").addEventListener("click", () => {
+    showAllPrograms();
+  });
 }
 
 // ---------- Program detail modal ----------
@@ -6012,13 +6047,26 @@ function programModalHtml(entry) {
   const u = entry.university;
   const ib = entry.ib || effectiveIBRange(u);
 
-  const fitHtml = entry.hasProfile && entry.fitScore != null
-    ? `<div class="modal-fit"><span class="fit-score">${Math.round(entry.fitScore)}% fit</span><span class="fit-label">${entry.fitLabel}</span></div>`
+  const confidenceHtml = entry.hasProfile && entry.confidenceScore != null
+    ? `<div class="modal-confidence confidence-${confidenceBand(entry.confidenceScore).toLowerCase()}">
+         <span class="confidence-score">${Math.round(entry.confidenceScore)}%</span>
+         <div>
+           <span class="confidence-band">${confidenceBand(entry.confidenceScore)} confidence</span>
+           <span class="confidence-label">${entry.confidenceLabel}</span>
+         </div>
+       </div>`
     : "";
 
-  const reqHtml = ib
-    ? `<p class="modal-admission-line">${ib.official ? "Published requirement" : "Estimated equivalent (unofficial)"}: <strong>${ib.min}${ib.max && ib.max !== ib.min ? `–${ib.max}` : ""} / 45 points</strong>${ib.source ? ` · <a href="${ib.source}" target="_blank" rel="noopener">source</a>` : ""}</p>`
-    : `<p class="modal-admission-line">Insufficient published data to estimate a required IB score for this university.</p>`;
+  const recommendedHtml = ib
+    ? `<p class="modal-admission-line">Recommended score to secure a spot: <strong>${ib.recommended} / 45 points</strong> (${ib.recommendedBasis})${ib.recommendedSource ? ` · <a href="${ib.recommendedSource}" target="_blank" rel="noopener">source</a>` : ""}</p>`
+    : "";
+
+  const rangeAddsInfo = ib && (ib.min !== ib.recommended || ib.max !== ib.recommended);
+  const reqHtml = !ib
+    ? `<p class="modal-admission-line">Insufficient published data to estimate a required IB score for this university.</p>`
+    : rangeAddsInfo
+      ? `<p class="modal-admission-line">${ib.official ? "Published requirement range" : "Estimated equivalent range (unofficial)"}: <strong>${ib.min}${ib.max && ib.max !== ib.min ? `–${ib.max}` : ""} / 45 points</strong>${ib.source ? ` · <a href="${ib.source}" target="_blank" rel="noopener">source</a>` : ""}</p>`
+      : "";
 
   const compHtml = entry.competitiveness
     ? `<p class="modal-admission-line">Program-specific competitiveness: ${entry.competitiveness}${entry.sourceUrl ? ` · <a href="${entry.sourceUrl}" target="_blank" rel="noopener">source</a>` : ""}</p>`
@@ -6035,10 +6083,11 @@ function programModalHtml(entry) {
     </div>
     <h2 id="modal-title">${entry.programName}</h2>
     <p class="modal-university-line">${u.name} · QS rank #${u.rank}</p>
-    ${fitHtml}
+    ${confidenceHtml}
     <p class="modal-description">${u.description}</p>
     <a class="modal-site-link" href="${u.site}" target="_blank" rel="noopener">Visit official site →</a>
     <p class="modal-section-title">Admission</p>
+    ${recommendedHtml}
     ${reqHtml}
     ${compHtml}
     ${tuitionHtml}
@@ -6049,7 +6098,7 @@ function openProgramModal(slug, pushHistory = true) {
   let entry = currentMatches.find(e => e.slug === slug) || programEntryBySlug.get(slug);
   if (!entry) return;
   if (!("ib" in entry)) {
-    entry = { ...entry, ib: effectiveIBRange(entry.university), fitScore: null, fitLabel: null, hasProfile: false };
+    entry = { ...entry, ib: effectiveIBRange(entry.university), confidenceScore: null, confidenceLabel: null, hasProfile: false };
   }
   document.getElementById("modal-body").innerHTML = programModalHtml(entry);
   document.getElementById("modal-backdrop").hidden = false;

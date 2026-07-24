@@ -103,12 +103,15 @@
           <p class="results-summary" id="results-summary"></p>
           <p class="results-total" id="results-total-points"></p>
         </div>
-        <button class="btn-secondary" id="edit-preferences">Edit preferences</button>
+        <div class="results-bar-actions">
+          <button class="btn-secondary" id="see-all-programs">See all programs</button>
+          <button class="btn-secondary" id="edit-preferences">Edit preferences</button>
+        </div>
       </div>
       <div class="controls">
         <input type="search" id="results-search" placeholder="Search programs or universities...">
         <select id="results-sort">
-          <option value="relevance">Sort by relevance</option>
+          <option value="relevance">Sort by confidence</option>
           <option value="rank">Sort by university ranking</option>
           <option value="name">Sort alphabetically</option>
         </select>
