@@ -34,12 +34,36 @@ const universities = [
         "programName": "History (Course 21H)"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "Urban Studies and Planning (Course 11)"
       },
       {
         "field": "Linguistics",
         "programName": "Linguistics and Philosophy (Course 24-2)"
+      },
+      {
+        "field": "Computer Science",
+        "programName": "Electrical Engineering and Computer Science (Course 6-3)"
+      },
+      {
+        "field": "Engineering",
+        "programName": "Engineering (various Course numbers)"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "Mathematics (Course 18)"
+      },
+      {
+        "field": "Data Science & Analytics",
+        "programName": "Statistics and Data Science (Course 6-3 / 18C)"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "Business Analytics (Course 15-2, MIT Sloan)"
+      },
+      {
+        "field": "Finance",
+        "programName": "Finance (Course 15-3, MIT Sloan)"
       }
     ],
     "noProgramsNote": null,
@@ -66,6 +90,26 @@ const universities = [
         "programName": "BSc Economics, Finance and Data Science",
         "competitiveness": "~6.5–7% offer rate (2023/24 cycle, third-party aggregated data)",
         "sourceUrl": "https://www.uniadmissions.co.uk/application-guides/imperial-acceptance-rates/"
+      },
+      {
+        "field": "Computer Science",
+        "programName": "Computing"
+      },
+      {
+        "field": "Engineering",
+        "programName": "Engineering (various departments)"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "Mathematics"
+      },
+      {
+        "field": "Data Science & Analytics",
+        "programName": "Mathematics with Data Science"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "Management (Imperial Business School)"
       }
     ],
     "noProgramsNote": "Imperial's undergraduate offerings are almost entirely science, engineering, medicine, and business; the social sciences appear only as non-degree elective modules alongside a STEM degree.",
@@ -105,7 +149,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Public Administration & Policy",
@@ -116,11 +160,11 @@ const universities = [
         "programName": "Communication"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "Urban Studies"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Feminist, Gender, and Sexuality Studies"
       },
       {
@@ -128,6 +172,27 @@ const universities = [
       },
       {
         "field": "History"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "noProgramsNote": null,
@@ -186,7 +251,7 @@ const universities = [
         "sourceUrl": "https://oxbridgeapplications.com/resource/oxford-success-rates/"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Geography",
         "competitiveness": "21% acceptance rate (339 applicants, 70 accepted, 2023 entry)",
         "sourceUrl": "https://oxbridgeapplications.com/resource/oxford-success-rates/"
@@ -196,6 +261,30 @@ const universities = [
         "programName": "Modern Languages and Linguistics",
         "competitiveness": "43% acceptance rate (91 applicants, 39 accepted, 2023 entry)",
         "sourceUrl": "https://oxbridgeapplications.com/resource/oxford-success-rates/"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "noProgramsNote": null,
@@ -242,12 +331,33 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Studies of Women, Gender, and Sexuality"
       },
       {
-        "field": "International Relations",
+        "field": "International Relations & Development",
         "programName": "Social Studies (closest analog; interdisciplinary)"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "noProgramsNote": null,
@@ -288,7 +398,7 @@ const universities = [
         "sourceUrl": "https://www.savemyexams.com/learning-hub/university-acceptance-rates/uoc/sociology-and-anthropology/human-social-and-political-scis/"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Geography",
         "competitiveness": "26.34% offer rate (524 applications, 138 offers, 2023/24)",
         "sourceUrl": "https://www.savemyexams.com/learning-hub/university-acceptance-rates/uoc/geography-and-earth-sciences/geo/"
@@ -304,6 +414,30 @@ const universities = [
         "programName": "Linguistics",
         "competitiveness": "36.97% offer rate (119 applications, 44 offers, 2023/24)",
         "sourceUrl": "https://www.savemyexams.com/learning-hub/university-acceptance-rates/uoc/english-language-and-linguistics/ling/"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£25,734–£70,554/yr (~$32,700–89,600)",
@@ -323,7 +457,20 @@ const universities = [
     "slug": "eth-zurich-swiss-federal-institute-of-technology",
     "description": "Founded in 1855 as the Swiss Federal Polytechnic School, ETH Zurich is a public federal institute of technology, overwhelmingly focused on engineering, natural sciences, mathematics, and computer science.",
     "competitivenessScope": "unverified",
-    "programs": [],
+    "programs": [
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
+      }
+    ],
     "noProgramsNote": "ETH offers no general-public undergraduate social science degree. Its only bachelor's-level social science offering, a BA in Public Policy, is restricted to career officers of the Swiss Armed Forces and not open to ordinary applicants.",
     "tuitionDisplay": "CHF ~4,380/yr (~$4,900)",
     "tuitionUSD": 4900,
@@ -363,8 +510,32 @@ const universities = [
         "programName": "Communications and New Media"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Geography"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "noProgramsNote": null,
@@ -411,7 +582,7 @@ const universities = [
         "sourceUrl": "https://www.admissionreport.com/university-college-london/ba-linguistics"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "BSc Urban Planning, Design and Management",
         "competitiveness": "35.74% offer rate (249 applications, 89 offers, 2024/25)",
         "sourceUrl": "https://www.admissionreport.com/university-college-london/bsc-urban-planning-design-and-management"
@@ -441,7 +612,7 @@ const universities = [
         "sourceUrl": "https://www.admissionreport.com/university-college-london/bsc-anthropology"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "BSc Geography",
         "competitiveness": "77% offer rate (2024/25)",
         "sourceUrl": "https://www.admissionreport.com/university-college-london/bsc-geography"
@@ -451,6 +622,30 @@ const universities = [
         "programName": "BA History",
         "competitiveness": "82% offer rate (2024/25)",
         "sourceUrl": "https://www.admissionreport.com/university-college-london/ba-history"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£26,200–£47,000/yr (~$33,300–59,700)",
@@ -481,6 +676,30 @@ const universities = [
       },
       {
         "field": "History"
+      },
+      {
+        "field": "Computer Science",
+        "programName": "Computer Science"
+      },
+      {
+        "field": "Engineering",
+        "programName": "Engineering and Applied Science"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "Mathematics"
+      },
+      {
+        "field": "Data Science & Analytics",
+        "programName": "Applied and Computational Mathematics"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "Business, Economics, and Management (BEM)"
+      },
+      {
+        "field": "Finance",
+        "programName": "Business, Economics, and Management (BEM)"
       }
     ],
     "noProgramsNote": null,
@@ -521,7 +740,7 @@ const universities = [
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Bachelor of Arts (JS6054)",
         "competitiveness": "JUPAS expected score 28 (2025); shared BA entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
@@ -557,7 +776,7 @@ const universities = [
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Bachelor of Social Sciences (BSocSc)",
         "competitiveness": "JUPAS expected score 24 (2025); shared entry point",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
@@ -569,10 +788,34 @@ const universities = [
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "BA Urban Studies",
         "competitiveness": "JUPAS expected score 24 (2025)",
         "sourceUrl": "https://admissions.hku.hk/sites/default/files/2025-01/HKU-JUPAS-Expected-Score-2025.pdf"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "HKD 182,000–218,000/yr (~$23,300–27,900)",
@@ -629,6 +872,30 @@ const universities = [
         "field": "History",
         "competitiveness": "10th percentile BCC/C, 90th percentile AAB/B",
         "sourceUrl": "https://www3.ntu.edu.sg/oad2/website_files/igp/ntu_igp.pdf"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "SGD 17,800–89,100/yr (~$13,200–65,900)",
@@ -670,7 +937,7 @@ const universities = [
         "field": "History"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Gender and Sexuality Studies"
       },
       {
@@ -681,12 +948,29 @@ const universities = [
         "programName": "Public Policy Studies"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Environment, Geography, and Urbanization"
       },
       {
-        "field": "Urban Studies & Planning",
-        "programName": "Environment, Geography, and Urbanization"
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "noProgramsNote": null,
@@ -722,7 +1006,7 @@ const universities = [
         "programName": "行政管理"
       },
       {
-        "field": "International Relations",
+        "field": "International Relations & Development",
         "programName": "国际政治/外交学"
       },
       {
@@ -739,11 +1023,7 @@ const universities = [
         "field": "Psychology"
       },
       {
-        "field": "Human Geography",
-        "programName": "人文地理与城乡规划"
-      },
-      {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "人文地理与城乡规划"
       },
       {
@@ -755,6 +1035,30 @@ const universities = [
       },
       {
         "field": "History"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "noProgramsNote": null,
@@ -794,7 +1098,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Criminology & Criminal Justice",
@@ -805,17 +1109,38 @@ const universities = [
         "programName": "Communication"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "Urban Studies"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Gender & Cultural Studies"
       },
       {
         "field": "Linguistics"
       },
       {
         "field": "History"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "noProgramsNote": null,
@@ -875,7 +1200,7 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Feminist, Gender & Sexuality Studies"
       },
       {
@@ -887,12 +1212,33 @@ const universities = [
         "programName": "Policy Analysis and Management"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "Urban and Regional Studies"
       },
       {
-        "field": "International Development",
+        "field": "International Relations & Development",
         "programName": "Global Development"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "noProgramsNote": null
@@ -923,7 +1269,7 @@ const universities = [
         "field": "Political Science"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Sociology"
@@ -937,6 +1283,30 @@ const universities = [
       },
       {
         "field": "History"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "noProgramsNote": null
@@ -982,7 +1352,7 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "International Development",
+        "field": "International Relations & Development",
         "programName": "Development Studies"
       },
       {
@@ -990,16 +1360,37 @@ const universities = [
         "programName": "Media Studies"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "Urban Studies"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Gender and Women's Studies"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Geography"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "noProgramsNote": null
@@ -1070,13 +1461,13 @@ const universities = [
         "sourceUrl": "https://study.unimelb.edu.au/find/courses/undergraduate/bachelor-of-arts/entry-requirements/"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Geography (via BA)",
         "competitiveness": "Guaranteed ATAR 88.0 (2026)",
         "sourceUrl": "https://study.unimelb.edu.au/find/courses/undergraduate/bachelor-of-arts/entry-requirements/"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies",
+        "field": "Gender & Cultural Studies",
         "programName": "Gender Studies (via BA)",
         "competitiveness": "Guaranteed ATAR 88.0 (2026)",
         "sourceUrl": "https://study.unimelb.edu.au/find/courses/undergraduate/bachelor-of-arts/entry-requirements/"
@@ -1088,10 +1479,34 @@ const universities = [
         "sourceUrl": "https://study.unimelb.edu.au/find/courses/undergraduate/bachelor-of-arts/entry-requirements/"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "Urban Planning (via Bachelor of Design)",
         "competitiveness": "Entry score not confirmed this pass",
         "sourceUrl": "https://study.unimelb.edu.au"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ]
   },
@@ -1130,7 +1545,7 @@ const universities = [
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
       },
       {
-        "field": "International Relations",
+        "field": "International Relations & Development",
         "programName": "Arts (Politics and International Relations major)",
         "competitiveness": "IB 28 / ATAR 75",
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
@@ -1177,22 +1592,46 @@ const universities = [
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
       },
       {
-        "field": "Urban Studies & Planning",
+        "field": "Geography & Urban Studies",
         "programName": "City Planning (Hons)",
         "competitiveness": "IB 28 / ATAR 75",
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
       },
       {
-        "field": "Human Geography",
+        "field": "Geography & Urban Studies",
         "programName": "Geographical Studies major",
         "competitiveness": "IB 28 / ATAR 75",
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
       },
       {
-        "field": "International Development",
+        "field": "International Relations & Development",
         "programName": "Global Development major",
         "competitiveness": "IB 28 / ATAR 75",
         "sourceUrl": "https://www.unsw.edu.au/content/dam/pdfs/future-students/UNSW_INT_Admissions-table_20250710.pdf"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ]
   },
@@ -1220,7 +1659,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1235,7 +1674,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1244,13 +1683,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "$65,000/yr",
@@ -1269,7 +1723,20 @@ const universities = [
     "site": "https://www.epfl.ch",
     "slug": "ecole-polytechnique-federale-de-lausanne",
     "description": "EPFL is Switzerland's federal institute of technology in Lausanne, tracing back to 1853 and gaining federal status in 1969. Like its sister institution ETH Zurich, its bachelor's programs are concentrated almost entirely in engineering, computer science, and the natural sciences.",
-    "programs": [],
+    "programs": [
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
+      }
+    ],
     "noProgramsNote": "This university's undergraduate offerings are concentrated in engineering and the natural sciences; it has no dedicated social science bachelor's programs.",
     "tuitionDisplay": "CHF ~4,380/yr (~$4,900)",
     "tuitionUSD": 4900,
@@ -1290,6 +1757,18 @@ const universities = [
     "programs": [
       {
         "field": "Economics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
       }
     ],
     "tuitionDisplay": "€4,000–6,000/yr (~$4,240–6,360)",
@@ -1325,7 +1804,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1340,7 +1819,25 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "$66,670/yr",
@@ -1376,7 +1873,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1389,6 +1886,27 @@ const universities = [
       },
       {
         "field": "Public Administration & Policy"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "$65,210/yr",
@@ -1424,7 +1942,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1439,7 +1957,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1448,13 +1966,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 49,200–81,400/yr (~$32,000–52,900)",
@@ -1490,7 +2026,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1505,7 +2041,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1514,13 +2050,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "CAD 30,000–65,000/yr (~$21,000–45,500)",
@@ -1554,6 +2105,30 @@ const universities = [
       },
       {
         "field": "History"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~€170–175/yr national-diploma programs; institutional programs ~€2,770–4,170/yr",
@@ -1589,7 +2164,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1604,7 +2179,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1613,13 +2188,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "CAD 45,000–70,060/yr (~$31,500–49,000)",
@@ -1655,7 +2245,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1667,7 +2257,28 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "¥60,000/yr English-medium (~$8,300); Chinese-medium ¥23,000–40,000",
@@ -1703,7 +2314,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1718,7 +2329,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1727,13 +2338,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£27,100–£61,000/yr",
@@ -1769,7 +2398,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1784,7 +2413,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1793,13 +2422,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 46,680–62,440/yr (~$30,300–40,600)",
@@ -1835,7 +2482,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1850,7 +2497,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1859,13 +2506,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "HKD 214,000/yr (~$27,400)",
@@ -1901,7 +2566,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1916,7 +2581,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1925,13 +2590,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "From £26,500/yr",
@@ -1967,7 +2650,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -1982,7 +2665,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -1991,13 +2674,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£26,000–£39,900/yr",
@@ -2033,7 +2734,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2048,7 +2749,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2057,13 +2758,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 39,500–101,600/yr (~$25,700–66,000)",
@@ -2099,7 +2818,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2111,7 +2830,31 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "¥535,800/yr (~$3,430) + one-time ¥282,000 entrance fee",
@@ -2147,7 +2890,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2162,7 +2905,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2171,13 +2914,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$71,170/yr + $350 int'l fee",
@@ -2213,7 +2971,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2228,7 +2986,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2237,13 +2995,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~KRW 5-8M/yr (~$3,800-6,000)",
@@ -2279,7 +3055,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2294,7 +3070,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2303,13 +3079,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "CAD ~$50,600/yr (~$37,500 USD)",
@@ -2331,6 +3122,18 @@ const universities = [
     "programs": [
       {
         "field": "Economics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
       }
     ],
     "tuitionDisplay": "Not found precisely (~£16,800/yr, unverified)",
@@ -2366,7 +3169,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2381,7 +3184,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2390,13 +3193,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$63,468/yr",
@@ -2432,7 +3250,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2447,7 +3265,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2456,13 +3274,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 35,000-50,000/yr",
@@ -2490,6 +3326,30 @@ const universities = [
       },
       {
         "field": "Sociology"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "HKD 140,000/yr (~$18,000)",
@@ -2525,7 +3385,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2540,7 +3400,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2549,13 +3409,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$63,000+/yr",
@@ -2591,7 +3466,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2606,7 +3481,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2615,13 +3490,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$57,242/yr (2026-27)",
@@ -2643,6 +3533,18 @@ const universities = [
     "programs": [
       {
         "field": "Public Administration & Policy"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
       }
     ],
     "tuitionDisplay": "€14,500-22,290/yr",
@@ -2669,7 +3571,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "RMB 24,800/yr (~$3,400); business ~RMB 80-120k",
@@ -2700,6 +3626,30 @@ const universities = [
       },
       {
         "field": "Sociology"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "RMB 28,000-50,000/yr (~$3,900-7,000)",
@@ -2735,7 +3685,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2750,7 +3700,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2759,13 +3709,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~KRW 8.6-17.4M/yr (~$6,300-12,700)",
@@ -2801,7 +3769,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2816,7 +3784,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2825,13 +3793,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£18,000-30,000/yr",
@@ -2861,7 +3847,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$67,020-69,702/yr",
@@ -2897,7 +3904,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -2912,7 +3919,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -2921,13 +3928,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "€9,000-15,000/yr typical",
@@ -2958,6 +3983,30 @@ const universities = [
       },
       {
         "field": "Public Administration & Policy"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "HKD 200,000/yr (~$25,600)",
@@ -2993,7 +4042,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3008,7 +4057,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3017,13 +4066,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$60,000-65,000/yr",
@@ -3059,7 +4123,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3074,7 +4138,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3083,13 +4147,27 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance",
+        "programName": "BSc Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management",
+        "programName": "BSc Management"
+      },
+      {
+        "field": "Data Science & Analytics",
+        "programName": "BSc Data Science"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "BSc Financial Mathematics and Statistics"
+      },
+      {
+        "field": "Law",
+        "programName": "LLB Bachelor of Laws"
       }
     ],
     "tuitionDisplay": "£27,500-35,000/yr",
@@ -3125,7 +4203,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3137,7 +4215,31 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "JPY 535,800/yr (~$3,600)",
@@ -3173,7 +4275,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3188,7 +4290,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3197,13 +4299,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "€0 (no fees), ~€150/semester",
@@ -3239,7 +4359,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3254,7 +4374,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3263,13 +4383,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "RM 29,800-76,000+/yr",
@@ -3305,7 +4443,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3320,7 +4458,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3329,13 +4467,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~€9,494/yr",
@@ -3371,7 +4527,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3386,7 +4542,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3395,13 +4551,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~KRW 11.6-15.6M/yr (~$8,500-11,400)",
@@ -3437,7 +4611,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3452,7 +4626,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3461,13 +4635,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "$67,320-70,265/yr",
@@ -3498,6 +4687,30 @@ const universities = [
       },
       {
         "field": "Psychology"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "HKD 190,000/yr (~$24,400)",
@@ -3533,7 +4746,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3548,7 +4761,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3557,13 +4770,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "NT$58,000-168,000/yr (~$1,900-5,500)",
@@ -3599,7 +4830,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3614,7 +4845,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3623,13 +4854,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "Varies by faculty (no single figure)",
@@ -3665,7 +4914,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3680,7 +4929,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3689,13 +4938,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$47,874/yr (2025-26)",
@@ -3714,7 +4978,20 @@ const universities = [
     "site": "https://www.kfupm.edu.sa",
     "slug": "king-fahd-university-of-petroleum-minerals",
     "description": "KFUPM is a public university in Dhahran, Saudi Arabia, founded in 1963, built specifically around engineering, petroleum, and applied science education. It does not offer social science bachelor's degrees.",
-    "programs": [],
+    "programs": [
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
+      }
+    ],
     "noProgramsNote": "This university's undergraduate offerings are concentrated in engineering and the natural sciences; it has no dedicated social science bachelor's programs.",
     "tuitionDisplay": "Not found reliably (mostly funds Saudi/scholarship students)",
     "tuitionUSD": null,
@@ -3749,7 +5026,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3764,7 +5041,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3773,13 +5050,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$38,650-51,106/yr (~$42,778 common)",
@@ -3815,7 +5107,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3830,7 +5122,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3839,13 +5131,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "$74,650/yr (2025-26)",
@@ -3870,6 +5177,30 @@ const universities = [
       },
       {
         "field": "Sociology"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~€170-2,770/yr (partial waiver)",
@@ -3905,7 +5236,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3920,7 +5251,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3929,13 +5260,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$33,560-44,688/yr",
@@ -3971,7 +5317,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -3986,7 +5332,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -3995,13 +5341,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "SEK 135,000-170,000/yr (~$13,000-16,000)",
@@ -4028,7 +5392,31 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~€2,770/yr avg (partial exemption)",
@@ -4064,7 +5452,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4079,7 +5467,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4088,13 +5476,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£24,800-47,450/yr",
@@ -4130,7 +5536,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4145,7 +5551,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4154,13 +5560,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "€26,500-33,000/yr",
@@ -4196,7 +5620,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4211,7 +5635,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4220,13 +5644,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£22,850-50,360/yr",
@@ -4262,7 +5704,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4277,7 +5719,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4286,13 +5728,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 32,000-48,000/yr",
@@ -4313,7 +5773,19 @@ const universities = [
     "description": "KTH is Sweden's largest technical university, founded in 1827 in Stockholm. Its bachelor's programs are concentrated in engineering and architecture; it offers no standalone social science majors, though its architecture school includes urban planning and design.",
     "programs": [
       {
-        "field": "Urban Studies & Planning"
+        "field": "Geography & Urban Studies"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
       }
     ],
     "tuitionDisplay": "SEK ~141,000/yr (ICT bachelor's, only English-taught one)",
@@ -4349,7 +5821,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4364,7 +5836,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4373,13 +5845,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£22,600-31,800/yr",
@@ -4415,7 +5905,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4430,7 +5920,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4439,13 +5929,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "~€3,000-3,400/yr incl. semester fee",
@@ -4481,7 +5989,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4496,7 +6004,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4505,13 +6013,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$44,456/yr",
@@ -4547,7 +6070,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4562,7 +6085,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4571,13 +6094,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 42,500-60,000/yr",
@@ -4613,7 +6154,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4628,7 +6169,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4637,13 +6178,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$44,996-46,899/yr",
@@ -4679,7 +6235,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4694,7 +6250,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4703,13 +6259,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "Free / no tuition fee",
@@ -4728,7 +6302,20 @@ const universities = [
     "site": "https://www.titech.ac.jp",
     "slug": "tokyo-institute-of-technology",
     "description": "Tokyo Institute of Technology, founded in 1881, is Japan's leading science and engineering university (it merged with Tokyo Medical and Dental University in 2024 to form Institute of Science Tokyo). Its undergraduate offerings are concentrated in engineering and science, with only general-education humanities and social science courses rather than dedicated majors.",
-    "programs": [],
+    "programs": [
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
+      }
+    ],
     "noProgramsNote": "This university's undergraduate offerings are concentrated in engineering and the natural sciences; it has no dedicated social science bachelor's programs.",
     "tuitionDisplay": "¥535,800/yr (~$3,700)",
     "tuitionUSD": 3700,
@@ -4763,7 +6350,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4778,7 +6365,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4787,13 +6374,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£19,000-47,000/yr",
@@ -4829,7 +6434,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4844,7 +6449,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4853,13 +6458,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£23,400-33,900/yr",
@@ -4895,7 +6518,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4910,7 +6533,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4919,13 +6542,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "$65,168/yr tuition",
@@ -4961,7 +6599,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -4976,7 +6614,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -4985,13 +6623,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "No fee, ~€300-330/semester",
@@ -5027,7 +6683,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5040,6 +6696,27 @@ const universities = [
       },
       {
         "field": "Public Administration & Policy"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~$28,794/yr",
@@ -5075,7 +6752,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5087,7 +6764,31 @@ const universities = [
         "field": "Linguistics"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
+      },
+      {
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "¥535,800/yr (~$3,700)",
@@ -5123,7 +6824,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5138,7 +6839,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -5147,13 +6848,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£23,810-30,570/yr",
@@ -5189,7 +6908,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5204,7 +6923,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -5213,13 +6932,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "SEK 100,000-144,000/yr",
@@ -5255,7 +6992,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5270,7 +7007,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -5279,13 +7016,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£22,000-35,000/yr",
@@ -5321,7 +7076,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5336,7 +7091,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -5345,13 +7100,28 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
       }
     ],
     "tuitionDisplay": "~CAD 29,000-40,000/yr",
@@ -5375,7 +7145,7 @@ const universities = [
         "field": "Communication Studies"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Political Science"
@@ -5384,7 +7154,28 @@ const universities = [
         "field": "Sociology"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
+      },
+      {
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "AUD 23,616-56,700/yr",
@@ -5420,7 +7211,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5435,7 +7226,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -5444,13 +7235,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "£9,250-30,750/yr",
@@ -5472,6 +7281,18 @@ const universities = [
     "programs": [
       {
         "field": "Economics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
       }
     ],
     "tuitionDisplay": "~€3,300/yr incl. admin fee",
@@ -5492,7 +7313,19 @@ const universities = [
     "description": "Politecnico di Milano, founded in 1863, is Italy's largest technical university, built around engineering, architecture, and design. It has no standalone social science majors, but its renowned architecture faculty includes urban planning.",
     "programs": [
       {
-        "field": "Urban Studies & Planning"
+        "field": "Geography & Urban Studies"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Data Science & Analytics"
       }
     ],
     "tuitionDisplay": "€900-4,000/yr income-banded",
@@ -5528,7 +7361,7 @@ const universities = [
         "field": "Anthropology"
       },
       {
-        "field": "International Relations"
+        "field": "International Relations & Development"
       },
       {
         "field": "Communication Studies"
@@ -5543,7 +7376,7 @@ const universities = [
         "field": "Criminology & Criminal Justice"
       },
       {
-        "field": "Human Geography"
+        "field": "Geography & Urban Studies"
       },
       {
         "field": "Social Work"
@@ -5552,13 +7385,31 @@ const universities = [
         "field": "Public Administration & Policy"
       },
       {
-        "field": "Urban Studies & Planning"
+        "field": "Gender & Cultural Studies"
       },
       {
-        "field": "International Development"
+        "field": "Finance"
       },
       {
-        "field": "Gender, Sexuality & Women's Studies"
+        "field": "Business Administration & Management"
+      },
+      {
+        "field": "Data Science & Analytics"
+      },
+      {
+        "field": "Computer Science"
+      },
+      {
+        "field": "Engineering"
+      },
+      {
+        "field": "Mathematics & Statistics"
+      },
+      {
+        "field": "Natural Sciences"
+      },
+      {
+        "field": "Law"
       }
     ],
     "tuitionDisplay": "CHF 1,600-4,000/yr",
@@ -5569,6 +7420,258 @@ const universities = [
     "ibMax": null,
     "ibOfficial": true,
     "ibSource": "https://recognition.ibo.org"
+  },
+  {
+    "rank": 140,
+    "name": "Erasmus University Rotterdam",
+    "country": "Netherlands",
+    "site": "https://www.eur.nl",
+    "slug": "erasmus-university-rotterdam",
+    "description": "Founded in 1913 as the Netherlands School of Commerce, Erasmus University Rotterdam (EUR) is a public research university best known for economics, econometrics, and business via the Rotterdam School of Management, and is affiliated with two Nobel laureates in Economic Sciences.",
+    "competitivenessScope": "unverified",
+    "tuitionDisplay": "~€13,500/yr (institutional rate for non-EEA students; EEA statutory rate is €2,694, institutional EEA rate €8,300); varies by program",
+    "tuitionUSD": 14600,
+    "tuitionSource": "https://www.eur.nl/en/education/practical-matters/registration/tuition-fee/tuition-fee-2026-2027",
+    "ibDisplay": "No single published minimum; EUR states the full IB Diploma is sufficient for general admission, with subject/level requirements set per program",
+    "ibSource": "https://www.eur.nl/en/education/practical-matters/bachelor-admission-and-application/diploma-overview",
+    "programs": [
+      {
+        "field": "Economics",
+        "programName": "International Bachelor Economics and Business Economics",
+        "sourceUrl": "https://www.eur.nl/en/bachelor/international-bachelor-economics-and-business-economics"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "Econometrics and Operations Research",
+        "sourceUrl": "https://www.eur.nl/en/ese/education/bachelor"
+      },
+      {
+        "field": "Law",
+        "programName": "Economics and Law (double degree)"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "International Business Administration (Rotterdam School of Management)",
+        "competitiveness": "Numerus fixus, ~750 places/year, selection 75% grades / 25% motivation",
+        "sourceUrl": "https://www.eur.nl/en/bachelor/bachelor-international-business-administration/admission"
+      },
+      {
+        "field": "Psychology",
+        "programName": "Psychology"
+      },
+      {
+        "field": "Sociology",
+        "programName": "Sociology"
+      },
+      {
+        "field": "Public Administration & Policy",
+        "programName": "Public Administration"
+      },
+      {
+        "field": "International Relations & Development",
+        "programName": "Management of International Social Challenges",
+        "sourceUrl": "https://www.eur.nl/en/essb"
+      },
+      {
+        "field": "History",
+        "programName": "International Bachelor History"
+      },
+      {
+        "field": "Communication Studies",
+        "programName": "International Bachelor Communication and Media",
+        "sourceUrl": "https://www.eur.nl/en/eshcc/education/bachelors"
+      },
+      {
+        "field": "Law",
+        "programName": "Erasmus School of Law (LLB)"
+      }
+    ]
+  },
+  {
+    "rank": 239,
+    "name": "Maastricht University",
+    "country": "Netherlands",
+    "site": "https://www.maastrichtuniversity.nl",
+    "slug": "maastricht-university",
+    "description": "Founded in 1976, Maastricht University (UM) is a public research university known for pioneering problem-based learning as its core teaching method and for research strength in psychology and neuroscience.",
+    "competitivenessScope": "unverified",
+    "tuitionDisplay": "Varies widely by program: ~€9,800/yr for Psychology, Economics and Business Economics, and European Law; ~€13,200–20,100/yr for European Studies, Global Studies, and the science/liberal-arts colleges (non-EU institutional rates, approximate)",
+    "tuitionUSD": 16000,
+    "tuitionSource": "https://www.maastrichtuniversity.nl/tuition-fee-guide-bachelor%E2%80%99s-programmes-202627",
+    "ibDisplay": "No single university-wide minimum; UM states the full IB Diploma is generally sufficient (equivalent to Dutch VWO), with subject requirements set per program",
+    "ibSource": "https://www.maastrichtuniversity.nl/file/foreign-diploma-requirements-bachelor-programmes-2025-2026pdf",
+    "programs": [
+      {
+        "field": "Economics",
+        "programName": "Economics and Business Economics"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "International Business"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "Econometrics and Operations Research"
+      },
+      {
+        "field": "Law",
+        "programName": "European Law School (LLB)"
+      },
+      {
+        "field": "Law",
+        "programName": "Global Law"
+      },
+      {
+        "field": "International Relations & Development",
+        "programName": "European Studies"
+      },
+      {
+        "field": "International Relations & Development",
+        "programName": "Global Studies"
+      },
+      {
+        "field": "Psychology",
+        "programName": "Psychology"
+      },
+      {
+        "field": "Natural Sciences",
+        "programName": "Maastricht Science Programme"
+      }
+    ]
+  },
+  {
+    "rank": 998,
+    "rankDisplay": "Not ranked in QS's overall World University Rankings (specialized institution) · QS Business &amp; Management Studies #18",
+    "name": "Copenhagen Business School",
+    "country": "Denmark",
+    "site": "https://www.cbs.dk",
+    "slug": "copenhagen-business-school",
+    "description": "Founded in 1917, Copenhagen Business School (CBS) is a public business school holding \"triple crown\" accreditation (EQUIS, AMBA, AACSB) and is widely regarded as one of Europe's most prestigious business schools. As a specialized institution it does not appear in QS's overall World University Rankings, but places among the world's top 20 for Business & Management Studies.",
+    "competitivenessScope": "unverified",
+    "tuitionDisplay": "~€13,000–16,000/yr for non-EU/EEA students (approximate, varies by program); free for EU/EEA/Swiss citizens",
+    "tuitionUSD": 15500,
+    "tuitionSource": "https://www.cbs.dk/en/study/bachelor/admission/how-to-apply/entry-requirements",
+    "ibDisplay": "Full IB Diploma required (CBS does not accept the IB Course Results certificate alone); no single official minimum point score published",
+    "ibSource": "https://www.cbs.dk/en/study/bachelor/admission/how-to-apply/entry-requirements",
+    "programs": [
+      {
+        "field": "Business Administration & Management",
+        "programName": "BSc in International Business"
+      },
+      {
+        "field": "International Relations & Development",
+        "programName": "BSc in International Business and Politics"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "BSc in International Shipping and Trade"
+      },
+      {
+        "field": "Data Science & Analytics",
+        "programName": "BSc in Business Administration and Digital Management"
+      },
+      {
+        "field": "Sociology",
+        "programName": "BSc in Business Administration and Sociology"
+      }
+    ]
+  },
+  {
+    "rank": 997,
+    "rankDisplay": "Not ranked in QS's overall World University Rankings (specialized institution) · QS Economics ~#58, Business &amp; Management 51&ndash;100 band",
+    "name": "Stockholm School of Economics",
+    "country": "Sweden",
+    "site": "https://www.hhs.se",
+    "slug": "stockholm-school-of-economics",
+    "description": "Founded in 1909, the Stockholm School of Economics (SSE) is a private business school known for economics research, including the Heckscher–Ohlin trade model, and for its influence on Nordic economic policy. As a specialized institution it does not appear in QS's overall World University Rankings, but ranked among Europe's top 20 business schools in the Financial Times European Business Schools ranking 2025.",
+    "competitivenessScope": "per-program",
+    "tuitionDisplay": "SEK 120,000/yr (~€10,500–€11,000) for non-EU/EEA/Swiss students; free for EU/EEA/Swiss citizens",
+    "tuitionUSD": 11300,
+    "tuitionSource": "https://www.hhs.se/en/education/study-at-sse/tuition-and-fees/",
+    "ibDisplay": "Minimum 33 points for eligibility; admission is highly competitive and typically requires 37–38+, with English B SL grade 4 minimum",
+    "ibMin": 33,
+    "ibMax": 38,
+    "ibOfficial": true,
+    "ibSource": "https://www.hhs.se/en/education/bsc/faq/international-applicants/",
+    "recommendedScore": 37,
+    "recommendedBasis": "Realistic competitive score per SSE's own guidance",
+    "recommendedOfficial": true,
+    "programs": [
+      {
+        "field": "Economics",
+        "programName": "BSc in Business and Economics",
+        "competitiveness": "SSE's sole bachelor's program; min. 33 pts eligible, realistically 37-38+ competitive",
+        "sourceUrl": "https://www.hhs.se/en/education/bsc/"
+      },
+      {
+        "field": "Finance",
+        "programName": "BSc in Business and Economics (Finance track)",
+        "competitiveness": "SSE's sole bachelor's program; min. 33 pts eligible, realistically 37-38+ competitive",
+        "sourceUrl": "https://www.hhs.se/en/education/bsc/"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "BSc in Business and Economics (Management track)",
+        "competitiveness": "SSE's sole bachelor's program; min. 33 pts eligible, realistically 37-38+ competitive",
+        "sourceUrl": "https://www.hhs.se/en/education/bsc/"
+      }
+    ]
+  },
+  {
+    "rank": 996,
+    "rankDisplay": "Not ranked in QS's overall World University Rankings (specialized institution) · QS Business &amp; Management Studies #9, Social Sciences &amp; Management #12",
+    "name": "Bocconi University",
+    "country": "Italy",
+    "site": "https://www.unibocconi.it",
+    "slug": "bocconi-university",
+    "description": "Founded in 1902 in Milan, Bocconi University specializes in economics, management, finance, law, and political science, with growing data science and AI offerings. Its SDA Bocconi School of Management holds triple accreditation (AACSB, EQUIS, AMBA). As a specialized institution it does not appear in QS's overall World University Rankings, but ranks among the world's top 10 for Business & Management Studies.",
+    "competitivenessScope": "unverified",
+    "tuitionDisplay": "Up to €17,000/yr standard rate (2026-27); Bocconi uses income-based tuition banding from €0 up to the ~€17,000 ceiling, so many students pay less",
+    "tuitionUSD": 18300,
+    "tuitionSource": "https://www.unibocconi.it/en/applying-bocconi/bachelor-and-law-programs/fees",
+    "ibDisplay": "Formal minimum is the standard IB pass threshold (24 points, 12+ at Higher Level); competitive admission realistically requires strong scores plus Bocconi's own admissions test (the Bocconi Test), which counts roughly 50-60% of the ranking score alongside school grades",
+    "ibMin": 24,
+    "ibOfficial": true,
+    "ibSource": "https://www.unibocconi.it/en/applying-bocconi/bachelor-and-law-programs/application-and-admissions/specific-diplomas-requirements",
+    "programs": [
+      {
+        "field": "Economics",
+        "programName": "Economics"
+      },
+      {
+        "field": "Finance",
+        "programName": "Finance"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "Management"
+      },
+      {
+        "field": "Computer Science",
+        "programName": "Management and Computer Science"
+      },
+      {
+        "field": "Data Science & Analytics",
+        "programName": "Mathematical and Computing Sciences for Artificial Intelligence"
+      },
+      {
+        "field": "Mathematics & Statistics",
+        "programName": "Mathematical and Computing Sciences for Artificial Intelligence"
+      },
+      {
+        "field": "Political Science",
+        "programName": "International Politics and Government"
+      },
+      {
+        "field": "Business Administration & Management",
+        "programName": "World Bachelor in Business",
+        "competitiveness": "4-year triple-degree with USC and HKUST"
+      },
+      {
+        "field": "Law",
+        "programName": "Bachelor in Global Law"
+      }
+    ]
   }
 ];
 
@@ -5576,23 +7679,33 @@ const universities = [
 
 
 
+
 const bachelorFields = [
-  { name: "Economics", type: "BA/BS", note: "Core discipline", description: "The study of production, markets, and decision-making under scarcity; the most quantitative of the core social sciences." },
-  { name: "Political Science", type: "BA", note: "Core discipline", description: "Government institutions, political behavior, and power, from local policy to comparative and international systems." },
-  { name: "Sociology", type: "BA/BS", note: "Core discipline", description: "How social structures, institutions, and group life shape human behavior and inequality." },
-  { name: "Psychology", type: "BA/BS", note: "Core discipline", description: "The scientific study of mind and behavior; consistently one of the most-enrolled social science majors." },
-  { name: "Anthropology", type: "BA", note: "Core discipline", description: "Human societies and cultures across time, studied through ethnography, archaeology, and biological anthropology." },
-  { name: "International Relations", type: "BA", note: "Applied field", description: "Diplomacy, conflict, and cooperation between states, often paired with economics or regional studies." },
-  { name: "Criminology & Criminal Justice", type: "BA/BS", note: "Applied field", description: "Causes of crime, policing, and the justice system, drawing on sociology, law, and psychology." },
-  { name: "Human Geography", type: "BA/BS", note: "Core discipline", description: "How people, cities, and economies are distributed across space, distinct from physical geography." },
-  { name: "Social Work", type: "BSW", note: "Applied field", description: "Direct practice supporting individuals, families, and communities; the licensed, practice-facing wing of the social sciences." },
-  { name: "Public Administration & Policy", type: "BA", note: "Applied field", description: "How governments design, fund, and evaluate policy; a common bridge into public-sector and NGO careers." },
-  { name: "Communication Studies", type: "BA", note: "Applied field", description: "Media, persuasion, and interpersonal communication, from mass media theory to organizational communication." },
-  { name: "Urban Studies & Planning", type: "BA/BS", note: "Applied field", description: "How cities grow, are governed, and are designed, combining geography, sociology, and policy." },
-  { name: "International Development", type: "BA", note: "Applied field", description: "Global poverty, aid, and growth, drawing on economics, political science, and area studies." },
-  { name: "Gender, Sexuality & Women's Studies", type: "BA", note: "Core discipline", description: "How gender and sexuality are socially constructed, and their effect on power, culture, and institutions." },
-  { name: "Linguistics", type: "BA", note: "Interdisciplinary", description: "The structure and social use of language; bridges the social sciences and humanities." },
-  { name: "History", type: "BA", note: "Interdisciplinary", description: "Long grouped with the social sciences in degree statistics; the study of past societies and change over time." },
+  // ---- Social sciences (a few of the original 16 broadened/merged) ----
+  { name: "Economics", type: "BA/BS", note: "Core discipline", description: "The study of production, markets, and decision-making under scarcity; the most quantitative of the core social sciences.", recommendedSubjects: ["Economics", "Mathematics: Analysis and Approaches"] },
+  { name: "Political Science", type: "BA", note: "Core discipline", description: "Government institutions, political behavior, and power, from local policy to comparative and international systems.", recommendedSubjects: ["Global Politics", "History"] },
+  { name: "Sociology", type: "BA/BS", note: "Core discipline", description: "How social structures, institutions, and group life shape human behavior and inequality.", recommendedSubjects: ["Psychology", "Social and Cultural Anthropology"] },
+  { name: "Psychology", type: "BA/BS", note: "Core discipline", description: "The scientific study of mind and behavior; consistently one of the most-enrolled social science majors.", recommendedSubjects: ["Psychology", "Biology"] },
+  { name: "Anthropology", type: "BA", note: "Core discipline", description: "Human societies and cultures across time, studied through ethnography, archaeology, and biological anthropology.", recommendedSubjects: ["Social and Cultural Anthropology"] },
+  { name: "International Relations & Development", type: "BA", note: "Applied field", description: "Diplomacy, conflict, cooperation, and global development, from bilateral relations to poverty and aid (merges what were previously two narrower fields).", recommendedSubjects: ["Global Politics", "Economics", "History"] },
+  { name: "Criminology & Criminal Justice", type: "BA/BS", note: "Applied field", description: "Causes of crime, policing, and the justice system, drawing on sociology, law, and psychology.", recommendedSubjects: ["Psychology", "Global Politics"] },
+  { name: "Geography & Urban Studies", type: "BA/BS", note: "Applied field", description: "How people, cities, and economies are distributed and designed across space (merges what were previously two narrower fields).", recommendedSubjects: ["Geography"] },
+  { name: "Social Work", type: "BSW", note: "Applied field", description: "Direct practice supporting individuals, families, and communities; the licensed, practice-facing wing of the social sciences.", recommendedSubjects: ["Psychology"] },
+  { name: "Public Administration & Policy", type: "BA", note: "Applied field", description: "How governments design, fund, and evaluate policy; a common bridge into public-sector and NGO careers.", recommendedSubjects: ["Economics", "Global Politics"] },
+  { name: "Communication Studies", type: "BA", note: "Applied field", description: "Media, persuasion, and interpersonal communication, from mass media theory to organizational communication.", recommendedSubjects: ["English A: Language and Literature"] },
+  { name: "Gender & Cultural Studies", type: "BA", note: "Core discipline", description: "How gender, identity, and culture are socially constructed, and their effect on power and institutions (broadened from gender studies alone).", recommendedSubjects: ["Social and Cultural Anthropology"] },
+  { name: "Linguistics", type: "BA", note: "Interdisciplinary", description: "The structure and social use of language; bridges the social sciences and humanities.", recommendedSubjects: ["English A: Language and Literature"] },
+  { name: "History", type: "BA", note: "Interdisciplinary", description: "Long grouped with the social sciences in degree statistics; the study of past societies and change over time.", recommendedSubjects: ["History"] },
+
+  // ---- Finance, quantitative, STEM, and law ----
+  { name: "Finance", type: "BSc/BBA", note: "Quantitative", description: "Capital markets, corporate finance, and investment, taught with a heavier quantitative core than general economics.", recommendedSubjects: ["Mathematics: Analysis and Approaches", "Economics"] },
+  { name: "Business Administration & Management", type: "BBA/BSc", note: "Professional", description: "Running organizations: strategy, operations, marketing, and people, usually with an economics or quantitative foundation.", recommendedSubjects: ["Business Management", "Mathematics: Analysis and Approaches"] },
+  { name: "Data Science & Analytics", type: "BSc", note: "Quantitative", description: "Statistics, machine learning, and applied computing for extracting insight from data; one of the fastest-growing majors.", recommendedSubjects: ["Mathematics: Analysis and Approaches", "Computer Science"] },
+  { name: "Computer Science", type: "BSc", note: "STEM", description: "Algorithms, software, and computing systems, from theory through to applied engineering.", recommendedSubjects: ["Mathematics: Analysis and Approaches", "Computer Science"] },
+  { name: "Engineering", type: "BEng/BSc", note: "STEM", description: "Applied design and problem-solving across mechanical, electrical, civil, and related disciplines.", recommendedSubjects: ["Mathematics: Analysis and Approaches", "Physics"] },
+  { name: "Mathematics & Statistics", type: "BSc", note: "STEM", description: "Pure and applied mathematics, probability, and statistical theory, underpinning most other quantitative fields.", recommendedSubjects: ["Mathematics: Analysis and Approaches"] },
+  { name: "Natural Sciences", type: "BSc", note: "STEM", description: "Biology, chemistry, and physics degrees, often combined or taken as a broad first-year science program before specializing.", recommendedSubjects: ["Biology", "Chemistry", "Physics"] },
+  { name: "Law", type: "LLB", note: "Professional", description: "Undergraduate law (LLB), the standard route into the legal profession outside the US, where law is typically a graduate JD.", recommendedSubjects: ["History", "English A: Language and Literature", "Global Politics"] },
 ];
 
 function slugify(name) {
@@ -5623,6 +7736,7 @@ const CONTINENT_BY_COUNTRY = {
   "Belgium": "Europe",
   "Ireland": "Europe",
   "Italy": "Europe",
+  "Denmark": "Europe",
   "Singapore": "Asia",
   "Hong Kong": "Asia",
   "China": "Asia",
@@ -5765,6 +7879,28 @@ function totalIBPoints() {
 
 function hasIBProfile() {
   return wizardState.subjects.some(s => s && s.grade);
+}
+
+const bachelorFieldByName = new Map(bachelorFields.map(f => [f.name, f]));
+
+function hasSubjectsChosen() {
+  return wizardState.subjects.some(s => s && s.name);
+}
+
+function subjectAlignment(field) {
+  const fieldDef = bachelorFieldByName.get(field);
+  const recommended = (fieldDef && fieldDef.recommendedSubjects) || [];
+  if (!recommended.length) return null;
+  const chosen = wizardState.subjects.filter(s => s && s.name);
+  const chosenByName = new Map(chosen.map(s => [s.name, s]));
+  const matched = recommended.filter(name => chosenByName.has(name));
+  const missing = recommended.filter(name => !chosenByName.has(name));
+  return {
+    recommended,
+    matched: matched.map(name => ({ name, level: chosenByName.get(name).level })),
+    missing,
+    fullMatch: missing.length === 0,
+  };
 }
 
 // ---------- Wizard: subjects step ----------
@@ -5949,7 +8085,8 @@ function computeMatches() {
           : `${Math.abs(gap)} point${Math.abs(gap) === 1 ? "" : "s"} below the recommended ${ib.recommended} pts (${ib.recommendedBasis})`;
       }
     }
-    return { ...entry, ib, confidenceScore, confidenceLabel, totalIB, hasProfile };
+    const alignment = subjectAlignment(entry.field);
+    return { ...entry, ib, confidenceScore, confidenceLabel, totalIB, hasProfile, alignment };
   });
 }
 
@@ -5985,7 +8122,7 @@ function renderResultsSummary() {
   const hasProfile = hasIBProfile();
   document.getElementById("results-summary").textContent = wizardState.interests.size
     ? `Showing ${[...wizardState.interests].join(", ")} programs`
-    : "Showing all social science programs";
+    : "Showing all programs";
   document.getElementById("results-total-points").textContent = hasProfile
     ? `Your IB total: ${totalIB} / 45`
     : "No IB profile entered: results are unranked by confidence";
@@ -6001,14 +8138,19 @@ function programCardHtml(entry) {
   const band = entry.confidenceScore == null ? null : confidenceBand(entry.confidenceScore).toLowerCase();
   const badge = band == null ? "" : `<span class="badge confidence-badge confidence-${band}">${Math.round(entry.confidenceScore)}% confidence</span>`;
   const stripeClass = band ? ` card-stripe confidence-${band}` : "";
+  const align = entry.alignment;
+  const alignmentHtml = align
+    ? `<span class="card-alignment ${align.fullMatch ? "alignment-full" : (align.matched.length ? "alignment-partial" : "alignment-none")}">${align.matched.length}/${align.recommended.length} recommended subjects</span>`
+    : "";
   return `
     <div class="card clickable${stripeClass}" data-slug="${entry.slug}" role="button" tabindex="0" aria-haspopup="dialog">
       <div class="card-top">
         <h3>${entry.programName}</h3>
         ${badge}
       </div>
-      <span class="meta">${entry.university.name} · #${entry.university.rank} · ${entry.university.country}</span>
+      <span class="meta">${entry.university.name} · ${entry.university.rankDisplay ? "unranked overall" : "#" + entry.university.rank} · ${entry.university.country}</span>
       <p>${entry.field}</p>
+      ${alignmentHtml}
     </div>
   `;
 }
@@ -6078,13 +8220,31 @@ function programModalHtml(entry) {
     ? `<p class="modal-admission-line">Tuition (international, annual): ${u.tuitionDisplay}${u.tuitionSource ? ` · <a href="${u.tuitionSource}" target="_blank" rel="noopener">source</a>` : ""}</p>`
     : "";
 
+  const align = entry.alignment;
+  const alignmentHtml = align
+    ? `<p class="modal-section-title">Recommended subjects for ${entry.field}</p>
+       <ul class="modal-subject-list">
+         ${align.recommended.map(name => {
+           const isMet = align.matched.some(m => m.name === name);
+           return `<li class="${isMet ? "subject-met" : "subject-missing"}">${isMet ? "✓" : "—"} ${name}</li>`;
+         }).join("")}
+       </ul>
+       <p class="modal-alignment-note">${
+         align.fullMatch
+           ? "Your chosen subjects cover all of this field's recommended subjects."
+           : hasSubjectsChosen()
+             ? `Your subjects cover ${align.matched.length} of ${align.recommended.length} recommended subjects. This is guidance, not a hard requirement &mdash; check the university's own admission page for what's actually required.`
+             : "Pick your IB subjects in Step 1 to see how they align with this field's recommended subjects."
+       }</p>`
+    : "";
+
   return `
     <div class="modal-eyebrow">
       <span class="badge">${entry.field}</span>
       <span class="modal-country">${u.country}</span>
     </div>
     <h2 id="modal-title">${entry.programName}</h2>
-    <p class="modal-university-line">${u.name} · QS rank #${u.rank}</p>
+    <p class="modal-university-line">${u.name} · ${u.rankDisplay ? u.rankDisplay : "QS rank #" + u.rank}</p>
     ${confidenceHtml}
     <p class="modal-description">${u.description}</p>
     <a class="modal-site-link" href="${u.site}" target="_blank" rel="noopener">Visit official site →</a>
@@ -6093,6 +8253,7 @@ function programModalHtml(entry) {
     ${reqHtml}
     ${compHtml}
     ${tuitionHtml}
+    ${alignmentHtml}
   `;
 }
 
@@ -6100,7 +8261,7 @@ function openProgramModal(slug, pushHistory = true) {
   let entry = currentMatches.find(e => e.slug === slug) || programEntryBySlug.get(slug);
   if (!entry) return;
   if (!("ib" in entry)) {
-    entry = { ...entry, ib: effectiveIBRange(entry.university), confidenceScore: null, confidenceLabel: null, hasProfile: false };
+    entry = { ...entry, ib: effectiveIBRange(entry.university), confidenceScore: null, confidenceLabel: null, hasProfile: false, alignment: subjectAlignment(entry.field) };
   }
   document.getElementById("modal-body").innerHTML = programModalHtml(entry);
   document.getElementById("modal-backdrop").hidden = false;

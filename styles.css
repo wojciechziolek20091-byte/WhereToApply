@@ -631,6 +631,17 @@ body {
   line-height: 1.5;
 }
 
+.card-alignment {
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.card-alignment.alignment-full { color: var(--accent); }
+.card-alignment.alignment-partial { color: var(--text); }
+
 .card a.site-link {
   margin-top: 0.5rem;
   font-size: 0.85rem;
@@ -779,5 +790,33 @@ select:focus-visible {
   letter-spacing: 0.08em;
   color: var(--text-muted);
   margin: 0 0 0.25rem;
+}
+
+.modal-section-title:not(:first-child) {
+  margin-top: 1.4rem;
+}
+
+.modal-subject-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.7rem;
+}
+
+.modal-subject-list li {
+  font-size: 0.88rem;
+  padding: 0.15rem 0;
+}
+
+.modal-subject-list li.subject-met { color: var(--accent); font-weight: 600; }
+.modal-subject-list li.subject-missing { color: var(--text-muted); }
+
+.modal-alignment-note {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0.6rem 0 0;
 }
 
