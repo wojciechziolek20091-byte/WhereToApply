@@ -1,15 +1,20 @@
 /*
-  WhereToApply: deliberately single-theme (no dark mode).
-  Palette (from brand mood board): white ground, deep teal ink, a
-  bright teal accent, sage and slate-blue tints for secondary surfaces.
-    --bg             #ffffff
-    --text           #2A505A (deep teal ink)
-    --text-muted     #505052 (neutral grey)
+  WhereToApply: deliberately single-theme (no dark mode), styled as a
+  measuring instrument, a "ruler" for admissions odds. A recurring
+  tick-mark motif (header rule, wizard progress, the welcome scale)
+  ties the app's actual subject, the IB's 0-45 point scale, to the
+  brand reference's own name and swatch-strip presentation.
+    --ink            #2A505A (deep teal, full-bleed header ground)
+    --paper          #ffffff (page ground)
     --accent         #015A76 (bright teal, primary)
     --accent-soft    #C9D9DD (pale slate-blue tint)
     --secondary-soft #C9D6D0 (pale sage tint)
+    --sage           #879F94 (mid sage, scale band)
+    --slate          #89A9B2 (mid slate-blue, scale band)
   Type: Alfa Slab One as the display face, used sparingly for the
-  wordmark and major headings; Montserrat for everything else.
+  wordmark and major headings; Montserrat for everything else. Sharp,
+  near-square corners and pill buttons are a deliberate contrast, not
+  the default rounded-card treatment.
 */
 
 @font-face {
@@ -47,13 +52,17 @@
 :root {
   --bg: #ffffff;
   --surface: #ffffff;
+  --ink: #2A505A;
   --text: #2A505A;
   --text-muted: #505052;
   --border: rgba(42, 80, 90, 0.18);
   --accent: #015A76;
   --accent-soft: #C9D9DD;
   --secondary-soft: #C9D6D0;
-  --radius: 6px;
+  --sage: #879F94;
+  --slate: #89A9B2;
+  --radius: 3px;
+  --radius-pill: 999px;
   --font-display: "Alfa Slab One", "Arial Black", sans-serif;
   --font-body: "Montserrat", "Helvetica Neue", Arial, sans-serif;
 }
@@ -68,31 +77,56 @@ body {
 }
 
 .site-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--text);
-  padding: 2.75rem 1.5rem 1.75rem;
+  background: var(--ink);
+  padding: 3rem 1.5rem 0;
 }
 
 .header-inner {
   max-width: 960px;
   margin: 0 auto;
+  padding-bottom: 1.9rem;
 }
 
 .site-header h1 {
-  margin: 0 0 0.45rem;
+  margin: 0 0 0.5rem;
   font-family: var(--font-display);
   font-size: 2.6rem;
   font-weight: 400;
   letter-spacing: 0.01em;
   text-wrap: balance;
-  color: var(--text);
+  color: #fff;
 }
 
 .tagline {
   margin: 0;
-  color: var(--text-muted);
+  max-width: 44rem;
+  color: var(--accent-soft);
   font-size: 1.02rem;
   font-style: italic;
+}
+
+.site-header::after {
+  content: "";
+  display: block;
+  height: 7px;
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.4) 0,
+    rgba(255, 255, 255, 0.4) 1px,
+    transparent 1px,
+    transparent 16px
+  );
+}
+
+/* ---- Eyebrows ---- */
+
+.eyebrow {
+  margin: 0 0 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--accent);
 }
 
 .container {
@@ -104,14 +138,21 @@ body {
 /* ---- Welcome ---- */
 
 .welcome-view {
-  padding: 3rem 0 3.5rem;
-  max-width: 640px;
+  padding: 3.5rem 0 4rem;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 3.5rem;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .welcome-view { grid-template-columns: 1fr; gap: 2.5rem; }
 }
 
 .welcome-title {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: 2.4rem;
+  font-size: 2.5rem;
   line-height: 1.15;
   margin: 0 0 1.1rem;
   color: var(--text);
@@ -123,38 +164,91 @@ body {
   line-height: 1.65;
   color: var(--text-muted);
   margin: 0 0 2rem;
+  max-width: 42rem;
 }
+
+.welcome-scale {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+}
+
+.welcome-scale-label {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.scale-band {
+  flex: 1;
+  min-height: 2.4rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0.9rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.scale-band-1 { background: var(--accent); color: #fff; }
+.scale-band-2 { background: var(--ink); color: #fff; }
+.scale-band-3 { background: var(--slate); color: #fff; }
+.scale-band-4 { background: var(--sage); color: #fff; }
+.scale-band-5 { background: var(--accent-soft); color: var(--text); }
+.scale-band-6 { background: var(--secondary-soft); color: var(--text); }
 
 /* ---- Wizard ---- */
 
-.wizard-steps {
+.wizard-ruler {
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.75rem;
+  border-top: 1px solid var(--border);
+  margin-bottom: 2.25rem;
 }
 
-.wizard-step-dot {
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  padding: 0.4rem 0.9rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
+.wizard-tick-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-top: 0;
+}
+
+.tick-mark {
+  width: 1px;
+  height: 8px;
+  margin-top: -1px;
+  background: var(--border);
+}
+
+.tick-label {
+  margin-top: 0.55rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
 }
 
-.wizard-step-dot.active {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
+.wizard-tick-item.active .tick-mark {
+  width: 2px;
+  height: 14px;
+  background: var(--accent);
 }
 
-.wizard-step-dot.done {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--secondary-soft);
+.wizard-tick-item.active .tick-label { color: var(--accent); font-weight: 700; }
+
+.wizard-tick-item.done .tick-mark {
+  width: 2px;
+  height: 11px;
+  background: var(--sage);
 }
+
+.wizard-tick-item.done .tick-label { color: var(--text); }
 
 .wizard-panel { display: none; }
 .wizard-panel.active { display: block; }
@@ -300,13 +394,15 @@ body {
 
 .btn-primary,
 .btn-secondary {
-  padding: 0.65rem 1.4rem;
-  border-radius: var(--radius);
+  padding: 0.7rem 1.6rem;
+  border-radius: var(--radius-pill);
   font-family: var(--font-body);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .btn-primary {
@@ -316,11 +412,11 @@ body {
   margin-left: auto;
 }
 
-.btn-primary:hover { opacity: 0.9; }
+.btn-primary:hover { background: var(--ink); border-color: var(--ink); }
 
 .btn-secondary {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid var(--text);
   color: var(--text);
 }
 
@@ -476,6 +572,7 @@ body {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
   border-radius: var(--radius);
   padding: 1.1rem 1.2rem;
   display: flex;
@@ -484,7 +581,11 @@ body {
   transition: border-color 0.15s;
 }
 
-.card:hover { border-color: var(--text); }
+.card:hover { border-top-color: var(--text); border-right-color: var(--text); border-bottom-color: var(--text); }
+
+.card.card-stripe.confidence-high { border-left-color: var(--accent); }
+.card.card-stripe.confidence-moderate { border-left-color: var(--sage); }
+.card.card-stripe.confidence-low { border-left-color: var(--border); }
 
 .card-top {
   display: flex;
@@ -579,7 +680,9 @@ select:focus-visible {
 }
 
 .card.clickable:hover {
-  border-color: var(--text);
+  border-top-color: var(--text);
+  border-right-color: var(--text);
+  border-bottom-color: var(--text);
   box-shadow: 0 2px 10px rgba(42, 80, 90, 0.08);
 }
 
@@ -600,7 +703,8 @@ select:focus-visible {
 .modal {
   position: relative;
   background: var(--surface);
-  border-radius: 10px;
+  border-top: 3px solid var(--accent);
+  border-radius: 4px;
   max-width: 720px;
   width: 100%;
   padding: 2.25rem 2.25rem 2.5rem;

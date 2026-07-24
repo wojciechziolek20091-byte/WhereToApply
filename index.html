@@ -17,20 +17,45 @@
   <main class="container">
 
     <section id="welcome-view" class="welcome-view">
-      <h2 class="welcome-title">Find your best-fit bachelor's program</h2>
-      <p class="welcome-copy">WhereToApply matches your IB subjects, grades, and interests against real admissions data from 100 of the world's top universities, then lets you filter by continent, ranking, and tuition to see exactly where you stand a realistic chance.</p>
-      <button class="btn-primary" id="welcome-start">Get Started</button>
+      <div class="welcome-copy-col">
+        <p class="eyebrow">Welcome</p>
+        <h2 class="welcome-title">Find your best-fit bachelor's program</h2>
+        <p class="welcome-copy">WhereToApply matches your IB subjects, grades, and interests against real admissions data from 100 of the world's top universities, then lets you filter by continent, ranking, and tuition to see exactly where you stand a realistic chance.</p>
+        <button class="btn-primary" id="welcome-start">Get Started</button>
+      </div>
+      <div class="welcome-scale" aria-hidden="true">
+        <p class="welcome-scale-label">The IB scale, at a glance</p>
+        <div class="scale-band scale-band-1"><span>45</span></div>
+        <div class="scale-band scale-band-2"><span>38</span></div>
+        <div class="scale-band scale-band-3"><span>34</span></div>
+        <div class="scale-band scale-band-4"><span>30</span></div>
+        <div class="scale-band scale-band-5"><span>26</span></div>
+        <div class="scale-band scale-band-6"><span>0</span></div>
+      </div>
     </section>
 
     <section id="wizard-view" hidden>
-      <div class="wizard-steps" id="wizard-steps">
-        <span class="wizard-step-dot active" data-step="1">1. Subjects</span>
-        <span class="wizard-step-dot" data-step="2">2. Core Points</span>
-        <span class="wizard-step-dot" data-step="3">3. Interests</span>
-        <span class="wizard-step-dot" data-step="4">4. Filters</span>
+      <div class="wizard-ruler" id="wizard-steps">
+        <div class="wizard-tick-item active" data-step="1">
+          <span class="tick-mark"></span>
+          <span class="tick-label">Subjects</span>
+        </div>
+        <div class="wizard-tick-item" data-step="2">
+          <span class="tick-mark"></span>
+          <span class="tick-label">Core Points</span>
+        </div>
+        <div class="wizard-tick-item" data-step="3">
+          <span class="tick-mark"></span>
+          <span class="tick-label">Interests</span>
+        </div>
+        <div class="wizard-tick-item" data-step="4">
+          <span class="tick-mark"></span>
+          <span class="tick-label">Filters</span>
+        </div>
       </div>
 
       <div class="wizard-panel active" id="wizard-step-1">
+        <p class="eyebrow">Step 1 of 4</p>
         <h2 class="wizard-title">Your IB subjects</h2>
         <p class="wizard-help">Pick your six IB Diploma subjects and your predicted (or actual) grade for each, 1&ndash;7.</p>
         <p class="subject-section-title">Higher Level (HL)</p>
@@ -40,6 +65,7 @@
       </div>
 
       <div class="wizard-panel" id="wizard-step-2">
+        <p class="eyebrow">Step 2 of 4</p>
         <h2 class="wizard-title">TOK / Extended Essay core points</h2>
         <p class="wizard-help">Your combined Theory of Knowledge and Extended Essay score, out of 3 bonus points.</p>
         <select id="core-points">
@@ -52,12 +78,14 @@
       </div>
 
       <div class="wizard-panel" id="wizard-step-3">
+        <p class="eyebrow">Step 3 of 4</p>
         <h2 class="wizard-title">What are you interested in?</h2>
         <p class="wizard-help">Pick one or more fields. Leave all unchecked to see every field.</p>
         <div class="interest-grid" id="interest-grid"></div>
       </div>
 
       <div class="wizard-panel" id="wizard-step-4">
+        <p class="eyebrow">Step 4 of 4</p>
         <h2 class="wizard-title">Filters</h2>
         <p class="wizard-help">Optional. Narrow the results, or leave blank to include everything.</p>
         <div class="filter-grid">
@@ -100,6 +128,7 @@
     <section id="results-view" hidden>
       <div class="results-bar">
         <div>
+          <p class="eyebrow">Your matches</p>
           <p class="results-summary" id="results-summary"></p>
           <p class="results-total" id="results-total-points"></p>
         </div>

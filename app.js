@@ -5877,7 +5877,7 @@ function goToStep(step) {
   wizardState.step = step;
   document.querySelectorAll(".wizard-panel").forEach(p => p.classList.remove("active"));
   document.getElementById(`wizard-step-${step}`).classList.add("active");
-  document.querySelectorAll(".wizard-step-dot").forEach(d => {
+  document.querySelectorAll(".wizard-tick-item").forEach(d => {
     d.classList.toggle("active", Number(d.dataset.step) === step);
     d.classList.toggle("done", Number(d.dataset.step) < step);
   });
@@ -5998,9 +5998,11 @@ function confidenceBand(score) {
 }
 
 function programCardHtml(entry) {
-  const badge = entry.confidenceScore == null ? "" : `<span class="badge confidence-badge confidence-${confidenceBand(entry.confidenceScore).toLowerCase()}">${Math.round(entry.confidenceScore)}% confidence</span>`;
+  const band = entry.confidenceScore == null ? null : confidenceBand(entry.confidenceScore).toLowerCase();
+  const badge = band == null ? "" : `<span class="badge confidence-badge confidence-${band}">${Math.round(entry.confidenceScore)}% confidence</span>`;
+  const stripeClass = band ? ` card-stripe confidence-${band}` : "";
   return `
-    <div class="card clickable" data-slug="${entry.slug}" role="button" tabindex="0" aria-haspopup="dialog">
+    <div class="card clickable${stripeClass}" data-slug="${entry.slug}" role="button" tabindex="0" aria-haspopup="dialog">
       <div class="card-top">
         <h3>${entry.programName}</h3>
         ${badge}
