@@ -230,7 +230,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     lateralGrip: 70,
     flatGripFraction: 0.25,
     gripMinSpeed: 2,
-    linearDrag: 60,
+    linearDrag: 8,
   },
   edge: {
     maxEdgeAngle: 0.7,

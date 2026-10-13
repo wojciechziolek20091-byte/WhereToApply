@@ -26,7 +26,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M1 Sim math, config, cable.** Vector and angle helpers, seeded RNG,
   `SimConfig` defaults, cable path with filleted corners, carrier kinematics,
   fixed-step accumulator. Tests for path length, continuity, wrap-around.
-- [ ] **M2 Rope and riding.** Rope tension, hydro forces, edge build and heading,
+- [x] **M2 Rope and riding.** Rope tension, hydro forces, edge build and heading,
   posture and connection, rider state, `stepSim()`. Tests: trailing equilibrium,
   edging swings the rider out and raises tension and speed, progressive edge.
 - [ ] **M3 Pop, air, landing, falls.** Load tracker, `computePop()`, air
