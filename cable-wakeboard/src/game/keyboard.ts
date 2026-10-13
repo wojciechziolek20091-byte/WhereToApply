@@ -43,6 +43,13 @@ export class Keyboard {
     return this.down.has(code);
   }
 
+  /** Press or release a key from another source (on-screen touch buttons). */
+  set(code: string, isDown: boolean): void {
+    if (isDown && !this.down.has(code)) this.pressed.add(code);
+    if (isDown) this.down.add(code);
+    else this.down.delete(code);
+  }
+
   /** True once per key press. */
   consume(code: string): boolean {
     const had = this.pressed.has(code);

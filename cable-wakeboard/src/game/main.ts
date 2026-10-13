@@ -5,6 +5,7 @@ import { createRun, stepRun, type RunState } from '../sim/session';
 import { advanceStepper, createStepper } from '../sim/stepper';
 import { Hud } from './hud';
 import { Keyboard } from './keyboard';
+import { mountStartScreen, mountTouchControls } from './touch';
 
 const view = document.getElementById('view')!;
 const hudEl = document.getElementById('hud')!;
@@ -15,8 +16,14 @@ const hud = new Hud(hudEl);
 const keys = new Keyboard(window);
 const stepper = createStepper();
 let prev: RenderSnapshot = snapshotOf(run.sim);
-let paused = false;
+let paused = true;
 let last = performance.now();
+
+mountTouchControls(document.body, keys);
+mountStartScreen(document.body, () => {
+  paused = false;
+  last = performance.now();
+});
 
 function frame(now: number): void {
   const frameSeconds = Math.min(0.25, (now - last) / 1000);
