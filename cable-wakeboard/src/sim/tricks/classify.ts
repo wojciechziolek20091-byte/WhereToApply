@@ -71,6 +71,9 @@ export function classifyAir(
       ? RALEYS.find((r) => r.approach === (air.approach === 'toeside' ? 'toeside' : 'heelside')) ?? null
       : null;
   if (air.time < minAirTime && !invert && spinDegrees === 0) return null;
+  // Rolling off a slider or being lifted by the line without popping is not a trick.
+  const unpopped = air.source !== 'kicker' && air.popSpeed < 0.5;
+  if (unpopped && !invert && !raley && spinDegrees === 0 && !air.grabbed) return null;
 
   const modifiers: string[] = [];
   const grab = air.grabbed ? GRABS[air.grabbed] : null;

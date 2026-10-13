@@ -120,3 +120,12 @@ describe('jibs', () => {
     expect(classifyJib(0.1, 0.1, 0)).toBeNull();
   });
 });
+
+describe('non-tricks', () => {
+  it('rolling off the end of a slider without popping does not count', () => {
+    const r = createRider(cfg, vec3(), vec3(8, -2, 0), 0);
+    const air = { ...createAirState(r, 'slider', 'b1', 0, 0, 0, neutralInput(), cfg), time: 0.5 };
+    r.air = air;
+    expect(classifyAir(air, evaluateLanding(r, air, UP, cfg), 'regular', cfg.air.minAirTime)).toBeNull();
+  });
+});

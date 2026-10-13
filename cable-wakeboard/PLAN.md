@@ -38,7 +38,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M5 Tricks as data.** Catalogue (jumps, spins, inverts, raleys, grabs,
   combos, jibs) and classifier. Table tests for the six basic inverts, the
   scarecrow, switch and blind spins.
-- [ ] **M6 Scoring and run session.** Metrics from events, three-judge panel,
+- [x] **M6 Scoring and run session.** Metrics from events, three-judge panel,
   passes and falls. Tests: weights, determinism, falls hurt execution, variety
   helps composition, two falls end a run.
 - [ ] **M7 Gray-box renderer and input.** Three.js scene from primitives,
