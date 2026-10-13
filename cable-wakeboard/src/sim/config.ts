@@ -159,8 +159,25 @@ export interface LandingConfig {
   fallRecovery: number;
 }
 
+export interface FeatureConfig {
+  /** Wet ramp friction coefficient. */
+  rampFriction: number;
+  /** Highest surface (m) a rider can ride onto; above that it is a crash. */
+  mountHeight: number;
+  /** Largest angle between travel and the feature axis to ride onto it (rad). */
+  mountAngle: number;
+  /** Below this speed up a ramp the rider stalls and falls (m/s). */
+  stallSpeed: number;
+}
+
 export interface JibConfig {
   friction: number;
+  /** Board rotation rate on a rail toward 50-50 or boardslide (rad/s). */
+  boardRotateRate: number;
+  /** Sideways damping on a rail (1/s). */
+  lateralDamping: number;
+  /** Rope sideways pull that tips balance one unit per second (N). */
+  ropeTip: number;
   /** Balance drift per second per unit of lateral offset. */
   drift: number;
   /** Balance correction per second at full input. */
@@ -201,6 +218,7 @@ export interface SimConfig {
   pop: PopConfig;
   air: AirConfig;
   landing: LandingConfig;
+  feature: FeatureConfig;
   jib: JibConfig;
   raley: RaleyConfig;
   run: RunConfig;
@@ -288,11 +306,20 @@ export const DEFAULT_CONFIG: SimConfig = {
     maxYawError: 0.5,
     maxEdgeFraction: 0.75,
     maxFlipError: 0.7,
-    stiffImpact: 4.0,
+    stiffImpact: 6.5,
     absorbImpact: 4.0,
     fallRecovery: 2.0,
   },
-  jib: { friction: 0.08, drift: 1.6, correction: 2.5, angleDrift: 1.2 },
+  feature: { rampFriction: 0.06, mountHeight: 0.25, mountAngle: 1.0, stallSpeed: 0.8 },
+  jib: {
+    friction: 0.08,
+    boardRotateRate: 7,
+    lateralDamping: 6,
+    ropeTip: 700,
+    drift: 1.6,
+    correction: 2.5,
+    angleDrift: 1.2,
+  },
   raley: { minEdgeLoad: 1400, minTension: 1200 },
   run: { passesPerRun: 2, maxFalls: 2, deadWaterTime: 8, respawnSlack: 0.98 },
   scoring: {

@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG } from '../src/sim/config';
 import { computePop, popTimingFactor, updateLoadTracker, type PopInputs } from '../src/sim/pop';
 import { createSim } from '../src/sim/world';
-import { cutAndPop, untilTouchdown } from './helpers';
+import { cutAndPop, untilTouchdown, flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG.pop;
 const good: PopInputs = {
@@ -57,7 +57,7 @@ describe('load tracker', () => {
 
 describe('flat-water air trick', () => {
   const airOf = (opts: Parameters<typeof cutAndPop>[1]) => {
-    const s = createSim();
+    const s = flatSim();
     const takeoff = cutAndPop(s, opts);
     const land = untilTouchdown(s);
     if (land.type !== 'landed') throw new Error(`fell: ${land.type === 'fall' ? land.kind : ''}`);

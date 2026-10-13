@@ -32,7 +32,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M3 Pop, air, landing, falls.** Load tracker, `computePop()`, air
   rotation, landing evaluation and every fall kind. Tests per fall, pop
   monotonicity, backing off kills pop.
-- [ ] **M4 Features.** Kickers and sliders as data, surface queries, riding the
+- [x] **M4 Features.** Kickers and sliders as data, surface queries, riding the
   ramp, launching at the lip, jib balance, crashes. Tests: kicker launch, timed
   pop beats untimed, slider balance.
 - [ ] **M5 Tricks as data.** Catalogue (jumps, spins, inverts, raleys, grabs,

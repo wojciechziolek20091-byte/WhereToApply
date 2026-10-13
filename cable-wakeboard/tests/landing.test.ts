@@ -6,7 +6,7 @@ import { TAU } from '../src/sim/math/scalar';
 import { UP, vec3 } from '../src/sim/math/vec';
 import type { AirState, RiderState } from '../src/sim/rider';
 import { createRider, createSim } from '../src/sim/world';
-import { launch, run, untilTouchdown } from './helpers';
+import { launch, run, untilTouchdown, flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG;
 
@@ -46,8 +46,8 @@ describe('evaluateLanding', () => {
   });
 
   it('butt checks a heavy landing on straight legs but absorbs it with bent knees', () => {
-    expect(setup({}, { vel: vec3(8, -6, 0), legCompression: 0 }).fall).toBe('buttCheck');
-    expect(setup({}, { vel: vec3(8, -6, 0), legCompression: 1 }).fall).toBeNull();
+    expect(setup({}, { vel: vec3(8, -8.5, 0), legCompression: 0 }).fall).toBe('buttCheck');
+    expect(setup({}, { vel: vec3(8, -8.5, 0), legCompression: 1 }).fall).toBeNull();
   });
 
   it('butt checks a raley that was not brought back', () => {
@@ -61,7 +61,7 @@ describe('evaluateLanding', () => {
 
 describe('air in the sim', () => {
   it('lands switch after a 180', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 3);
     launch(s, 4.5);
     // Spin after the peak, for about half a turn.
@@ -78,7 +78,7 @@ describe('air in the sim', () => {
 
   it('spinning before the peak costs height', () => {
     const peakWith = (early: boolean) => {
-      const s = createSim();
+      const s = flatSim();
       run(s, 3);
       launch(s, 4.5);
       const e = untilTouchdown(s, (t) => ({ spin: early ? (t < 0.05 ? 1 : 0) : 0 }));
@@ -91,7 +91,7 @@ describe('air in the sim', () => {
   });
 
   it('letting go in the air is a dropped-handle fall', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 3);
     launch(s, 3);
     const e = untilTouchdown(s, (t) => ({ release: t < 0.05 }));
@@ -99,7 +99,7 @@ describe('air in the sim', () => {
   });
 
   it('an invert without enough air under-rotates', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 3);
     launch(s, 1.5, { flip: -1 });
     const e = untilTouchdown(s);

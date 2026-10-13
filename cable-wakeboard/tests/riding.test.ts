@@ -1,13 +1,13 @@
 import { DEFAULT_CONFIG } from '../src/sim/config';
 import { distance, horizontal, horizontalLength } from '../src/sim/math/vec';
 import { createSim } from '../src/sim/world';
-import { lateralOffset, run } from './helpers';
+import { lateralOffset, run, flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG;
 
 describe('riding behind the cable', () => {
   it('trails straight behind at carrier speed with a flat board', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 5);
     const r = s.rider;
     expect(r.mode).toBe('riding');
@@ -22,7 +22,7 @@ describe('riding behind the cable', () => {
   });
 
   it('swings out to the heelside, faster and with more tension, when edging', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 4);
     const trailTension = s.rider.ropeTension;
     let peakTension = 0;
@@ -40,14 +40,14 @@ describe('riding behind the cable', () => {
   });
 
   it('goes the other way on the toeside', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 4);
     run(s, 1.5, () => ({ edge: -1 }));
     expect(lateralOffset(s)).toBeGreaterThan(3);
   });
 
   it('bleeds connection with the arms out under load', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 4);
     run(s, 1.5, () => ({ edge: 1, handleIn: 0 }));
     expect(s.rider.waistHinge).toBeGreaterThan(0.2);
@@ -55,7 +55,7 @@ describe('riding behind the cable', () => {
   });
 
   it('drops the handle on release and coasts to a stop', () => {
-    const s = createSim();
+    const s = flatSim();
     run(s, 2);
     run(s, 1 / 60, () => ({ release: true }));
     expect(s.rider.hasHandle).toBe(false);

@@ -78,13 +78,19 @@ export interface JibState {
   crossedTime: number;
 }
 
-/** Contact with a kicker ramp. */
+/** Contact with a feature surface (kicker ramp or slider). */
 export interface RampState {
   featureId: string;
-  /** Distance along the ramp from its start (m). */
+  /** Distance along the feature axis from its start (m). */
   u: number;
-  /** Tick the pop was released while on this ramp, or -1. */
+  /** Distance to the right of the axis (m). */
+  v: number;
+  /** Edge angle when the rider hit the base (rad). */
+  edgeAngleAtBase: number;
+  /** Tick the pop was released while on this feature, or -1. */
   releaseTick: number;
+  /** Pop computed at release, applied when leaving the lip. */
+  pendingPop: { speed: number; quality: number } | null;
 }
 
 export interface RiderState {

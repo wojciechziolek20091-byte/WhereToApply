@@ -51,3 +51,10 @@ export function cutAndPop(s: SimState, opts: { releaseAt?: number; flattenAt?: n
   }
   return s.events.find((e) => e.type === 'takeoff');
 }
+
+import { DEFAULT_CONFIG } from '../src/sim/config';
+import { FLAT_PARK } from '../src/sim/park';
+import { createSim } from '../src/sim/world';
+
+/** A sim on flat water with no features. */
+export const flatSim = () => createSim(DEFAULT_CONFIG, FLAT_PARK);

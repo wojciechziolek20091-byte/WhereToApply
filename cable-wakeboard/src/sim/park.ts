@@ -94,3 +94,6 @@ export function resolvePark(park: ParkDef, path: CablePath): ResolvedFeature[] {
 /** Total length of a feature along its axis. */
 export const featureLength = (def: FeatureDef): number =>
   def.kind === 'kicker' ? def.length : def.entryLength + def.length;
+
+/** No features: flat water only. Used by physics tests. */
+export const FLAT_PARK: ParkDef = { name: 'Flat water', features: [] };

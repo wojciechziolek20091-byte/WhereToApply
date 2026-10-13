@@ -164,12 +164,21 @@ Defined as data in `park.ts` (`FeatureDef`) and queried in `features.ts`:
 
 - **Kicker**: a curved ramp described by length, width, height and lip angle.
   `kickerHeightAt(u)` is a power curve whose slope at the lip equals the lip angle.
-  On the ramp the board follows the surface; at the lip it launches with the
-  surface's velocity direction plus the pop.
+  On the ramp the board follows the surface (`stepFeature()` in `onFeature.ts`);
+  at the lip it launches with the surface's velocity direction plus the pop.
+  Riding onto the ramp snapshots `load.edgeLoadAtBase`. On the ramp the hold
+  ratio is the edge angle still held relative to the edge angle at the base
+  (`ramp.edgeAngleAtBase`): flattening on the way up costs pop. A release on
+  the ramp is stored as `ramp.pendingPop` and applied when the board leaves
+  the lip; a release on the water before the ramp pops on flat water, which
+  usually means landing on the ramp (`featureCrash`).
 - **Slider / box / rail**: a flat top at a fixed height, entered by a short entry
   ramp. On it the rider slides with low friction and must keep `rider.jib.balance`
-  inside [-1, 1]. Board angle relative to the rail picks the jib trick
-  (`50-50` aligned, `boardslide` across).
+  inside [-1, 1] (`updateJib()`). Being off-centre, holding the board between
+  0 and 90 degrees, and the rope's sideways pull tip the balance; leaning with
+  the edge input corrects. Board angle relative to the rail (`jib.boardAngle`,
+  driven by the spin input) picks the jib trick (`50-50` aligned, `boardslide`
+  across). Releasing the load on a slider ollies off it.
 - Hitting a feature from the wrong side is a `featureCrash` fall.
 
 **Soft landings.** Landing impact is measured along the surface normal
