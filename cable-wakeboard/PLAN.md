@@ -35,7 +35,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M4 Features.** Kickers and sliders as data, surface queries, riding the
   ramp, launching at the lip, jib balance, crashes. Tests: kicker launch, timed
   pop beats untimed, slider balance.
-- [ ] **M5 Tricks as data.** Catalogue (jumps, spins, inverts, raleys, grabs,
+- [x] **M5 Tricks as data.** Catalogue (jumps, spins, inverts, raleys, grabs,
   combos, jibs) and classifier. Table tests for the six basic inverts, the
   scarecrow, switch and blind spins.
 - [ ] **M6 Scoring and run session.** Metrics from events, three-judge panel,
