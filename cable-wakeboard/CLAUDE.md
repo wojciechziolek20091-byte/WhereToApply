@@ -51,6 +51,8 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
 src/render/   graybox.ts: Three.js gray-box renderer. Reads SimState; never writes it.
 src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts, main.ts loop.
 scripts/      Tuning probes (vite-node).
+roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
+              See roblox/README.md. Not yet driven by the sim.
 tests/        Vitest specs, mostly for src/sim.
 docs/MECHANICS.md  Sport mechanics and where each lives in code. Keep in sync.
 PLAN.md       Milestones and backlog.

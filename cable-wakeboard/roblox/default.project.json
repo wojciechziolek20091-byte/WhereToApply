@@ -1,0 +1,16 @@
+{
+  "name": "CableWakeboard",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "WakeShared": {
+        "$path": "src/shared"
+      }
+    },
+    "ServerScriptService": {
+      "WakeServer": {
+        "$path": "src/server"
+      }
+    }
+  }
+}

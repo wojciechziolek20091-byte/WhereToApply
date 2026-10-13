@@ -1,0 +1,161 @@
+-- Minimal Roblox API mock: just enough for RiderBuilder to run under the
+-- plain `luau` CLI. Not a full engine: no rendering, no physics.
+
+local V = {}
+V.__index = V
+local function vec(x, y, z)
+	return setmetatable({ X = x or 0, Y = y or 0, Z = z or 0 }, V)
+end
+V.__add = function(a, b) return vec(a.X + b.X, a.Y + b.Y, a.Z + b.Z) end
+V.__sub = function(a, b) return vec(a.X - b.X, a.Y - b.Y, a.Z - b.Z) end
+V.__unm = function(a) return vec(-a.X, -a.Y, -a.Z) end
+V.__mul = function(a, b)
+	if type(a) == "number" then return vec(a * b.X, a * b.Y, a * b.Z) end
+	if type(b) == "number" then return vec(a.X * b, a.Y * b, a.Z * b) end
+	return vec(a.X * b.X, a.Y * b.Y, a.Z * b.Z)
+end
+V.__div = function(a, b) return vec(a.X / b, a.Y / b, a.Z / b) end
+V.__index = function(self, k)
+	if k == "Magnitude" then return math.sqrt(self.X ^ 2 + self.Y ^ 2 + self.Z ^ 2) end
+	if k == "Unit" then
+		local m = math.sqrt(self.X ^ 2 + self.Y ^ 2 + self.Z ^ 2)
+		return vec(self.X / m, self.Y / m, self.Z / m)
+	end
+	return rawget(V, k)
+end
+function V.Cross(a, b) return vec(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X) end
+function V.Dot(a, b) return a.X * b.X + a.Y * b.Y + a.Z * b.Z end
+Vector3 = { new = vec }
+Vector2 = { new = function(x, y) return { X = x, Y = y } end }
+
+-- CFrame: rotation stored as columns (right, up, back) plus position.
+local C = {}
+local function cf(p, r, u, b)
+	return setmetatable({ p = p, r = r, u = u, b = b }, C)
+end
+local function rotate(c, v) return c.r * v.X + c.u * v.Y + c.b * v.Z end
+C.__mul = function(a, o)
+	if getmetatable(o) == C then
+		return cf(a.p + rotate(a, o.p), rotate(a, o.r), rotate(a, o.u), rotate(a, o.b))
+	end
+	return a.p + rotate(a, o)
+end
+C.__index = function(self, k)
+	if k == "Position" then return self.p end
+	if k == "LookVector" then return -self.b end
+	return nil
+end
+local I = { vec(1, 0, 0), vec(0, 1, 0), vec(0, 0, 1) }
+CFrame = {}
+function CFrame.new(x, y, z)
+	if type(x) == "table" then return cf(x, I[1], I[2], I[3]) end
+	return cf(vec(x or 0, y or 0, z or 0), I[1], I[2], I[3])
+end
+function CFrame.Angles(rx, ry, rz)
+	local function rotX(t) local c, s = math.cos(t), math.sin(t) return cf(vec(), vec(1, 0, 0), vec(0, c, s), vec(0, -s, c)) end
+	local function rotY(t) local c, s = math.cos(t), math.sin(t) return cf(vec(), vec(c, 0, -s), vec(0, 1, 0), vec(s, 0, c)) end
+	local function rotZ(t) local c, s = math.cos(t), math.sin(t) return cf(vec(), vec(c, s, 0), vec(-s, c, 0), vec(0, 0, 1)) end
+	return rotX(rx) * rotY(ry) * rotZ(rz)
+end
+function CFrame.lookAt(at, target, up)
+	up = up or vec(0, 1, 0)
+	local look = (target - at).Unit
+	local right = look:Cross(up).Unit
+	local newUp = right:Cross(look)
+	return cf(at, right, newUp, -look)
+end
+
+local Col = {}
+Col.__index = Col
+local function color(r, g, b) return setmetatable({ R = r, G = g, B = b }, Col) end
+function Col.ToHSV(c)
+	local mx, mn = math.max(c.R, c.G, c.B), math.min(c.R, c.G, c.B)
+	local d = mx - mn
+	local h = 0
+	if d > 0 then
+		if mx == c.R then h = ((c.G - c.B) / d) % 6
+		elseif mx == c.G then h = (c.B - c.R) / d + 2
+		else h = (c.R - c.G) / d + 4 end
+		h = h / 6
+	end
+	return h, (mx == 0 and 0 or d / mx), mx
+end
+function Col.Lerp(a, b, t) return color(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t) end
+Color3 = {
+	fromRGB = function(r, g, b) return color(r / 255, g / 255, b / 255) end,
+	fromHSV = function(h, s, v)
+		local i = math.floor(h * 6)
+		local f = h * 6 - i
+		local p, q, t = v * (1 - s), v * (1 - f * s), v * (1 - (1 - f) * s)
+		local m = i % 6
+		if m == 0 then return color(v, t, p) elseif m == 1 then return color(q, v, p)
+		elseif m == 2 then return color(p, v, t) elseif m == 3 then return color(p, q, v)
+		elseif m == 4 then return color(t, p, v) else return color(v, p, q) end
+	end,
+}
+
+local function enumGroup(names)
+	local g = {}
+	for _, n in names do g[n] = { Name = n } end
+	return g
+end
+Enum = {
+	Material = enumGroup({ "SmoothPlastic", "Plastic" }),
+	PartType = enumGroup({ "Block", "Ball", "Cylinder" }),
+	SurfaceType = enumGroup({ "Smooth" }),
+}
+
+Random = {}
+function Random.new(seed)
+	local state = (seed or 1) * 2654435761 % 4294967296
+	local r = {}
+	local function nextf()
+		state = (state * 1664525 + 1013904223) % 4294967296
+		return state / 4294967296
+	end
+	function r:NextNumber(a, b) return a + (b - a) * nextf() end
+	function r:NextInteger(a, b) return a + math.floor((b - a + 1) * nextf()) end
+	return r
+end
+
+-- Instances: plain property bags with a parent/children tree.
+local Inst = {}
+Inst.__index = function(self, k)
+	local m = rawget(Inst, k)
+	if m then return m end
+	return rawget(self, "_props")[k]
+end
+Inst.__newindex = function(self, k, v)
+	local props = rawget(self, "_props")
+	if k == "Parent" then
+		local old = props.Parent
+		if old then
+			local kids = rawget(old, "_children")
+			for i, c in kids do if c == self then table.remove(kids, i) break end end
+		end
+		if v then table.insert(rawget(v, "_children"), self) end
+	end
+	props[k] = v
+end
+function Inst:GetChildren() return table.clone(rawget(self, "_children")) end
+function Inst:GetDescendants()
+	local out = {}
+	local function walk(i)
+		for _, c in rawget(i, "_children") do table.insert(out, c) walk(c) end
+	end
+	walk(self)
+	return out
+end
+function Inst:IsA(cls)
+	local c = rawget(self, "_props").ClassName
+	if cls == "BasePart" then return c == "Part" or c == "WedgePart" or c == "CornerWedgePart" end
+	return c == cls
+end
+function Inst:ScaleTo(_s) rawget(self, "_props").Scaled = _s end
+Instance = {
+	new = function(className)
+		local i = setmetatable({ _props = { ClassName = className, Name = className }, _children = {} }, Inst)
+		if className == "Part" then i.Shape = Enum.PartType.Block end
+		return i
+	end,
+}
