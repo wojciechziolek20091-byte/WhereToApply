@@ -29,7 +29,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M2 Rope and riding.** Rope tension, hydro forces, edge build and heading,
   posture and connection, rider state, `stepSim()`. Tests: trailing equilibrium,
   edging swings the rider out and raises tension and speed, progressive edge.
-- [ ] **M3 Pop, air, landing, falls.** Load tracker, `computePop()`, air
+- [x] **M3 Pop, air, landing, falls.** Load tracker, `computePop()`, air
   rotation, landing evaluation and every fall kind. Tests per fall, pop
   monotonicity, backing off kills pop.
 - [ ] **M4 Features.** Kickers and sliders as data, surface queries, riding the

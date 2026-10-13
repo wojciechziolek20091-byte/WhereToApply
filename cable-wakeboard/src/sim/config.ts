@@ -55,6 +55,10 @@ export interface HydroConfig {
   gripMinSpeed: number;
   /** Dead-in-the-water drag so a detached rider stops (N per m/s). */
   linearDrag: number;
+  /** Rope lift above this multiple of body weight pulls the rider off the water. */
+  liftOffFactor: number;
+  /** Drag on a fallen rider in the water (N per m/s). */
+  fallenDrag: number;
 }
 
 export interface EdgeConfig {
@@ -231,6 +235,8 @@ export const DEFAULT_CONFIG: SimConfig = {
     flatGripFraction: 0.25,
     gripMinSpeed: 2,
     linearDrag: 8,
+    liftOffFactor: 1.6,
+    fallenDrag: 300,
   },
   edge: {
     maxEdgeAngle: 0.7,
@@ -260,7 +266,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     edgeLoadRef: 1500,
     tensionGain: 1.6,
     tensionRef: 1500,
-    maxPop: 5.5,
+    maxPop: 4.5,
     extendTime: 0.15,
     lipLead: 0.06,
     lipWindow: 0.25,
