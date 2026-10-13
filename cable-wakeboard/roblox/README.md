@@ -42,6 +42,7 @@ local rider = RiderBuilder.build({
 	palette = "B", -- "A", "B", "Sheet", or a full palette table
 	proportions = { HeadSize = 0.9, BootSize = 1.15 }, -- any CONFIG.Proportions key
 	accessories = { Ponytail = true }, -- Helmet, Hair, Ponytail, Handle, Board
+	board = "Sage", -- "Sage" (default), "Classic", or a full BoardStyle table
 	seed = 3, -- facet layout; same seed, same rider
 })
 rider:PivotTo(CFrame.new(0, 0.05, 0))
@@ -71,6 +72,16 @@ All colours and proportions are in the `CONFIG` table at the top of
   wedge, vents.
 - Oversized gloves and boots, thick baggy legs with a knee bend, a bevelled
   board with rocker and a tow handle in both hands.
+
+Boards (`CONFIG.Board` for the shape, `CONFIG.BoardStyles` for colourways):
+**Sage** (default, from the user's board reference: sage green deck, darker
+rail layer, black bindings with copper buckles, insert dots, a handle slot and
+a pale slash graphic on the base; the reference's logo and sticker are left
+out) and **Classic** (charcoal with an accent stripe, no binding hardware).
+The rocker is a chain of segments turned up 3, 7 and 13 degrees, and the tips
+step in with a narrower end cap for a rounded-square outline.
+
+![Sage board: top, base, side, three-quarter](docs/board-preview.png)
 
 Palettes: **A** (royal blue jacket, purple-grey pants, lime gloves and boots,
 blue helmet), **B** (green jacket, brick red pants, yellow-orange accents,

@@ -76,4 +76,30 @@ end
 check(pony >= 2 and pony <= 3, `palette B should have a 2-3 wedge ponytail, got {pony}`)
 check(not pcall(RiderBuilder.build, { palette = "Nope" }), "unknown palette should error")
 
-if failures == 0 then print("ALL CHECKS PASSED") else print(`{failures} FAILURES`) os.exit(1) end
+-- Board styles.
+local function count(model, pattern)
+	local n = 0
+	for _, d in model:GetDescendants() do
+		if string.find(d.Name, pattern) then n += 1 end
+	end
+	return n
+end
+local sage = RiderBuilder.build({ palette = "A" })
+check(count(sage, "^BaseSlash") == 4, "Sage board should have 4 base slashes")
+check(count(sage, "Plate$") == 2, "Sage board should have two binding plates")
+check(count(sage, "Buckle$") == 2, "Sage bindings should have buckles")
+local classic = RiderBuilder.build({ palette = "A", board = "Classic" })
+check(count(classic, "^BaseSlash") == 0, "Classic board has no base graphic")
+check(count(classic, "Plate$") == 0, "Classic board has no binding plates")
+check(count(classic, "^Stripe$") == 1, "Classic board keeps its stripe")
+check(not pcall(RiderBuilder.build, { board = "Nope" }), "unknown board style should error")
+-- Rocker: tips rise above the flat, symmetrically.
+local tipY = {}
+for _, d in sage:GetDescendants() do
+	local dir, i = string.match(d.Name, "^Tip(%-?%d)_(%d)Deck$")
+	if dir and i == "3" then tipY[dir] = d.CFrame.Position.Y end
+end
+check(tipY["1"] and tipY["-1"] and tipY["1"] > 0.15, "tips should be turned up")
+check(tipY["1"] and math.abs(tipY["1"] - tipY["-1"]) < 1e-6, "rocker should be symmetric")
+
+if failures == 0 then print("ALL CHECKS PASSED") else error(`{failures} FAILURES`) end

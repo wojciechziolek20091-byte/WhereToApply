@@ -38,7 +38,6 @@ export type Palette = {
 	accent: Color3, -- small details: zip pulls, binding straps, board stripe
 	skin: Color3, -- head and neck
 	hair: Color3, -- hair tufts and ponytail
-	board: Color3, -- wakeboard base
 	handle: Color3, -- tow handle bar
 }
 
@@ -67,8 +66,20 @@ export type Accessories = {
 	Board: boolean, -- wakeboard with bindings
 }
 
+export type BoardStyle = {
+	deck: Color3, -- top sheet of the board
+	rail: Color3, -- darker layer showing along the rails (the sandwich edge)
+	base: Color3, -- underside
+	baseGraphic: Color3?, -- pale slash graphic on the base, or nil for none
+	binding: Color3?, -- binding plate, heel cup and straps, or nil for boots only
+	buckle: Color3, -- buckles and D-rings on the bindings
+	insert: Color3, -- insert dots and the handle slot on the deck
+	stripe: Color3?, -- optional accent stripe down the deck
+}
+
 export type BuildOptions = {
 	palette: (string | Palette)?, -- name in CONFIG.Palettes or a full palette table
+	board: (string | BoardStyle)?, -- name in CONFIG.BoardStyles or a full style table
 	proportions: { [string]: number }?, -- overrides for CONFIG.Proportions
 	accessories: { [string]: boolean }?, -- overrides for the palette's accessories
 	seed: number?, -- facet layout seed; same seed, same rider
@@ -106,7 +117,6 @@ local CONFIG = {
 				accent = rgb(255, 178, 46), -- warm yellow-orange details
 				skin = rgb(236, 182, 140), -- warm skin tone
 				hair = rgb(96, 64, 42), -- brown
-				board = rgb(46, 44, 58), -- charcoal board
 				handle = rgb(30, 30, 36), -- black handle
 			},
 			accessories = { Helmet = true, Hair = true, Ponytail = false, Handle = true, Board = true },
@@ -124,7 +134,6 @@ local CONFIG = {
 				accent = rgb(255, 196, 60), -- yellow-orange details
 				skin = rgb(228, 168, 126), -- warm skin tone
 				hair = rgb(132, 66, 32), -- auburn ponytail
-				board = rgb(40, 52, 62), -- slate board
 				handle = rgb(30, 30, 36), -- black handle
 			},
 			accessories = { Helmet = true, Hair = true, Ponytail = true, Handle = true, Board = true },
@@ -145,7 +154,6 @@ local CONFIG = {
 				accent = rgb(236, 226, 204), -- cream details (pocket tab, straps)
 				skin = rgb(240, 190, 146), -- warm skin tone
 				hair = rgb(220, 182, 96), -- blond tufts
-				board = rgb(46, 44, 58), -- charcoal board
 				handle = rgb(30, 30, 36), -- black handle
 			},
 			accessories = { Helmet = true, Hair = true, Ponytail = false, Handle = true, Board = true },
@@ -169,14 +177,46 @@ local CONFIG = {
 		HeadTurn = 35, -- head looking where the rider is going, degrees
 	} :: Proportions,
 
+	-- Board shape, shared by every style. Proportions follow the reference
+	-- board: long parallel rails, wide rounded-square tips, gentle rocker.
 	Board = {
-		Length = 4.6, -- tip to tip
-		Width = 1.35, -- edge to edge
-		Thickness = 0.18, -- base thickness
-		TipLength = 0.75, -- length of each upturned tip
-		RockerAngle = 14, -- tip upturn, degrees
+		Length = 4.6, -- tip to tip, measured flat
+		Width = 1.36, -- rail to rail
+		Thickness = 0.14, -- deck thickness (thin, like a real wakeboard)
+		FlatLength = 2.2, -- flat section in the middle, under the bindings
+		RockerAngles = { 3, 7, 13 }, -- upturn of each segment from the flat out to a tip, degrees
+		TipNarrowing = 0.88, -- width of the last segment relative to the full width
+		TipCap = 0.16, -- length of the narrower end cap that rounds each tip
 		Stance = 1.9, -- distance between the two bindings
 	},
+
+	-- Board colourways. A rider uses CONFIG.DefaultBoard unless BuildOptions.board says otherwise.
+	BoardStyles = {
+		-- From the user's board reference: sage green, black bindings, copper
+		-- buckles, pale slash graphic on the base. Logos and stickers left out.
+		Sage = {
+			deck = rgb(106, 140, 110), -- sage green top sheet
+			rail = rgb(64, 88, 70), -- darker green sandwich edge
+			base = rgb(96, 128, 100), -- slightly darker sage underside
+			baseGraphic = rgb(206, 216, 198), -- pale grey-green slashes
+			binding = rgb(32, 34, 34), -- black bindings
+			buckle = rgb(178, 116, 74), -- copper buckles
+			insert = rgb(28, 32, 30), -- insert dots and handle slot
+			stripe = nil,
+		},
+		-- The first gray-box board: charcoal with an accent stripe, no bindings.
+		Classic = {
+			deck = rgb(46, 44, 58), -- charcoal
+			rail = rgb(30, 28, 38), -- darker edge
+			base = rgb(40, 38, 50), -- underside
+			baseGraphic = nil,
+			binding = nil,
+			buckle = rgb(255, 178, 46), -- yellow-orange
+			insert = rgb(24, 22, 30),
+			stripe = rgb(255, 178, 46), -- yellow-orange stripe
+		},
+	},
+	DefaultBoard = "Sage",
 
 	Handle = {
 		Length = 1.1, -- bar length
@@ -196,6 +236,7 @@ type Ctx = {
 	root: BasePart,
 	rng: Random,
 	palette: Palette,
+	board: BoardStyle,
 	p: Proportions,
 	acc: Accessories,
 }
@@ -324,35 +365,81 @@ end
 -- Body parts
 -- ===================================================================
 
+--[[
+	Board: a flat middle section, then on each side a chain of segments, each
+	turned up a little more (CONFIG.Board.RockerAngles), so the rocker reads as
+	a gentle faceted curve in side view. Each segment is a deck block over a
+	slightly wider, darker rail layer. Tips are narrowed and their corners
+	chamfered with 45-degree blocks into a rounded-square outline.
+]]
 local function buildBoard(ctx: Ctx): Vector3
 	local bc = CONFIG.Board
-	local pal = ctx.palette
+	local st = ctx.board
 	local g = newGroup(ctx, "Board")
 	local t = bc.Thickness
-	local mid = bc.Length - 2 * bc.TipLength
-	prim(ctx, g, "Block", "Deck", Vector3.new(mid, t, bc.Width), CFrame.new(0, t / 2, 0), pal.board)
-	-- Edge facets: two long wedges along each rail so the deck reads as bevelled.
-	-- A wedge's slope faces -Z with its tall end at +Z, so the +Z rail turns it round
-	-- to slope down toward the outside edge.
-	for _, side in { -1, 1 } do
-		local cf = CFrame.new(0, t * 1.2, side * bc.Width * 0.36) * CFrame.Angles(0, if side > 0 then math.pi else 0, 0)
-		prim(ctx, g, "Wedge", `Bevel{side}`, Vector3.new(mid, t * 0.4, bc.Width * 0.28), cf, shade(pal.board, 1))
+	local w = bc.Width
+	local railT = t * 0.45
+
+	local function slab(name: string, len: number, width: number, cf: CFrame, steps: number)
+		prim(ctx, g, "Block", `{name}Deck`, Vector3.new(len, t * 0.6, width * 0.97), cf * CFrame.new(0, t * 0.2, 0), shade(st.deck, steps))
+		prim(ctx, g, "Block", `{name}Rail`, Vector3.new(len, railT, width), cf * CFrame.new(0, -t * 0.25, 0), shade(st.rail, steps * 0.5))
 	end
-	-- Upturned tips (rocker).
-	local rock = rad(bc.RockerAngle)
+
+	-- Flat middle.
+	local half = bc.FlatLength / 2
+	slab("Mid", bc.FlatLength, w, CFrame.new(0, t / 2, 0), 0)
+	-- Base underside and its graphic.
+	prim(ctx, g, "Block", "Base", Vector3.new(bc.FlatLength, 0.02, w * 0.94), CFrame.new(0, 0.005, 0), st.base)
+	if st.baseGraphic then
+		-- Four pale slashes in a loose zig-zag, laid just under the base.
+		local slashes = {
+			{ x = -0.55, z = 0.12, len = 1.25, ang = 52 },
+			{ x = 0.1, z = -0.05, len = 1.5, ang = 58 },
+			{ x = 0.62, z = 0.18, len = 0.8, ang = 48 },
+			{ x = -0.15, z = 0.32, len = 0.5, ang = 64 },
+		}
+		for i, sl in slashes do
+			local cf = CFrame.new(sl.x, -0.012, sl.z) * CFrame.Angles(0, rad(sl.ang), 0)
+			prim(ctx, g, "Block", `BaseSlash{i}`, Vector3.new(sl.len, 0.02, 0.09 + 0.03 * (i % 2)), cf, st.baseGraphic)
+		end
+	end
+
+	-- Rocker segments out to each tip.
+	local n = #bc.RockerAngles
+	local segLen = (bc.Length / 2 - half) / n
 	for _, dir in { -1, 1 } do
-		local hinge = CFrame.new(dir * mid / 2, t / 2, 0) * CFrame.Angles(0, 0, dir * rock)
-		local tip = hinge * CFrame.new(dir * bc.TipLength / 2, 0, 0)
-		prim(ctx, g, "Block", `Tip{dir}`, Vector3.new(bc.TipLength, t, bc.Width * 0.94), tip, shade(pal.board, -1))
-		-- Blunt nose and tail: a narrower end block, turned 45 degrees, rounds the outline.
-		local endCf = hinge * CFrame.new(dir * bc.TipLength, 0, 0) * CFrame.Angles(0, rad(45), 0)
-		prim(ctx, g, "Block", `TipEnd{dir}`, Vector3.new(bc.Width * 0.62, t * 0.98, bc.Width * 0.62), endCf, shade(pal.board, -1.5))
-		-- Fin.
-		prim(ctx, g, "Wedge", `Fin{dir}`, Vector3.new(0.06, 0.22, 0.36), CFrame.new(dir * (mid / 2 + 0.1), -0.11, 0) * CFrame.Angles(0, if dir > 0 then math.pi / 2 else -math.pi / 2, 0), shade(pal.board, -2))
+		local hinge = CFrame.new(dir * half, t / 2, 0)
+		local endWidth = w
+		for i, deg in bc.RockerAngles do
+			local width = w * (1 - (1 - bc.TipNarrowing) * (i / n))
+			-- Turn about the segment's inner edge, then step out to its centre.
+			local turned = hinge * CFrame.Angles(0, 0, dir * rad(deg - (bc.RockerAngles[i - 1] or 0)))
+			local centre = turned * CFrame.new(dir * segLen / 2, 0, 0)
+			slab(`Tip{dir}_{i}`, segLen * 1.04, width, centre, -0.5 * i)
+			hinge = turned * CFrame.new(dir * segLen, 0, 0)
+			endWidth = width
+		end
+		-- Rounded-square tip: a narrower end cap steps the outline in, so the
+		-- nose and tail read as rounded rather than square.
+		local cap = hinge * CFrame.Angles(0, 0, dir * rad(3)) * CFrame.new(dir * bc.TipCap / 2, 0, 0)
+		slab(`TipCap{dir}`, bc.TipCap * 1.1, endWidth * 0.8, cap, -2)
+		-- Fin under the tip, near the end of the flat.
+		prim(ctx, g, "Wedge", `Fin{dir}`, Vector3.new(0.05, 0.18, 0.32), CFrame.new(dir * (half + 0.15), -0.09, 0) * CFrame.Angles(0, if dir > 0 then math.pi / 2 else -math.pi / 2, 0), shade(st.rail, -1))
 	end
-	-- Accent stripe down the deck.
-	prim(ctx, g, "Block", "Stripe", Vector3.new(mid * 0.9, 0.02, 0.22), CFrame.new(0, t + 0.01, -bc.Width * 0.22), pal.accent)
-	return Vector3.new(0, t, 0)
+
+	-- Deck details: insert dots beside each binding and a handle slot at the tail.
+	local deckTop = t * 0.5 + t * 0.2
+	local stance = bc.Stance / 2
+	for _, x in { -stance, stance } do
+		for _, z in { -0.42, 0.42 } do
+			prim(ctx, g, "Block", `Insert{x}{z}`, Vector3.new(0.07, 0.02, 0.07), CFrame.new(x + 0.48, deckTop + 0.01, z * w * 0.5), st.insert)
+		end
+	end
+	prim(ctx, g, "Block", "HandleSlot", Vector3.new(0.1, 0.02, 0.32), CFrame.new(-half - 0.05, deckTop + 0.01, 0), st.insert)
+	if st.stripe then
+		prim(ctx, g, "Block", "Stripe", Vector3.new(bc.FlatLength * 0.9, 0.02, 0.22), CFrame.new(0, deckTop + 0.01, -w * 0.22), st.stripe)
+	end
+	return Vector3.new(0, deckTop, 0)
 end
 
 --- Chunky boot with sole, toe cap and binding strap. Returns the top of the boot.
@@ -360,16 +447,38 @@ local function buildBoot(ctx: Ctx, g: Instance, name: string, x: number, deckTop
 	local pal = ctx.palette
 	local s = ctx.p.BootSize
 	local len, wid, hgt = 1.35 * s, 0.82 * s, 0.72 * s
-	local base = CFrame.new(x, deckTop, 0)
+	local st = ctx.board
+	local plate = if st.binding then 0.08 * s else 0
+	if st.binding then
+		-- Binding plate: wider and longer than the boot.
+		local pcf = CFrame.new(x, deckTop + plate / 2, 0.02)
+		prim(ctx, g, "Block", `{name}Plate`, Vector3.new(wid * 1.3, plate, len * 1.12), pcf, st.binding)
+		-- Heel cup wrapping the back of the boot.
+		prim(ctx, g, "Block", `{name}HeelCup`, Vector3.new(wid * 1.14, hgt * 0.62, 0.2 * s), CFrame.new(x, deckTop + plate + hgt * 0.31, -len * 0.48) * tilt(ctx, 0.4), shade(st.binding, 0.5))
+		-- Side walls up each side of the boot.
+		for _, side in { -1, 1 } do
+			prim(ctx, g, "Block", `{name}Wall{side}`, Vector3.new(0.1 * s, hgt * 0.42, len * 0.7), CFrame.new(x + side * wid * 0.55, deckTop + plate + hgt * 0.21, -0.08) * tilt(ctx, 0.3), shade(st.binding, side * 0.5))
+		end
+		-- Buckle and D-ring on the outside wall, in copper.
+		local outer = if x >= 0 then 1 else -1
+		prim(ctx, g, "Block", `{name}Buckle`, Vector3.new(0.06 * s, 0.2 * s, 0.14 * s), CFrame.new(x + outer * wid * 0.63, deckTop + plate + hgt * 0.24, -len * 0.18), st.buckle)
+		prim(ctx, g, "Block", `{name}DRing`, Vector3.new(0.05 * s, 0.14 * s, 0.05 * s), CFrame.new(x + outer * wid * 0.63, deckTop + plate + hgt * 0.62, len * 0.12) * CFrame.Angles(rad(30), 0, 0), st.buckle)
+	end
+	local base = CFrame.new(x, deckTop + plate, 0)
 	prim(ctx, g, "Block", `{name}Sole`, Vector3.new(wid * 1.06, 0.16 * s, len * 1.04), base * CFrame.new(0, 0.08 * s, 0.05), pal.bootSole)
 	prim(ctx, g, "Block", `{name}Body`, Vector3.new(wid, hgt * 0.7, len * 0.9), base * CFrame.new(0, 0.16 * s + hgt * 0.35, -0.02) * tilt(ctx, 0.5), shade(pal.boots, 0))
 	prim(ctx, g, "Block", `{name}Shaft`, Vector3.new(wid * 0.92, hgt * 0.55, len * 0.55), base * CFrame.new(0, 0.16 * s + hgt * 0.8, -len * 0.18) * tilt(ctx, 0.5), shade(pal.boots, 1))
 	-- Toe cap: wedge sloping down toward the toes (+Z).
 	prim(ctx, g, "Wedge", `{name}Toe`, Vector3.new(wid * 0.98, hgt * 0.45, len * 0.38), base * CFrame.new(0, 0.16 * s + hgt * 0.62, len * 0.3) * CFrame.Angles(0, math.pi, 0), shade(pal.boots, -1))
 	prim(ctx, g, "Block", `{name}ToeBumper`, Vector3.new(wid * 1.02, 0.2 * s, 0.22 * s), base * CFrame.new(0, 0.22 * s, len * 0.48), pal.bootSole)
-	-- Binding strap across the instep.
-	prim(ctx, g, "Block", `{name}Strap`, Vector3.new(wid * 1.12, 0.14 * s, 0.32 * s), base * CFrame.new(0, 0.16 * s + hgt * 0.62, len * 0.05) * tilt(ctx, 0.4), pal.accent)
-	return Vector3.new(x, deckTop + 0.16 * s + hgt * 1.0, -len * 0.12)
+	-- Binding strap across the instep, and an ankle strap when there is a binding.
+	local strapColor = st.binding or pal.accent
+	prim(ctx, g, "Block", `{name}Strap`, Vector3.new(wid * 1.16, 0.14 * s, 0.32 * s), base * CFrame.new(0, 0.16 * s + hgt * 0.62, len * 0.05) * tilt(ctx, 0.4), strapColor)
+	if st.binding then
+		prim(ctx, g, "Block", `{name}AnkleStrap`, Vector3.new(wid * 1.1, 0.14 * s, 0.3 * s), base * CFrame.new(0, 0.16 * s + hgt * 0.92, -len * 0.2) * tilt(ctx, 0.4), shade(st.binding, 1))
+		prim(ctx, g, "Block", `{name}StrapTab`, Vector3.new(0.12 * s, 0.1 * s, 0.1 * s), base * CFrame.new(wid * 0.2, 0.16 * s + hgt * 0.7, len * 0.12), st.buckle)
+	end
+	return Vector3.new(x, deckTop + plate + 0.16 * s + hgt * 1.0, -len * 0.12)
 end
 
 local function buildLegs(ctx: Ctx, deckTop: number): (Vector3, Vector3)
@@ -377,7 +486,8 @@ local function buildLegs(ctx: Ctx, deckTop: number): (Vector3, Vector3)
 	local pal = ctx.palette
 	local g = newGroup(ctx, "Legs")
 	local stance = CONFIG.Board.Stance / 2
-	local hipY = deckTop + 0.88 * p.BootSize + 1.95 - p.Crouch
+	local plate = if ctx.board.binding then 0.08 * p.BootSize else 0
+	local hipY = deckTop + plate + 0.88 * p.BootSize + 1.95 - p.Crouch
 	local hips = {}
 	for _, dir in { 1, -1 } do
 		local name = if dir > 0 then "Front" else "Back"
@@ -593,11 +703,22 @@ function RiderBuilder.build(options: BuildOptions?): Model
 	root.Parent = model
 	model.PrimaryPart = root
 
+	local boardSpec = opts.board or CONFIG.DefaultBoard
+	local boardStyle: BoardStyle
+	if type(boardSpec) == "string" then
+		local found = (CONFIG.BoardStyles :: any)[boardSpec]
+		assert(found, `Unknown board style "{boardSpec}"`)
+		boardStyle = found
+	else
+		boardStyle = boardSpec :: BoardStyle
+	end
+
 	local ctx: Ctx = {
 		model = model,
 		root = root,
 		rng = Random.new(opts.seed or CONFIG.Seed),
 		palette = palette,
+		board = boardStyle,
 		p = proportions :: Proportions,
 		acc = accessories,
 	}
