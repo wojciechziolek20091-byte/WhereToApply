@@ -41,7 +41,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M6 Scoring and run session.** Metrics from events, three-judge panel,
   passes and falls. Tests: weights, determinism, falls hurt execution, variety
   helps composition, two falls end a run.
-- [ ] **M7 Gray-box renderer and input.** Three.js scene from primitives,
+- [x] **M7 Gray-box renderer and input.** Three.js scene from primitives,
   interpolated rendering, chase camera, keyboard mapping, HUD with tension and
   edge load.
 - [ ] **M8 Determinism and guards.** Replay test (same inputs, same state hash),

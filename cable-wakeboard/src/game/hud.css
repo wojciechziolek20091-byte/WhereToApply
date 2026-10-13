@@ -1,0 +1,68 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #9aa4ad;
+  font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #111;
+}
+#view {
+  position: fixed;
+  inset: 0;
+}
+#hud {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: 300px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.82);
+  border-radius: 6px;
+  pointer-events: none;
+}
+#hud h1 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bar {
+  height: 6px;
+  background: #ccc;
+  margin: 2px 0 6px;
+}
+.bar > i {
+  display: block;
+  height: 100%;
+  background: #333;
+}
+.bar.warn > i {
+  background: #b33;
+}
+.tricks {
+  margin: 6px 0;
+  min-height: 5.6em;
+}
+.help {
+  margin-top: 8px;
+  color: #444;
+  font-size: 11px;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin-top: 6px;
+}
+td,
+th {
+  text-align: right;
+  padding: 1px 4px;
+}
+td:first-child,
+th:first-child {
+  text-align: left;
+}
