@@ -5,7 +5,7 @@ import { evaluateLanding } from '../src/sim/landing';
 import { TAU } from '../src/sim/math/scalar';
 import { UP, vec3 } from '../src/sim/math/vec';
 import type { AirState, RiderState } from '../src/sim/rider';
-import { createRider, createSim } from '../src/sim/world';
+import { createRider } from '../src/sim/world';
 import { launch, run, untilTouchdown, flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG;

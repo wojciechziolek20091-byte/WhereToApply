@@ -12,8 +12,10 @@ Run from `cable-wakeboard/`:
 - `npm run dev`: Vite dev server
 - `npm test`: Vitest, run once
 - `npm run test:watch`
-- `npm run check`: `tsc --noEmit` over sim, game and tests
+- `npm run check`: `tsc --noEmit` over sim, game and tests (strict, no unused locals)
 - `npm run build`: typecheck and production build to `dist/`
+- `npx vite-node scripts/probe.ts` (and `probe-*.ts`): ad-hoc tuning probes that
+  print sim state over a scripted input. Not tests; edit freely.
 
 Always run `npm run check && npm test` before committing.
 
@@ -33,26 +35,37 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   pop.ts      Load tracker and computePop().
   air.ts      Air integration and rotation.
   landing.ts  Landing evaluation and fall kinds.
+  actions.ts  Shared rider transitions: applyRope, takeOff, touchDown, fallRider.
+  onFeature.ts Riding kickers and sliders, jib balance, landing on features.
   rider.ts    RiderState.
   input.ts    InputFrame (what the player asks for in one tick).
   events.ts   SimEvent union emitted each tick.
-  step.ts     stepSim(): one fixed tick.
+  step.ts     stepSim(): one fixed tick, dispatching on rider.mode.
   world.ts    SimState, createSim().
   stepper.ts  FixedStepper accumulator.
   hash.ts     State hash for determinism tests.
   tricks/     data.ts (catalogue), classify.ts.
   scoring/    judges.ts (panel), metrics.ts.
-  session.ts  RunSession: passes, falls, respawn, trick log, scoring.
-src/render/   Three.js gray-box renderer. Reads SimState; never writes it.
-src/game/     Browser glue: keyboard -> InputFrame, HUD, main loop.
+  session.ts  createRun/stepRun: passes, falls, respawn, trick log, scoring.
+  index.ts    Public exports.
+src/render/   graybox.ts: Three.js gray-box renderer. Reads SimState; never writes it.
+src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts, main.ts loop.
+scripts/      Tuning probes (vite-node).
 tests/        Vitest specs, mostly for src/sim.
 docs/MECHANICS.md  Sport mechanics and where each lives in code. Keep in sync.
 PLAN.md       Milestones and backlog.
 ```
 
-Data flow per frame: keyboard -> `InputFrame` -> `FixedStepper` runs
-`RunSession.step()` 0..n times at 60 Hz -> `SimState` (+ events) -> renderer
-interpolates between the previous and current snapshot.
+Data flow per frame: keyboard -> `InputFrame` -> `advanceStepper()` runs
+`stepRun()` 0..n times at 60 Hz -> `SimState` (+ `events` for that tick) ->
+renderer interpolates between the previous and current snapshot.
+
+Rider modes: `riding` (water) -> `feature` (kicker/slider) -> `air` -> back to
+`riding`/`feature`, or `fallen` (session respawns after `landing.fallRecovery`).
+Physics never names tricks: it emits `landed` with the `AirState`, and the
+session classifies it with `tricks/classify.ts`.
+
+In the browser console, `cable()` returns the live `RunState`.
 
 ## Conventions
 
@@ -72,9 +85,27 @@ interpolates between the previous and current snapshot.
 - When a mechanic changes, update `docs/MECHANICS.md` in the same commit.
 - Tests live in `tests/`, named after the module (`rope.test.ts`).
 
+## Tuning reference (defaults, flat water)
+
+- Trailing flat behind the carrier: about 380 N at 8.3 m/s.
+- Hard cut: 1.5 to 2.8 kN, up to about 45 km/h, about 11 m out from the line.
+- Well-timed flat-water pop: about 4.7 m/s, 1.3 s air, 1.3 m peak.
+- Kicker 1 (1.1 m, lip 0.5 rad) straight with no pop: about 1.1 s air, 1.8 m peak.
+
+`tests/riding.test.ts`, `pop.test.ts` and `features.test.ts` pin these loosely;
+retune the numbers there if a deliberate tuning change moves them.
+
 ## Gotchas
 
 - Rope stiffness stands in for the body; raising it a lot needs a smaller
   timestep or the rope will ring.
 - `tests/architecture.test.ts` fails if anything under `src/sim` imports three
-  or uses `Math.random` / `Date.now` / `performance`.
+  or uses `Math.random` / `Date.now` / `performance` / `window` / `document`
+  (comments are ignored).
+- Physics tests use `flatSim()` (no features) so riders do not hit a kicker
+  mid-test; feature tests build their own one-feature park.
+- `events` is cleared at the start of every tick. Consume them right after
+  `stepSim()` / `stepRun()`.
+- The game layer converts screen-relative steering to the sim's edge and spin
+  conventions (`carveToEdge`, `-toeSign` for frontside). Keep the sim's input
+  in rider terms.

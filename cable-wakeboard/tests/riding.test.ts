@@ -1,6 +1,5 @@
 import { DEFAULT_CONFIG } from '../src/sim/config';
 import { distance, horizontal, horizontalLength } from '../src/sim/math/vec';
-import { createSim } from '../src/sim/world';
 import { lateralOffset, run, flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG;

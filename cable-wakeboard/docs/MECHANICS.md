@@ -55,7 +55,15 @@ The stiffness stands in for the rider's body and arms, not for rope stretch.
 **The elevated tow point.** With a 9 m high cable and an 18 m rope the rope
 climbs at roughly 30 degrees. So tension has an **upward component**
 (`ropeForce.y`): it unweights the rider while riding, helps hold the rider up in
-the air, and is the source of lift for flat-water **air tricks**.
+the air, and is the source of lift for flat-water **air tricks**. If the upward
+pull exceeds `hydro.liftOffFactor` times body weight while the rider is not
+loading, the line lifts the rider off the water (`'lineLift'` takeoff).
+
+**The cut.** The rhythm the physics produces, and the one riders use: edge out
+away from the line, switch edges, and the rope goes slack for a moment while
+the rider swings back; then it loads up hard as the rider cuts back in. The
+peak of that second load is where a flat-water pop belongs. Popping in the
+slack gets about half the height.
 
 ## 3. Edging
 
@@ -147,9 +155,15 @@ Rotation is tracked separately from the board's ballistic motion in
   *after* the peak. Starting one while still rising sets `air.spunBeforePeak`,
   costs height (`air.earlySpinPenalty`) and is penalised in execution scoring.
 - **Inverts** (`flipAngle`) must be committed at takeoff: `InputFrame.flip` held
-  when the pop fires sets `air.flipDir` (-1 back, +1 front). The axis is decided
-  by how hard the rider was cutting across the line at takeoff
-  (`air.axis`: `"flip"` when nearly straight, `"roll"` when cutting hard).
+  when the pop fires sets `air.flipDir` (-1 back, +1 front). The rotation then
+  runs by itself for one full turn at `air.invertRate` (faster with the handle
+  in); not enough air time means under-rotation, and holding the flip input past
+  a full turn keeps rotating (over-rotation). The axis is decided by how hard the
+  rider was cutting across the line at takeoff (`air.axis`: `"flip"` when nearly
+  straight, `"roll"` when the cut angle exceeds `air.rollAxisCut`).
+- **Board direction in the air.** Without a spin the board follows the direction
+  of travel, since the rope steers the rider in the air too. Only
+  `air.spinAngle` counts toward landing alignment.
 - **Raleys** (`air.raley`): with a very hard edge and high tension at takeoff,
   holding `InputFrame.raley` swings the body up above the board using the rope.
   The body must come back down (`air.raleyExtension` back near 0) before landing.
@@ -193,8 +207,8 @@ dropping to flat water from the same height. Absorbing with bent knees
 | Fall | Cause in the sim |
 |---|---|
 | `buttCheck` | Heavy normal impact without absorbing (legs straight, hinged, raley not returned) |
-| `caughtEdge` | Board not aligned with direction of travel (mod 180 degrees), or landing on a big edge angle |
-| `overRotation` / `underRotation` | Invert or spin residual too far from a whole rotation |
+| `caughtEdge` | Touching down on a big edge angle (`landing.maxEdgeFraction`) |
+| `overRotation` / `underRotation` | Invert residual beyond `maxFlipError`, or spin more than `maxYawError` from a whole half turn |
 | `droppedHandle` | Player let go, or tension over `gripLimit` for longer than `gripTime` |
 | `featureCrash` | Hit a feature from the side or back, or lost balance on a slider |
 
@@ -207,8 +221,12 @@ respawns or ends the run.
 the air (`AirRecord`) to a name and a difficulty. Nothing about trick names is
 hard-coded in the physics.
 
-- **Jumps**: off a kicker or flat water, `backside` = heelside approach,
-  `frontside` = toeside approach, regular or switch.
+- **Jumps**: off a kicker, a slider or flat water. `Backside` = heelside approach,
+  `Frontside` = toeside approach, `Straight` = no edge, regular or switch
+  ("Backside Kicker Air", "Frontside Air Trick"). Boat wakeboarding's one-wake
+  and two-wake jumps have no cable equivalent; kicker size plays that role.
+  Rolling off a slider or being lifted by the line without popping is not a
+  trick.
 - **Spins**: 180, 360, 540, 720. Direction: **frontside** (chest opens to the
   direction of travel) or **backside / blind** (back turns first). Frontside sign is
   `-toeSign` in the sim's yaw convention.
@@ -237,8 +255,14 @@ Competition judging (IWWF style) uses three judges, each scoring 1 to 10 on:
 - **Intensity** (weight 3.4): size (height, distance, air time) and difficulty.
 - **Composition** (weight 3.3): variety, use of the features, flow, no dead water.
 
-Difficulty modifiers raise a trick's intensity: number of rotations, switch,
-grabbed, blind spins, combos. A run is two passes (in the sim, two laps of the
-cable) and two falls end a run. Both are config (`RunConfig.passesPerRun`,
-`RunConfig.maxFalls`). See `scoring/judges.ts`: `scoreRun()`; each judge has a
-small deterministic bias from a seeded RNG so a panel is reproducible.
+Difficulty modifiers raise a trick's intensity: number of rotations (`SPINS`),
+switch, grabbed, blind spins, combos (`MODIFIERS` in `tricks/data.ts`). A run is
+two passes (in the sim, two laps of the cable) and two falls end a run. Both are
+config (`RunConfig.passesPerRun`, `RunConfig.maxFalls`).
+
+`session.ts` turns sim events into `TrickRecord`s and `FallRecord`s;
+`scoring/metrics.ts` aggregates them (`computeRunMetrics()`), and
+`scoring/judges.ts` maps metrics to the three criteria (`criteriaFromMetrics()`)
+and runs the panel (`scoreRun()`). Each judge has a small deterministic bias from
+a seeded RNG so a panel is reproducible. Dead water is time beyond
+`run.deadWaterTime` without a trick or a feature.

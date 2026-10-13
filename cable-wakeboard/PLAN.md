@@ -44,9 +44,19 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M7 Gray-box renderer and input.** Three.js scene from primitives,
   interpolated rendering, chase camera, keyboard mapping, HUD with tension and
   edge load.
-- [ ] **M8 Determinism and guards.** Replay test (same inputs, same state hash),
+- [x] **M8 Determinism and guards.** Replay test (same inputs, same state hash),
   architecture test (no `three` or `Math.random` in `src/sim`), CLAUDE.md
   final pass.
+
+## Known limitations
+
+- The rope is a straight spring-damper: no sag, no rope mass, no whip.
+- Spins rotate only while the input is held; there is no angular momentum.
+- Inverts auto-rotate one turn; the player only chooses when to stop extra rotation.
+- Raley and invert visuals are rough approximations of the body.
+- Jib balance is a 1D model; there is no rail-to-rail transfer or presses.
+- Judges are formula-based with a seeded bias, not a learned model.
+- Renderer has no level of detail, shadows or water surface motion.
 
 ## Backlog (later sessions)
 
@@ -59,3 +69,6 @@ purpose-built park. Assumptions made to fill the gaps:
 - Tuning pass against video of real riders (speeds, air times, heights).
 - Replay recording and playback UI.
 - Trick input buffer and a proper trick UI.
+- Presses (nose, tail) and spins on and off sliders.
+- Corner tricks and rope-slack mechanics at towers (currently emergent only).
+- Per-feature scoring of "use of course".

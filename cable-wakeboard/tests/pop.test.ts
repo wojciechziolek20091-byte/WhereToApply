@@ -1,6 +1,5 @@
 import { DEFAULT_CONFIG } from '../src/sim/config';
 import { computePop, popTimingFactor, updateLoadTracker, type PopInputs } from '../src/sim/pop';
-import { createSim } from '../src/sim/world';
 import { cutAndPop, untilTouchdown, flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG.pop;

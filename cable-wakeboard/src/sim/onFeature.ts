@@ -1,7 +1,7 @@
 import type { SimConfig } from './config';
 import { DT, GRAVITY } from './config';
 import { edgeNorm, toeSign, updateEdge } from './edge';
-import { featureUnder, surfaceAt, toLocal, toWorld } from './features';
+import { featureUnder, surfaceAt, toWorld } from './features';
 import type { InputFrame } from './input';
 import { approach, clamp01, sign, wrapAngle, wrapHalfTurn } from './math/scalar';
 import { add, dot, forwardOf, horizontal, horizontalLength, rightOf, scale } from './math/vec';
@@ -50,7 +50,7 @@ export function tryEnterFeature(s: SimState): boolean {
   return true;
 }
 
-function startJib(r: RiderState, feature: ResolvedFeature, boardYaw: number): JibState {
+function startJib(feature: ResolvedFeature, boardYaw: number): JibState {
   return {
     featureId: feature.def.id,
     balance: 0,
@@ -199,7 +199,7 @@ export function stepFeature(s: SimState, input: InputFrame): void {
   r.heading = f.heading;
 
   if (f.def.kind === 'slider' && next.onTop) {
-    if (!r.jib) r.jib = startJib(r, f, r.heading);
+    if (!r.jib) r.jib = startJib(f, r.heading);
     if (!updateJib(r, r.jib, input, ropeLat, f.def.width / 2, cfg)) {
       endJib(s);
       fallRider(s, 'featureCrash');
@@ -241,7 +241,7 @@ export function touchDownOnFeature(s: SimState, air: AirState): boolean {
     releaseTick: -1,
     pendingPop: null,
   };
-  r.jib = startJib(r, feature, feature.heading + wrapAngle(yaw));
+  r.jib = startJib(feature, feature.heading + wrapAngle(yaw));
   setMode(s, 'feature');
   s.events.push({ type: 'landed', tick: s.tick, air, landing });
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
