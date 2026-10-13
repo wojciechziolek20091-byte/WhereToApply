@@ -16,7 +16,9 @@ describe('sim architecture', () => {
   });
 
   it.each(simFiles)('%s stays pure and deterministic', (file) => {
-    const src = readFileSync(file, 'utf8');
+    const src = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
     expect(src).not.toMatch(/from\s+['"]three/);
     expect(src).not.toMatch(/Math\.random|Date\.now|performance\.now|\bwindow\b|\bdocument\b/);
   });

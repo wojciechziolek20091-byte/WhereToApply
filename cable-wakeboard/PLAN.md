@@ -23,7 +23,7 @@ purpose-built park. Assumptions made to fill the gaps:
 
 - [x] **M0 Docs and scaffold.** MECHANICS.md, PLAN.md, CLAUDE.md. Vite + TS +
   Vitest + Three.js project, strict tsconfig, `npm test` and `npm run check`.
-- [ ] **M1 Sim math, config, cable.** Vector and angle helpers, seeded RNG,
+- [x] **M1 Sim math, config, cable.** Vector and angle helpers, seeded RNG,
   `SimConfig` defaults, cable path with filleted corners, carrier kinematics,
   fixed-step accumulator. Tests for path length, continuity, wrap-around.
 - [ ] **M2 Rope and riding.** Rope tension, hydro forces, edge build and heading,
