@@ -51,7 +51,10 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
 src/art/      Engine-free art: mesh.ts (primitives and hulls -> flat-shaded triangle
               arrays), riders.ts + riderParts.json (rider art exported from the Luau
               RiderBuilder by scripts/export-rider-art.sh). No engine imports.
-src/render/   babylon/: the game's engine (Babylon.js): BabylonRenderer.ts (scene,
+src/render/   babylon/: the game's engine (Babylon.js). character.ts: the smooth rider
+              from the user's character sheet (procedural shapes, two-bone IK pose,
+              colourways Sheet/A/B, one merged mesh); art/board.ts is its board.
+              rot.ts: basis/quaternion helpers. BabylonRenderer.ts (scene,
               rider, water, forest, buoys, other riders, spray, wake, chase
               camera), looks.ts (DAY default, DUSK via ?look=dusk). graybox.ts: old
               three.js view, kept for debugging via ?renderer=graybox.
@@ -61,9 +64,10 @@ src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts (tiles, tri
               published page needs no CSS of its own), main.ts loop.
 scripts/      Tuning probes (vite-node).
 roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
-              See roblox/README.md. RiderBuilder.luau is the source of truth for
-              rider art: after changing it, run scripts/export-rider-art.sh
-              <path/to/luau> to refresh src/art/riderParts.json for the web game.
+              See roblox/README.md. The Roblox rider (RiderBuilder.luau, faceted) is
+              no longer the web rider; src/art/riderParts.json (its export) is kept
+              for the art tests and the old look, refresh it with
+              scripts/export-rider-art.sh <path/to/luau>.
 tests/        Vitest specs, mostly for src/sim.
 docs/MECHANICS.md  Sport mechanics and where each lives in code. Keep in sync.
 PLAN.md       Milestones and backlog.
@@ -78,7 +82,8 @@ Rider modes: `riding` (water) -> `feature` (kicker/slider) -> `air` -> back to
 Physics never names tricks: it emits `landed` with the `AirState`, and the
 session classifies it with `tricks/classify.ts`.
 
-In the browser console, `cable()` returns the live `RunState`.
+In the browser console, `cable()` returns the live `RunState`. `?cam=front|back|side`
+frames the rider close up for checking the character.
 
 ## Conventions
 

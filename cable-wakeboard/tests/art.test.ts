@@ -72,3 +72,31 @@ describe('exported rider art', () => {
     }
   });
 });
+
+import { boardOutline, buildBoardGeometry, rockerAt, WAKEBOARD } from '../src/art/board';
+
+describe('smooth board', () => {
+  it('has the rider-facing size and a symmetric rocker', () => {
+    const pts = boardOutline(WAKEBOARD);
+    const xs = pts.map((p) => p[0]);
+    const zs = pts.map((p) => p[1]);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(WAKEBOARD.length, 6);
+    expect(Math.max(...zs) - Math.min(...zs)).toBeCloseTo(WAKEBOARD.width, 6);
+    expect(rockerAt(WAKEBOARD, 0)).toBe(0);
+    expect(rockerAt(WAKEBOARD, WAKEBOARD.length / 2)).toBeCloseTo(WAKEBOARD.rocker, 9);
+    expect(rockerAt(WAKEBOARD, -0.5)).toBeCloseTo(rockerAt(WAKEBOARD, 0.5), 12);
+  });
+
+  it('builds a closed triangle list with a colour per vertex', () => {
+    const g = buildBoardGeometry(WAKEBOARD, { deck: [0, 1, 0], rail: [0, 0, 0], base: [1, 1, 1] });
+    expect(g.indices.length % 3).toBe(0);
+    expect(g.colors.length / 4).toBe(g.positions.length / 3);
+    expect(Math.max(...g.indices)).toBeLessThan(g.positions.length / 3);
+    // Deck triangles face up: their normal has positive Y.
+    const p = (i: number) => [g.positions[3 * i]!, g.positions[3 * i + 1]!, g.positions[3 * i + 2]!];
+    const [a, b, c] = [p(g.indices[0]!), p(g.indices[1]!), p(g.indices[2]!)];
+    const u = [b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!];
+    const v = [c[0]! - a[0]!, c[1]! - a[1]!, c[2]! - a[2]!];
+    expect(u[2]! * v[0]! - u[0]! * v[2]!).toBeGreaterThan(0);
+  });
+});

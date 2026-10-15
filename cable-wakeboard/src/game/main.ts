@@ -42,7 +42,10 @@ function createRenderer(): GameRenderer {
   canvas.style.touchAction = 'none';
   view.appendChild(canvas);
   const look = params.get('look') === 'dusk' ? LOOKS.dusk : LOOKS.day;
-  return new BabylonRenderer(canvas, run.sim, initialPalette, look);
+  const r = new BabylonRenderer(canvas, run.sim, initialPalette, look);
+  const cam = params.get('cam');
+  if (cam === 'front' || cam === 'back' || cam === 'side') r.debugCam = cam;
+  return r;
 }
 
 const renderer = createRenderer();

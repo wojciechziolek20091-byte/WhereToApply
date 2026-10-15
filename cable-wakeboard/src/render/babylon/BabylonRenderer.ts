@@ -11,7 +11,7 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
-import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
@@ -26,7 +26,7 @@ import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
 import '@babylonjs/core/Particles/particleSystemComponent';
 import { Scene } from '@babylonjs/core/scene';
 import { boxHull, buildHullMesh, extrudeProfile, placeHulls, rockHull, type HullPart, type MeshData } from '../../art/mesh';
-import { riderMesh, STUD, type RiderPalette } from '../../art/riders';
+import type { RiderPalette } from '../../art/riders';
 import { cablePointAt } from '../../sim/cable';
 import { toeSign } from '../../sim/edge';
 import { kickerHeightAt } from '../../sim/features';
@@ -34,10 +34,11 @@ import { createRng, nextFloat, nextRange, type RngState } from '../../sim/math/r
 import { clamp01 } from '../../sim/math/scalar';
 import { horizontalLength, lerpVec, type Vec3 } from '../../sim/math/vec';
 import type { ResolvedFeature } from '../../sim/park';
-import { hipPosition } from '../../sim/step';
 import type { SimState } from '../../sim/world';
 import type { RenderSnapshot } from '../graybox';
 import { DAY, type Look } from './looks';
+import { buildCharacter, characterMaterial, type CharacterRig } from './character';
+import { applyBasis, axisAngle, basisToQuaternion, col, mulBasis, yawBasis } from './rot';
 
 const v3 = (p: Vec3): Vector3 => new Vector3(p.x, p.y, p.z);
 const c3 = (c: readonly [number, number, number]): Color3 => new Color3(c[0], c[1], c[2]);
@@ -54,33 +55,6 @@ function meshFromData(name: string, data: MeshData, scene: Scene, material: Stan
   mesh.material = material;
   return mesh;
 }
-
-/** 3x3 rotation as world-space images of the local axes (columns). */
-type Basis = [Vec3, Vec3, Vec3];
-const col = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
-const mulBasis = (a: Basis, b: Basis): Basis =>
-  b.map((v) => col(
-    a[0].x * v.x + a[1].x * v.y + a[2].x * v.z,
-    a[0].y * v.x + a[1].y * v.y + a[2].y * v.z,
-    a[0].z * v.x + a[1].z * v.y + a[2].z * v.z,
-  )) as Basis;
-/** Right-handed rotation by `angle` about unit axis `k` (Rodrigues). */
-function axisAngle(k: Vec3, angle: number): Basis {
-  const c = Math.cos(angle), s = Math.sin(angle), t = 1 - c;
-  const rot = (v: Vec3): Vec3 => {
-    const d = k.x * v.x + k.y * v.y + k.z * v.z;
-    const cx = k.y * v.z - k.z * v.y, cy = k.z * v.x - k.x * v.z, cz = k.x * v.y - k.y * v.x;
-    return col(v.x * c + cx * s + k.x * d * t, v.y * c + cy * s + k.y * d * t, v.z * c + cz * s + k.z * d * t);
-  };
-  return [rot(col(1, 0, 0)), rot(col(0, 1, 0)), rot(col(0, 0, 1))];
-}
-/** Sim heading as a basis: local X along travel, Z to the right of travel. */
-const yawBasis = (psi: number): Basis => [col(Math.cos(psi), 0, Math.sin(psi)), col(0, 1, 0), col(-Math.sin(psi), 0, Math.cos(psi))];
-/** Babylon uses row vectors, so the basis vectors are the matrix rows. */
-const basisToQuaternion = (b: Basis): Quaternion =>
-  Quaternion.FromRotationMatrix(
-    Matrix.FromValues(b[0].x, b[0].y, b[0].z, 0, b[1].x, b[1].y, b[1].z, 0, b[2].x, b[2].y, b[2].z, 0, 0, 0, 0, 1),
-  );
 
 /**
  * Tileable ripple texture: a sum of sine waves with whole-number wave counts
@@ -152,6 +126,8 @@ export class BabylonRenderer {
   private readonly sun: DirectionalLight;
   private readonly shadows: ShadowGenerator;
   private rider: Mesh;
+  private rig: CharacterRig;
+  private readonly charMat: StandardMaterial;
   private readonly carrier: Mesh;
   private rope: LinesMesh;
   readonly spray: ParticleSystem;
@@ -163,6 +139,9 @@ export class BabylonRenderer {
   private camPos: Vector3 | null = null;
   private palette: RiderPalette;
   private clock = 0;
+
+  /** Fixed close-up camera for checking the character (`?cam=front|back|side`). */
+  debugCam: 'front' | 'back' | 'side' | null = null;
 
   constructor(canvas: HTMLCanvasElement, sim: SimState, palette: RiderPalette, look: Look = DAY) {
     this.palette = palette;
@@ -204,7 +183,10 @@ export class BabylonRenderer {
     this.buildShore(lake);
     this.buildPark(sim);
 
-    this.rider = this.buildRider(palette);
+    this.charMat = characterMaterial(scene);
+    const built = this.buildRider(palette);
+    this.rider = built.mesh;
+    this.rig = built.rig;
     const carrierMat = new StandardMaterial('carrierMat', scene);
     carrierMat.diffuseColor = c3(look.carrier);
     carrierMat.specularColor = Color3.Black();
@@ -232,14 +214,17 @@ export class BabylonRenderer {
     this.palette = palette;
     this.shadows.removeShadowCaster(this.rider);
     this.rider.dispose();
-    this.rider = this.buildRider(palette);
+    const built = this.buildRider(palette);
+    this.rider = built.mesh;
+    this.rig = built.rig;
   }
 
-  private buildRider(palette: RiderPalette): Mesh {
-    const mesh = meshFromData(`rider-${palette}`, riderMesh(palette), this.scene, this.flat);
-    mesh.rotationQuaternion = Quaternion.Identity();
-    this.shadows.addShadowCaster(mesh);
-    return mesh;
+  /** The smooth character from the user's sheet (see character.ts), in metres. */
+  private buildRider(palette: RiderPalette): { mesh: Mesh; rig: CharacterRig } {
+    const built = buildCharacter(this.scene, palette, this.charMat);
+    built.mesh.rotationQuaternion = Quaternion.Identity();
+    this.shadows.addShadowCaster(built.mesh);
+    return built;
   }
 
   /** Lake rectangle: the cable loop plus a margin of open water. */
@@ -446,9 +431,9 @@ export class BabylonRenderer {
   private buildGhosts(carrierMat: StandardMaterial): void {
     const palettes: RiderPalette[] = ['A', 'B', 'A'];
     palettes.forEach((pal, k) => {
-      const mesh = meshFromData(`ghost${k}`, riderMesh(pal), this.scene, this.flat);
+      const mesh = buildCharacter(this.scene, pal, this.charMat).mesh;
+      mesh.name = `ghost${k}`;
       mesh.rotationQuaternion = Quaternion.Identity();
-      mesh.scaling = new Vector3(STUD, STUD, STUD);
       const carrier = CreateBox(`ghostCarrier${k}`, { width: 0.7, height: 0.35, depth: 0.4 }, this.scene);
       carrier.material = carrierMat;
       const rope = CreateLines(`ghostRope${k}`, { points: [Vector3.Zero(), Vector3.Zero()], updatable: true }, this.scene);
@@ -476,7 +461,7 @@ export class BabylonRenderer {
       g.mesh.position = new Vector3(x, 0, z);
       const edge = -Math.sign(swayRate) * 0.45 * Math.min(1, Math.abs(swayRate) / 1.5);
       g.mesh.rotationQuaternion = basisToQuaternion(mulBasis(yawBasis(heading), axisAngle(col(1, 0, 0), -edge)));
-      g.rope = CreateLines(g.rope.name, { points: [v3(cp.pos), new Vector3(x, 1.0, z)], instance: g.rope });
+      g.rope = CreateLines(g.rope.name, { points: [v3(cp.pos), new Vector3(x, 0.8, z)], instance: g.rope });
     }
   }
 
@@ -560,13 +545,14 @@ export class BabylonRenderer {
     this.rider.rotationQuaternion = basisToQuaternion(basis);
     // Mirror across the travel axis when the toes point left (goofy or switch).
     const squat = 1 - 0.12 * r.legCompression;
-    this.rider.scaling = new Vector3(STUD, STUD * squat, STUD * toes);
+    this.rider.scaling = new Vector3(1, squat, toes);
 
-    // Rope from carrier to hips.
+    // Rope from the carrier to the handle in the rider's hands.
     if (r.hasHandle) {
-      const hip = hipPosition(sim);
-      const hipLerped = new Vector3(hip.x + riderPos.x - r.pos.x, hip.y + riderPos.y - r.pos.y, hip.z + riderPos.z - r.pos.z);
-      this.rope = CreateLines('rope', { points: [v3(carrierPos), hipLerped], instance: this.rope });
+      const h = this.rig.handle;
+      const local = applyBasis(basis, { x: h.x, y: h.y * squat, z: h.z * toes });
+      const handle = new Vector3(riderPos.x + local.x, riderPos.y + local.y, riderPos.z + local.z);
+      this.rope = CreateLines('rope', { points: [v3(carrierPos), handle], instance: this.rope });
       this.rope.isVisible = true;
     } else {
       this.rope.isVisible = false;
@@ -603,8 +589,18 @@ export class BabylonRenderer {
     // Keep the shadow camera on the rider.
     this.sun.position = v3(riderPos).add(new Vector3(...this.look.sunDirection).normalize().scale(40));
 
-    this.updateCamera(riderPos, carrierPos, frameSeconds);
+    if (this.debugCam) this.closeUpCamera(riderPos, r.heading, toes);
+    else this.updateCamera(riderPos, carrierPos, frameSeconds);
     this.scene.render();
+  }
+
+  /** Close-up of the rider: front faces the rider's chest (toe side). */
+  private closeUpCamera(riderPos: Vec3, heading: number, toes: number): void {
+    const f = { x: Math.cos(heading), z: Math.sin(heading) };
+    const toe = { x: -Math.sin(heading) * toes, z: Math.cos(heading) * toes };
+    const dir = this.debugCam === 'front' ? toe : this.debugCam === 'back' ? { x: -toe.x, z: -toe.z } : f;
+    this.camera.position = new Vector3(riderPos.x + dir.x * 3.2, riderPos.y + 1.0, riderPos.z + dir.z * 3.2);
+    this.camera.setTarget(new Vector3(riderPos.x, riderPos.y + 0.85, riderPos.z));
   }
 
   /** Chase camera low behind the rider, looking toward the carrier. */
