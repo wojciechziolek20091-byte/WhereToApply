@@ -75,28 +75,34 @@ purpose-built park. Assumptions made to fill the gaps:
   clubhouse, tents, halls, parking, roads and fields. Same data in Luau
   (generated), drawn by both the web renderer and the Roblox client.
 
+- [x] **A1-A11 Rider animation** (the animation spec): jointed rigs on the web
+  and in Roblox, a layered procedural animator (poses as data, Hermite clips,
+  springs, inertialized blends, two-bone IK with the handle as a real object,
+  head aim, spine lead and spotting, COM pivot for inverts, grabs, slides,
+  landings, crash lead-ins and a ragdoll), section 11 physics behind flags,
+  VFX/camera/sound hooks, replication packets, F4/F6/F7 debug tools, a Luau
+  twin with parity. docs/ANIMATION.md.
+
 ## Known limitations
 
 - The rope is a straight spring-damper: no sag, no rope mass, no whip.
-- Spins rotate only while the input is held; there is no angular momentum.
+- Spins rotate only while the input is held; tuck only reshapes the speed
+  within a turn (section 11), it is not a free angular-momentum model.
 - Inverts auto-rotate one turn; the player only chooses when to stop extra rotation.
-- Raley and invert visuals are rough approximations of the body.
 - Jib balance is a 1D model; there is no rail-to-rail transfer or presses.
 - Judges are formula-based with a seeded bias, not a learned model.
-- Rider is one rigid mesh: no limb animation for crouch, grabs or raleys yet.
-- Water is static faceted geometry; no waves or wake trail.
+- The raley swings about the board's long axis toward the toes, not exactly
+  toward the cable (docs/ANIMATION.md lists what still looks stiff).
+- Water is static faceted geometry; no waves.
 - The sim does not know about land: the shoreline and island are placed out of
   reach instead (tests/site.test.ts). Riding into the bank is not a fall yet.
 - No Roblox Studio session was available: the Roblox client and server scripts
   compile and the shared Sim and ComboValidator are tested in the luau CLI, but
   the Studio-only parts (ContextActionService, Beam, GUI, RemoteEvents,
-  leaderstats) have not been run in Studio. There is no ragdoll yet (the
-  RiderBuilder model is welded primitives): a crash tumbles the model.
-- Multiplayer: the rider is a local, client-side model; other players do not
-  see it yet.
-- The Roblox client (`roblox/src/client`) has not been run in Studio yet: the
-  sim under it is verified, the camera, scale and HUD are a first pass. It does
-  not mirror the rider for goofy/switch.
+  leaderstats, Motor6D posing, adornments, particles) have not been run in
+  Studio. The animation and rig are checked by parity and under a mock.
+- Sound hooks have no assets (AnimConfig.Sound ids are empty).
+- R15 rigs are mapped (RigMap) but untested; the game uses its own rig.
 
 ## Backlog (later sessions)
 
@@ -104,7 +110,7 @@ purpose-built park. Assumptions made to fill the gaps:
 - Multiple carriers and other riders on the cable.
 - Dock start.
 - Gamepad input and analog edge.
-- Rope sag and a proper rope visual.
+- Rope mass and whip (the visual sags; the physics rope is still a spring).
 - More features: A-frames, kinked rails, pipes, table tops, landing ramps.
 - Tuning pass against video of real riders (speeds, air times, heights).
 - Replay recording and playback UI.

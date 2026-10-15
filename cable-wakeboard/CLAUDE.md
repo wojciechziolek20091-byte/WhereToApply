@@ -17,7 +17,7 @@ Run from `cable-wakeboard/`:
 - `npx vite-node scripts/probe.ts` (and `probe-*.ts`): ad-hoc tuning probes that
   print sim state over a scripted input. Not tests; edit freely.
 
-- `LUAU=/path/to/luau npm run test:parity`: TypeScript <-> Luau parity (needs the
+- `LUAU=/path/to/luau npm run test:parity`: TypeScript <-> Luau parity, sim and animation, plus the Roblox rig check (needs the
   `luau` CLI from https://github.com/luau-lang/luau/releases; skipped without LUAU)
 
 Always run `npm run check && npm test` before committing, and the parity test
@@ -68,26 +68,42 @@ src/art/      Engine-free art: site.ts (polygon helpers, ear clipping, triangle 
               for the park site), mesh.ts (primitives and hulls -> flat-shaded triangle
               arrays), riders.ts + riderParts.json (rider art exported from the Luau
               RiderBuilder by scripts/export-rider-art.sh). No engine imports.
+src/anim/     Rider animation (docs/ANIMATION.md). Engine-free like the sim, but NOT
+              bit-exact (Math.sin & co. are fine here). state.ts: RiderAnimState (the
+              spec's contract) + animStateFromSim adapter. animator.ts: the layered
+              system (base poses, trick clips, spring reactions, IK, spine lead,
+              inertialized blends, COM pivot, hands and handle). poses.ts: every
+              pose and clip as data. channels.ts (pose as numbers, mirrorPose),
+              clip.ts (Hermite sampling), skeleton.ts (joints, FK, COM), ik.ts,
+              spring.ts, quat.ts, ragdoll.ts, replication.ts (packets),
+              testDriver.ts (scripted scenarios for the scrubber and tests),
+              config.ts (AnimConfig, spec-style PascalCase keys).
 src/render/   babylon/: the game's engine (Babylon.js). character.ts: the smooth rider
-              from the user's character sheet (procedural shapes, two-bone IK pose,
-              colourways Sheet/A/B, one merged mesh); art/board.ts is its board.
+              from the user's character sheet (procedural shapes, colourways
+              Sheet/A/B), jointed: one TransformNode per bone, applyFrame poses it;
+              art/board.ts is its board.
               rot.ts: basis/quaternion helpers. BabylonRenderer.ts (scene,
               rider, water, forest, buoys, other riders, spray, wake, chase
               camera), looks.ts (DAY default, DUSK via ?look=dusk). graybox.ts: old
               three.js view, kept for debugging via ?renderer=graybox.
               Renderers read SimState; they never write it.
-src/game/     Browser glue: keyboard.ts (keys -> raw InputFrame), hud.ts (tension meter
+src/game/     Browser glue: animDebug.ts (F7 pose scrubber), keyboard.ts (keys -> raw InputFrame), hud.ts (tension meter
               with LOADED, trick feed and combo, pop timing bar, handle-pass ring,
               balance meter, help on H, debug overlay on F3), hud.css (imported
-              ?inline and injected), main.ts loop (`?park=test` for the test map).
+              ?inline and injected), main.ts loop (`?park=test` for the test map,
+              F4 slow motion, F6 skeleton, F7 scrubber, `?scrub=Name&u=0.5`,
+              `?clean=1` for captures, `?physics=old` for section 11 off).
 src/render/pose.ts  Rider orientation shared by both renderers (twin: roblox RiderPose.luau).
 scripts/      Tuning probes (vite-node).
 roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
               src/shared/Sim/: the Luau twin of src/sim (one module per file,
               same names, same fields). src/shared/WakeInput.luau: actions and
               bindings -> InputFrame (twin of keyboard.ts). ComboValidator.luau:
-              server checks. src/client/WakeClient.client.luau: Studio client
-              (ContextActionService, Beam rope, HUD). src/server/WakeServer.server.luau:
+              server checks. src/shared/Anim/: the Luau twin of src/anim.
+              RigMap.luau, RiderRig.luau: animation frames -> Motor6Ds.
+              src/client/WakeClient.client.luau: Studio client
+              (ContextActionService, animated rig, Beam rope, VFX, HUD, debug keys,
+              anim replication). src/server/WakeServer.server.luau:
               RemoteEvents, validation, leaderstats.
               See roblox/README.md. The Roblox rider (RiderBuilder.luau, faceted) is
               no longer the web rider; src/art/riderParts.json (its export) is kept
@@ -133,6 +149,18 @@ from the south) and `?cam=map` (top-down, north up) show the whole park.
   pass, E (+R/N/T) grabs, Shift arms out, X let go.
 - When a mechanic changes, update `docs/MECHANICS.md` in the same commit.
 - Tests live in `tests/`, named after the module (`rope.test.ts`).
+
+## Two versions of the animation (TypeScript and Luau)
+
+`src/anim` and `roblox/src/shared/Anim` are also twins, checked by
+`tests/animParity.test.ts` (to 1e-6, not bit-exact) and
+`tests/architecture.test.ts` (every TS module has its twin: animator ->
+Animator, ik -> TwoBoneIK, state -> RiderAnimStateAdapter, replication ->
+AnimReplication, testDriver -> AnimTestDriver, config -> AnimConfig,
+poses -> RiderPoses). AnimConfig.luau and RiderPoses.luau are generated
+(`scripts/gen-luau-data.ts`). Luau channel arrays are 1-based; the replication
+packet's Luau indices are the TS index + 1. The Roblox glue (RiderBuilder rig,
+RigMap, RiderRig) is checked under the mock by `tests/robloxRig.test.ts`.
 
 ## Two versions of the sim (TypeScript and Luau)
 
@@ -193,6 +221,12 @@ Probes: `scripts/probe-tension.ts` (milestone 2 log), `probe-air.ts`,
 
 ## Gotchas
 
+- Animation rest poses must stay mirror-symmetric (tests check both rigs):
+  goofy and switch riders are the regular pose mirrored, and the rig is
+  turned half round. Keep RiderBuilder's TorsoLean/Twist/HeadTurn at 0.
+- Bone rest orientation is identity in both rigs, so a joint's local rotation
+  is its Motor6D.Transform / TransformNode rotation. Babylon quaternions
+  take ours as-is (tests/character.test.ts checks it).
 - Rope stiffness stands in for the body; raising it a lot needs a smaller
   timestep or the rope will ring.
 - Import Babylon per module (`@babylonjs/core/Meshes/mesh`, not `@babylonjs/core`):

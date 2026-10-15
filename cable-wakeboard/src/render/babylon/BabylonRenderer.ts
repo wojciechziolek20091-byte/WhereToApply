@@ -903,8 +903,9 @@ export class BabylonRenderer {
     const f = { x: Math.cos(heading), z: Math.sin(heading) };
     const toe = { x: -Math.sin(heading) * toes, z: Math.cos(heading) * toes };
     const dir = this.debugCam === 'front' ? toe : this.debugCam === 'back' ? { x: -toe.x, z: -toe.z } : f;
-    this.camera.position = new Vector3(riderPos.x + dir.x * 3.2, riderPos.y + 1.0, riderPos.z + dir.z * 3.2);
-    this.camera.setTarget(new Vector3(riderPos.x, riderPos.y + 0.85, riderPos.z));
+    // Never below the water (a floating ragdoll would put it there).
+    this.camera.position = new Vector3(riderPos.x + dir.x * 3.2, Math.max(0.6, riderPos.y + 1.0), riderPos.z + dir.z * 3.2);
+    this.camera.setTarget(new Vector3(riderPos.x, Math.max(0.3, riderPos.y + 0.85), riderPos.z));
   }
 
   /** Chase camera low behind the rider, looking toward the carrier; pulls out for inverts, kicks on pops and landings. */

@@ -68,8 +68,8 @@ RiderPoses.ALL_CLIPS = {
 		name = "ollie",
 		keys = {
 			{ t = 0, knee = 16, joints = { Waist = { x = 4 } }, board = { z = 9 } },
-			{ t = 0.15, knee = 52, joints = { Waist = { x = 14 } }, board = { z = 2 } },
-			{ t = 0.45, knee = 46, joints = { Waist = { x = 12 } }, board = { z = 0 } },
+			{ t = 0.22, knee = 70, joints = { Hips = { x = 10 }, Waist = { x = 18 } }, board = { z = 2 } },
+			{ t = 0.45, knee = 58, joints = { Hips = { x = 8 }, Waist = { x = 14 } }, board = { z = 0 } },
 			{ t = 0.85, knee = 32, joints = { Waist = { x = 8 } } },
 			{ t = 1, knee = 30, joints = { Waist = { x = 8 } } },
 		},

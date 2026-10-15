@@ -10,7 +10,7 @@
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:parity": "vitest run tests/parity.test.ts tests/architecture.test.ts"
+    "test:parity": "vitest run tests/parity.test.ts tests/animParity.test.ts tests/robloxRig.test.ts tests/architecture.test.ts"
   },
   "dependencies": {
     "@babylonjs/core": "^9.27.1",

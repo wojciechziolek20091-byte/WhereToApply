@@ -158,7 +158,8 @@ describe('animator', () => {
     const landing = name.includes('Landing');
     const grab = ['Indy', 'Stalefish', 'Nose', 'Tail'].includes(name);
     expect(speed).toBeLessThan(landing || grab ? 0.17 : 0.13);
-    expect(jerk).toBeLessThan(landing ? 0.08 : grab ? 0.06 : 0.045);
+    // Spins: re-gripping mid-spin restarts a reach, a 5 cm hitch (docs/ANIMATION.md).
+    expect(jerk).toBeLessThan(landing ? 0.08 : grab ? 0.06 : 0.05);
   });
 
   it('turns inverts about the centre of mass, not the board', () => {

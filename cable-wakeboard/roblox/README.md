@@ -21,8 +21,15 @@ src/shared/Sim/                 The game simulation, one ModuleScript per file (
                                 is the folder's module). Same code as ../src/sim.
 src/shared/WakeInput.luau       ContextActionService action names and keys -> InputFrame
                                 (same controls as the web game), CONTROLS_HELP text
-src/shared/RiderPose.luau       Sim posture -> joint angles for the rider model (same as
-                                ../src/render/pose.ts)
+src/shared/Anim/                The rider animation system, one ModuleScript per file (twin
+                                of ../src/anim; see ../docs/ANIMATION.md): Animator,
+                                RiderAnimStateAdapter, TwoBoneIK, Ragdoll, AnimReplication,
+                                AnimTestDriver, generated AnimConfig and RiderPoses
+src/shared/RiderPose.luau       Board orientation from the sim (yaw, inverts, edge), used by
+                                the adapter (same as ../src/render/pose.ts)
+src/shared/RiderRig.luau        An animation frame -> the rig: PivotTo, Motor6D.Transform,
+                                the handle model
+src/shared/RigMap.luau          Animation joints -> Motor6D names (WakeRider rig and R15)
 src/shared/ComboValidator.luau  Server-side checks of a reported combo: trick points,
                                 combo factors and totals against the sim's tables
 src/shared/SiteGeometry.luau    Polygon helpers (ear clipping) for drawing the park site
@@ -34,7 +41,8 @@ src/client/WakeClient.client.luau  Plays the sim: the park from the sketch and m
 src/server/WakeServer.server.luau  Creates ReplicatedStorage.WakeRemotes, validates every
                                 ComboEnded with ComboValidator, keeps leaderstats
                                 (Points, Best Combo)
-src/shared/RiderBuilder.luau    RiderBuilder.build(options) -> Model
+src/shared/RiderBuilder.luau    RiderBuilder.build(options) -> jointed Model (Motor6D per
+                                joint), RiderBuilder.rigDef(options) -> the animator's rig
 src/shared/DuskLighting.luau    DuskLighting.apply(): sky, haze, sun, post effects
 src/shared/WaterSpray.luau      WaterSpray.attach(rider), setIntensity(emitter, 0..1)
 src/server/Showcase.server.luau Lake, rocks and one rider per palette, for judging the look
@@ -42,6 +50,8 @@ tests/mock_roblox.luau          Tiny Roblox API mock for running the builder out
 tests/rider_spec.luau           Smoke tests: classes, material, welds, height, shades, toggles
 tests/run.sh                    Bundles mock + module + spec and runs them with `luau`
 tests/sim_trace.luau            Scripted run printed tick by tick (parity test, Luau half)
+tests/anim_trace.luau           Animation frames for a seeded run and every scenario (parity)
+tests/rig_anim_spec.luau        Motor6D chains vs the animator, under the mock
 ```
 
 ## Getting it into Studio
@@ -54,8 +64,9 @@ conversion. Either:
   CableWakeboard.rbxlx` and open the place file.
 - **Studio MCP (local Claude session):** ask Claude to recreate the tree from
   `default.project.json`: a ModuleScript per file in `src/shared` under
-  `ReplicatedStorage.WakeShared`, with `Sim` as a ModuleScript made from
-  `Sim/init.luau` and every other `Sim/*.luau` as a child ModuleScript of it;
+  `ReplicatedStorage.WakeShared`, with `Sim` and `Anim` as ModuleScripts made
+  from their `init.luau` and every other file in each folder as a child
+  ModuleScript of it;
   `src/client/WakeClient.client.luau` as a LocalScript in
   `StarterPlayer.StarterPlayerScripts`; `src/server/WakeServer.server.luau` as a
   Script in `ServerScriptService`; then press Play.
@@ -115,8 +126,33 @@ Units are metres in the sim; `WakeClient` converts to studs (1 stud = 0.28 m).
 Vectors are plain `{x, y, z}` tables of doubles, not `Vector3` (float32).
 
 `WakeClient` and `WakeServer` are a first pass that has not been run in Studio
-yet; the sim under them, and `ComboValidator` (run against a real sim run in the
-parity test), are the verified part.
+yet; the sim and animation under them (parity-tested against TypeScript),
+`ComboValidator` (run against a real sim run) and the rig's Motor6D chains
+(checked against the animator under the mock) are the verified part.
+
+## Animation
+
+```lua
+local Anim = require(game.ReplicatedStorage.WakeShared.Anim)
+local RiderRig = require(game.ReplicatedStorage.WakeShared.RiderRig)
+local model = RiderBuilder.build({ palette = "Sheet" })
+local rig = RiderRig.new(model, RiderBuilder.Config.Rig.MetresPerStud)
+local animator = Anim.Animator.create(RiderBuilder.rigDef({ palette = "Sheet" }))
+RunService.PreSimulation:Connect(function(dt)
+	local state = Anim.Adapter.fromSim(run.sim, eventsSinceLastFrame, lastState)
+	RiderRig.apply(rig, Anim.Animator.step(animator, state, dt))
+end)
+```
+
+The rig is RiderBuilder's own: one invisible `Bone<Joint>` part per joint
+(Hips, Waist, Neck, L/R Shoulder, Elbow, Wrist, Hip, Knee, Ankle; L is the lead
+side), a Motor6D named after the joint, every visual part welded to its bone,
+and the tow handle as a separate `Handle` model. The rest pose is upright and
+mirror-symmetric, so goofy and switch riders are mirrored poses (never extra
+clips). WakeClient keys: F4 slow motion, F6 skeleton overlay, F7 pose
+scrubber (`[` `]` clip, `-` `=` phase). Other players' riders are animated from
+18 Hz anim-state packets (UnreliableRemoteEvent `AnimState`, relayed by
+WakeServer). Details and the list of what is still stiff: ../docs/ANIMATION.md.
 
 ## Using the builder
 
@@ -134,8 +170,9 @@ rider.Parent = workspace
 ```
 
 `Root` is the PrimaryPart (invisible, anchored, centre of the board base);
-every other part is welded to it, so one `PivotTo` moves the whole rider.
-The handle has an Attachment named `RopeAttachment` for the live rope.
+the board is welded to it and the body hangs off it through the Motor6Ds, so
+one `PivotTo` moves the whole rider. The handle's bar has Attachments
+`RopeAttachment`, `GripL` and `GripR`.
 
 Rider space matches the web sim: +X is the direction of travel (board nose,
 toward the carrier), +Y up, +Z the toe side. To place a rider from the sim's
@@ -179,8 +216,8 @@ colours and clothing only).
 ## Tests
 
 ```
-tests/run.sh /path/to/luau                       # rider builder smoke tests
-cd .. && LUAU=/path/to/luau npm run test:parity  # sim: Luau vs TypeScript, every tick
+tests/run.sh /path/to/luau                       # rider builder smoke tests (rig included)
+cd .. && LUAU=/path/to/luau npm run test:parity  # sim and animation: Luau vs TypeScript; rig chains
 ```
 
 Needs the `luau` CLI from https://github.com/luau-lang/luau/releases. The mock
