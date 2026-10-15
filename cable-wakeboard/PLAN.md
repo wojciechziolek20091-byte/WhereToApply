@@ -51,6 +51,10 @@ purpose-built park. Assumptions made to fill the gaps:
 - [x] **M9 Game engine.** Babylon.js renderer with the faceted low-poly art
   shared with Roblox (exported from RiderBuilder.luau), dusk sky and sun,
   faceted water and features, pastel spray, rider picker. Deployed as a web game.
+- [x] **M10 Luau twin.** The whole sim ported line by line to Luau
+  (`roblox/src/shared/Sim`), deterministic math (`detmath`) in both so they
+  stay bit-identical, a parity test that plays three full scripted runs through
+  both and compares every tick, and a thin Roblox client (`WakeClient`) for Studio.
 
 ## Known limitations
 
@@ -62,6 +66,9 @@ purpose-built park. Assumptions made to fill the gaps:
 - Judges are formula-based with a seeded bias, not a learned model.
 - Rider is one rigid mesh: no limb animation for crouch, grabs or raleys yet.
 - Water is static faceted geometry; no waves or wake trail.
+- The Roblox client (`roblox/src/client`) has not been run in Studio yet: the
+  sim under it is verified, the camera, scale and HUD are a first pass. It does
+  not mirror the rider for goofy/switch.
 
 ## Backlog (later sessions)
 

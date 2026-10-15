@@ -266,3 +266,12 @@ config (`RunConfig.passesPerRun`, `RunConfig.maxFalls`).
 and runs the panel (`scoreRun()`). Each judge has a small deterministic bias from
 a seeded RNG so a panel is reproducible. Dead water is time beyond
 `run.deadWaterTime` without a trick or a feature.
+
+## Two implementations
+
+Every mechanic above exists twice: in TypeScript (`src/sim`, the web game) and
+in Luau (`roblox/src/shared/Sim`, Roblox), with the same function and field
+names (`edge.ts` `updateEdge()` is `Edge.luau` `Edge.updateEdge()`, and so on).
+Both use `detmath` for trigonometry and powers, so the same inputs give the same
+bits; `tests/parity.test.ts` checks it tick by tick. A change to a mechanic is
+made in both, in the same commit.

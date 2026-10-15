@@ -59,7 +59,7 @@ export function evaluateLanding(r: RiderState, air: AirState, normal: Vec3, cfg:
         1 -
           0.35 * (Math.abs(yawError) / lc.maxYawError) -
           0.3 * (Math.abs(flipError) / lc.maxFlipError) -
-          0.35 * clamp01(impact / capacity) ** 2,
+          0.35 * clamp01(impact / capacity) * clamp01(impact / capacity),
       );
   return { fall, impact, quality, yawError, flipError, halfTurns, flips };
 }

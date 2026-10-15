@@ -1,3 +1,4 @@
+import { atan2, cos, sin } from './detmath';
 /** Plain 3D vector. Immutable helpers: every function returns a new vector. */
 export interface Vec3 {
   x: number;
@@ -17,7 +18,8 @@ export const addScaled = (a: Vec3, b: Vec3, s: number): Vec3 =>
 export const dot = (a: Vec3, b: Vec3): number => a.x * b.x + a.y * b.y + a.z * b.z;
 export const cross = (a: Vec3, b: Vec3): Vec3 =>
   vec3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
-export const length = (a: Vec3): number => Math.hypot(a.x, a.y, a.z);
+// Plain sqrt of a sum (not Math.hypot) so the Luau port computes the same bits.
+export const length = (a: Vec3): number => Math.sqrt(a.x * a.x + a.y * a.y + a.z * a.z);
 export const distance = (a: Vec3, b: Vec3): number => length(sub(a, b));
 export const normalize = (a: Vec3): Vec3 => {
   const l = length(a);
@@ -28,11 +30,11 @@ export const lerpVec = (a: Vec3, b: Vec3, t: number): Vec3 =>
 
 /** Horizontal (x-z) part of a vector. */
 export const horizontal = (a: Vec3): Vec3 => vec3(a.x, 0, a.z);
-export const horizontalLength = (a: Vec3): number => Math.hypot(a.x, a.z);
+export const horizontalLength = (a: Vec3): number => Math.sqrt(a.x * a.x + a.z * a.z);
 
 /** Unit forward vector for a heading psi: (cos psi, 0, sin psi). */
-export const forwardOf = (psi: number): Vec3 => vec3(Math.cos(psi), 0, Math.sin(psi));
+export const forwardOf = (psi: number): Vec3 => vec3(cos(psi), 0, sin(psi));
 /** Unit vector to the right of heading psi, seen from above with +y up. */
-export const rightOf = (psi: number): Vec3 => vec3(-Math.sin(psi), 0, Math.cos(psi));
+export const rightOf = (psi: number): Vec3 => vec3(-sin(psi), 0, cos(psi));
 /** Heading angle of the horizontal part of a vector. */
-export const headingOf = (a: Vec3): number => Math.atan2(a.z, a.x);
+export const headingOf = (a: Vec3): number => atan2(a.z, a.x);

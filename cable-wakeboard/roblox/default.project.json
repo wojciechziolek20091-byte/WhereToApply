@@ -11,6 +11,13 @@
       "WakeServer": {
         "$path": "src/server"
       }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "WakeClient": {
+          "$path": "src/client"
+        }
+      }
     }
   }
 }

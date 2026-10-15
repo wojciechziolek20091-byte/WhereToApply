@@ -17,13 +17,18 @@ Run from `cable-wakeboard/`:
 - `npx vite-node scripts/probe.ts` (and `probe-*.ts`): ad-hoc tuning probes that
   print sim state over a scripted input. Not tests; edit freely.
 
-Always run `npm run check && npm test` before committing.
+- `LUAU=/path/to/luau npm run test:parity`: TypeScript <-> Luau parity (needs the
+  `luau` CLI from https://github.com/luau-lang/luau/releases; skipped without LUAU)
+
+Always run `npm run check && npm test` before committing, and the parity test
+whenever `src/sim` or `roblox/src/shared/Sim` changes.
 
 ## Architecture
 
 ```
 src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, NO Date.
-  math/       vec.ts (Vec3 helpers), scalar.ts (clamp, wrap, approach), rng.ts (seeded)
+  math/       vec.ts (Vec3 helpers), scalar.ts (clamp, wrap, approach), rng.ts (seeded),
+              detmath.ts (sin, cos, tan, atan2, log, exp, pow from + - * / only)
   config.ts   SimConfig and DEFAULT_CONFIG. All tunables live here.
   cable.ts    Cable path (towers + filleted corners), carrier kinematics.
   park.ts     Park layout and feature data (kickers, sliders).
@@ -64,6 +69,9 @@ src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts (tiles, tri
               published page needs no CSS of its own), main.ts loop.
 scripts/      Tuning probes (vite-node).
 roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
+              src/shared/Sim/: the Luau twin of src/sim (one module per file,
+              same names, same fields). src/shared/WakeInput.luau: keys -> InputFrame
+              (twin of keyboard.ts). src/client/WakeClient.client.luau: Studio client.
               See roblox/README.md. The Roblox rider (RiderBuilder.luau, faceted) is
               no longer the web rider; src/art/riderParts.json (its export) is kept
               for the art tests and the old look, refresh it with
@@ -102,6 +110,36 @@ frames the rider close up for checking the character.
 - Tricks, grabs, spins, features are data. Add a trick by adding a row.
 - When a mechanic changes, update `docs/MECHANICS.md` in the same commit.
 - Tests live in `tests/`, named after the module (`rope.test.ts`).
+
+## Two versions of the sim (TypeScript and Luau)
+
+`src/sim` (TypeScript) and `roblox/src/shared/Sim` (Luau) are the same program
+and must stay bit-identical. **Every change to sim logic is made in both, in the
+same commit**, then `npm run test:parity` must pass. The TypeScript side is the
+one to edit first (it has the unit tests); then mirror it line by line.
+
+- File map: `foo.ts` -> `Foo.luau`, `math/foo.ts` -> `Foo.luau`,
+  `tricks/data.ts` -> `TricksData.luau`, `scoring/judges.ts` -> `ScoringJudges.luau`.
+  `init.luau` is `index.ts`. `hash.ts`, `events.ts`, `rider.ts` are TypeScript-only
+  (types and test tooling). `tests/architecture.test.ts` fails if a module is missing.
+- Requires: `require(script.Parent.Foo)` inside Sim; from outside,
+  `require(ReplicatedStorage.WakeShared.Sim)`.
+- Numbers: never `Math.sin/cos/tan/atan2/pow/exp/log/hypot` or `**` in the sim
+  (V8 and C libm differ in the last bit); use `math/detmath.ts` / `DetMath.luau`.
+  `Math.sqrt`, `abs`, `min`, `max`, `floor` and + - * / are exact in both.
+- JS `%` is `math.fmod` (Luau `%` floors). `Math.round` is `Scalar.round`.
+  `Math.imul` is `Rng.imul`. Spread `{ ...a }` is `table.clone(a)`.
+- `null` is `nil`. Arrays are 1-based in Luau: watch `find`, `[0]`, `slice`.
+  `local` is a keyword: `hit["local"]`.
+- Vectors are plain `{x, y, z}` tables, never Roblox `Vector3` (float32).
+- Keep the operation order of every expression: `a * b * c` and `a * (b * c)`
+  round differently.
+- The Luau Sim must not touch Roblox APIs (`game`, `Instance`, `Vector3`,
+  `task`, `os`, `math.random`), so it also runs in the plain `luau` CLI.
+- Parity tooling: `tests/parity/trace.ts` and `roblox/tests/sim_trace.luau` are
+  twins (same scripted input, same trace fields); `tests/parity/luauBundle.ts`
+  bundles the Luau modules for the CLI. A failure prints the first differing
+  tick and field.
 
 ## Tuning reference (defaults, flat water)
 

@@ -1,7 +1,8 @@
 # Cable Wakeboard: Roblox
 
-The Roblox side of the game: visual style and the rider character. Luau,
-primitives only (Block, Wedge, Ball, Cylinder; CornerWedge is allowed but not
+The Roblox side of the game: the full game simulation (a Luau twin of the web
+game's TypeScript sim), a Studio client, and the visual style and rider
+character. Art is Luau, primitives only (Block, Wedge, Ball, Cylinder; CornerWedge is allowed but not
 needed yet), SmoothPlastic, no textures, decals or faces.
 
 ![Three palettes, previewed outside Roblox](docs/rider-preview.png)
@@ -14,7 +15,12 @@ screenshot. Studio lighting will differ.
 
 ```
 default.project.json            Rojo project: shared -> ReplicatedStorage.WakeShared,
-                                server -> ServerScriptService.WakeServer
+                                server -> ServerScriptService.WakeServer,
+                                client -> StarterPlayer.StarterPlayerScripts.WakeClient
+src/shared/Sim/                 The game simulation, one ModuleScript per file (init.luau
+                                is the folder's module). Same code as ../src/sim.
+src/shared/WakeInput.luau       Held keys -> InputFrame, same keys as the web game
+src/client/WakeClient.client.luau  Plays the sim: park, rider, rope, chase camera, HUD
 src/shared/RiderBuilder.luau    RiderBuilder.build(options) -> Model
 src/shared/DuskLighting.luau    DuskLighting.apply(): sky, haze, sun, post effects
 src/shared/WaterSpray.luau      WaterSpray.attach(rider), setIntensity(emitter, 0..1)
@@ -22,17 +28,49 @@ src/server/Showcase.server.luau Lake, rocks and one rider per palette, for judgi
 tests/mock_roblox.luau          Tiny Roblox API mock for running the builder outside Studio
 tests/rider_spec.luau           Smoke tests: classes, material, welds, height, shades, toggles
 tests/run.sh                    Bundles mock + module + spec and runs them with `luau`
+tests/sim_trace.luau            Scripted run printed tick by tick (parity test, Luau half)
 ```
 
 ## Getting it into Studio
 
-Either:
+Everything here is plain files laid out for Rojo, so exporting is a copy, not a
+conversion. Either:
 
-- **Rojo:** install Rojo and its Studio plugin, run `rojo serve` in this folder,
-  and click Connect in the plugin.
-- **Studio MCP (local Claude session):** ask Claude to create a ModuleScript per
-  file in `src/shared` under `ReplicatedStorage.WakeShared`, and a Script from
-  `src/server/Showcase.server.luau` in `ServerScriptService`, then press Play.
+- **Rojo (recommended):** install Rojo and its Studio plugin, run `rojo serve`
+  in this folder, and click Connect in the plugin. Or `rojo build -o
+  CableWakeboard.rbxlx` and open the place file.
+- **Studio MCP (local Claude session):** ask Claude to recreate the tree from
+  `default.project.json`: a ModuleScript per file in `src/shared` under
+  `ReplicatedStorage.WakeShared`, with `Sim` as a ModuleScript made from
+  `Sim/init.luau` and every other `Sim/*.luau` as a child ModuleScript of it;
+  `src/client/WakeClient.client.luau` as a LocalScript in
+  `StarterPlayer.StarterPlayerScripts`; then press Play.
+- **By hand:** the same tree, pasting each file into a script of the same name.
+
+`Showcase.server.luau` (the style lineup) and `WakeClient` both build into the
+workspace; disable Showcase when playing.
+
+## The simulation
+
+```lua
+local Sim = require(game.ReplicatedStorage.WakeShared.Sim)
+local run = Sim.Session.createRun() -- default config and park
+Sim.Session.stepRun(run, Sim.Input.neutralInput()) -- one 60 Hz tick
+print(run.sim.rider.pos.x, run.points, run.pass)
+```
+
+Module for module, field for field, the same as `../src/sim`: what the web
+game does, this does, to the last bit. `npm run test:parity` (from the parent
+folder) proves it: it plays three complete scripted runs (carving, pops,
+spins, grabs, jibs, falls, respawns, two passes, judges' scores) through both
+and compares every value on every tick. Rules for keeping the two in step are
+in `../CLAUDE.md` ("Two versions of the sim").
+
+Units are metres in the sim; `WakeClient` converts to studs (1 stud = 0.28 m).
+Vectors are plain `{x, y, z}` tables of doubles, not `Vector3` (float32).
+
+`WakeClient` is a first pass that has not been run in Studio yet; the sim under
+it is the verified part.
 
 ## Using the builder
 
@@ -95,7 +133,8 @@ colours and clothing only).
 ## Tests
 
 ```
-tests/run.sh /path/to/luau
+tests/run.sh /path/to/luau                       # rider builder smoke tests
+cd .. && LUAU=/path/to/luau npm run test:parity  # sim: Luau vs TypeScript, every tick
 ```
 
 Needs the `luau` CLI from https://github.com/luau-lang/luau/releases. The mock

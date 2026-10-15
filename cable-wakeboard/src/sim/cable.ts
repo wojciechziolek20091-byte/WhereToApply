@@ -1,3 +1,4 @@
+import { tan } from './math/detmath';
 import type { CableConfig } from './config';
 import { mod, wrapAngle } from './math/scalar';
 import { type Vec3, forwardOf, rightOf, scale, vec3, addScaled, sub, normalize, headingOf, length } from './math/vec';
@@ -67,7 +68,7 @@ export function buildCablePath(cfg: CableConfig): CablePath {
     const headingIn = headingOf(dIn);
     const delta = wrapAngle(headingOf(dOut) - headingIn);
     const turn: 1 | -1 = delta >= 0 ? 1 : -1;
-    const tangentLen = cfg.cornerRadius * Math.tan(Math.abs(delta) / 2);
+    const tangentLen = cfg.cornerRadius * tan(Math.abs(delta) / 2);
     const inLen = length(sub(at(i), at(i - 1)));
     const outLen = length(sub(at(i + 1), at(i)));
     if (tangentLen * 2 > Math.min(inLen, outLen)) {

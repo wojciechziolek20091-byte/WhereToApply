@@ -1,3 +1,4 @@
+import { pow, tan } from './math/detmath';
 import { type Vec3, addScaled, dot, forwardOf, normalize, rightOf, sub, UP, vec3 } from './math/vec';
 import type { FeatureDef, KickerDef, ResolvedFeature, SliderDef } from './park';
 import { featureLength } from './park';
@@ -31,12 +32,12 @@ export const toWorld = (f: ResolvedFeature, u: number, v: number, y: number): Ve
 };
 
 /** Kicker exponent so the slope at the lip equals tan(lipAngle). */
-export const kickerExponent = (k: KickerDef): number => Math.max(1, (Math.tan(k.lipAngle) * k.length) / k.height);
+export const kickerExponent = (k: KickerDef): number => Math.max(1, (tan(k.lipAngle) * k.length) / k.height);
 
 export function kickerHeightAt(k: KickerDef, u: number): { height: number; slope: number } {
   const x = Math.min(Math.max(u / k.length, 0), 1);
   const p = kickerExponent(k);
-  return { height: k.height * x ** p, slope: ((k.height * p) / k.length) * x ** (p - 1) };
+  return { height: k.height * pow(x, p), slope: ((k.height * p) / k.length) * pow(x, p - 1) };
 }
 
 export function sliderHeightAt(sd: SliderDef, u: number): { height: number; slope: number; onTop: boolean } {

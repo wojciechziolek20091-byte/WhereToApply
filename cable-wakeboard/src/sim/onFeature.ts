@@ -1,3 +1,4 @@
+import { cos, sin } from './math/detmath';
 import type { SimConfig } from './config';
 import { DT, GRAVITY } from './config';
 import { edgeNorm, toeSign, updateEdge } from './edge';
@@ -31,7 +32,7 @@ export function tryEnterFeature(s: SimState): boolean {
   const { feature, local, surface } = hit;
   const speed = horizontalLength(r.vel);
   const along = speed > 0.1 ? dot(horizontal(r.vel), forwardOf(feature.heading)) / speed : 0;
-  if (surface.height > s.cfg.feature.mountHeight || along < Math.cos(s.cfg.feature.mountAngle)) {
+  if (surface.height > s.cfg.feature.mountHeight || along < cos(s.cfg.feature.mountAngle)) {
     fallRider(s, 'featureCrash');
     return true;
   }
@@ -85,7 +86,7 @@ export function updateJib(r: RiderState, j: JibState, input: InputFrame, ropeLat
   const target = input.spin !== 0 ? sign(input.spin) * (Math.PI / 2) : 0;
   j.boardAngle = approach(j.boardAngle, target, jc.boardRotateRate * DT);
   const lateral = (r.ramp?.v ?? 0) / (halfWidth + 0.15);
-  const offStable = Math.sin(2 * j.boardAngle);
+  const offStable = sin(2 * j.boardAngle);
   const lean = -toeSign(r) * input.edge;
   const dBalance = jc.drift * lateral + jc.angleDrift * offStable + ropeLat / jc.ropeTip - jc.correction * lean;
   j.balance += dBalance * DT;
