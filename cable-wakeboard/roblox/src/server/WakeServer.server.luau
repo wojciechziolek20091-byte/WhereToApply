@@ -73,3 +73,38 @@ Crashed.OnServerEvent:Connect(function(player: Player, reason: any)
 		print(`[WakeServer] {player.Name} crashed: {tostring(reason)}`)
 	end
 end)
+
+-- Animation replication (spec section 12): each client sends its rider's
+-- compact anim state at ~18 Hz; the server checks its shape and passes it to
+-- everyone else, who animate that rider with the same animation system. No
+-- joints are replicated. Unreliable: a lost packet is just interpolated over.
+local AnimState = Instance.new("UnreliableRemoteEvent")
+AnimState.Name = "AnimState"
+AnimState.Parent = remotes
+local PACKET_LENGTH = 50
+local lastSend: { [number]: number } = {}
+AnimState.OnServerEvent:Connect(function(player: Player, packet: any)
+	if type(packet) ~= "table" or #packet ~= PACKET_LENGTH then
+		return
+	end
+	for i = 1, PACKET_LENGTH do
+		local v = packet[i]
+		if type(v) ~= "number" or v ~= v or math.abs(v) > 1e6 then
+			return
+		end
+	end
+	-- At most ~30 packets a second per player.
+	local now = os.clock()
+	if now - (lastSend[player.UserId] or 0) < 1 / 30 then
+		return
+	end
+	lastSend[player.UserId] = now
+	for _, other in Players:GetPlayers() do
+		if other ~= player then
+			AnimState:FireClient(other, player.UserId, packet)
+		end
+	end
+end)
+Players.PlayerRemoving:Connect(function(player: Player)
+	lastSend[player.UserId] = nil
+end)

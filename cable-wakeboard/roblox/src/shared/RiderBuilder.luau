@@ -16,6 +16,15 @@
 	where the rope pulls from), +Y is up, +Z is the rider's toe side (the way
 	the rider faces). Board bottom sits at Y = 0. Units are studs.
 
+	The rider is a jointed rig for the animation system (shared/Anim): one
+	invisible bone part per joint ("Bone<Joint>"), each turned by a Motor6D
+	named after the joint (Hips, Waist, Neck, LShoulder, LElbow, LWrist, ...;
+	L is the lead side, +X). Every visual part is welded to its bone, so the
+	art is unchanged and Motor6D.Transform poses it. The rest pose is neutral
+	and mirror-symmetric (upright, arms hanging in front); bone rest
+	orientations are identity, so a joint's Transform is the animator's local
+	rotation. The tow handle is its own Model ("Handle") that the client moves.
+
 	Usage:
 		local RiderBuilder = require(path.to.RiderBuilder)
 		local rider = RiderBuilder.build({ palette = "A" })
@@ -181,9 +190,11 @@ local CONFIG = {
 		BootSize = 0.82, -- boot size multiplier
 		KneeBend = 0.55, -- visible knee bend toward the toes
 		Crouch = 0.15, -- slight athletic crouch
-		TorsoLean = 12, -- lean toward the toes, degrees
-		TorsoTwist = 22, -- chest turned toward the rope, degrees
-		HeadTurn = 35, -- head looking where the rider is going, degrees
+		-- Rest-pose posture. Keep these 0 for an animated rig: the animator sets the
+		-- lean, twist and head turn, and needs a mirror-symmetric rest pose.
+		TorsoLean = 0, -- lean toward the toes, degrees
+		TorsoTwist = 0, -- chest turned toward the rope, degrees
+		HeadTurn = 0, -- head looking where the rider is going, degrees
 	} :: Proportions,
 
 	-- Board shape, shared by every style. Proportions follow the reference
@@ -231,6 +242,14 @@ local CONFIG = {
 		Length = 1.1, -- bar length
 		Radius = 0.09, -- bar thickness
 		RopeStub = 2.5, -- short length of rope drawn toward the carrier
+		GripSpacing = 0.55, -- distance between the two hands on the bar
+	},
+
+	Rig = {
+		-- Rest-pose fists, from the hip centre (mirrored for the back hand): in front of the hips.
+		RestGrip = Vector3.new(0.62, 0.1, 1.0),
+		-- Metres per stud, for the animator's RigDef (the sim and animator work in metres).
+		MetresPerStud = 0.28,
 	},
 }
 
@@ -243,6 +262,8 @@ RiderBuilder.Config = CONFIG
 type Ctx = {
 	model: Model,
 	root: BasePart,
+	bone: BasePart?, -- parts are welded to this bone (Root when nil)
+	bones: { [string]: BasePart },
 	rng: Random,
 	palette: Palette,
 	board: BoardStyle,
@@ -315,7 +336,7 @@ local function prim(ctx: Ctx, group: Instance, kind: Kind, name: string, size: V
 	part.Anchored = false
 	part.Parent = group
 	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = ctx.root
+	weld.Part0 = ctx.bone or ctx.root
 	weld.Part1 = part
 	weld.Parent = part
 	return part
@@ -453,8 +474,10 @@ local function buildBoard(ctx: Ctx): Vector3
 end
 
 --- Chunky boot with sole, toe cap and binding strap. Returns the top of the boot.
-local function buildBoot(ctx: Ctx, g: Instance, name: string, x: number, deckTop: number): Vector3
+local function buildBoot(ctx: Ctx, g: Instance, name: string, x: number, deckTop: number, ankleBone: string): Vector3
 	local pal = ctx.palette
+	-- Binding hardware stays on the board (Root); the boot moves with the foot.
+	ctx.bone = ctx.root
 	local s = ctx.p.BootSize
 	local len, wid, hgt = 1.3 * s, 0.7 * s, 0.64 * s
 	local st = ctx.board
@@ -475,6 +498,7 @@ local function buildBoot(ctx: Ctx, g: Instance, name: string, x: number, deckTop
 		prim(ctx, g, "Block", `{name}DRing`, Vector3.new(0.05 * s, 0.14 * s, 0.05 * s), CFrame.new(x + outer * wid * 0.63, deckTop + plate + hgt * 0.62, len * 0.12) * CFrame.Angles(rad(30), 0, 0), st.buckle)
 	end
 	local base = CFrame.new(x, deckTop + plate, 0)
+	ctx.bone = ctx.bones[ankleBone]
 	prim(ctx, g, "Block", `{name}Sole`, Vector3.new(wid * 1.06, 0.16 * s, len * 1.04), base * CFrame.new(0, 0.08 * s, 0.05), pal.bootSole)
 	prim(ctx, g, "Block", `{name}Body`, Vector3.new(wid, hgt * 0.7, len * 0.9), base * CFrame.new(0, 0.16 * s + hgt * 0.35, -0.02) * tilt(ctx, 0.5), shade(pal.boots, 0))
 	prim(ctx, g, "Block", `{name}Shaft`, Vector3.new(wid * 0.92, hgt * 0.55, len * 0.55), base * CFrame.new(0, 0.16 * s + hgt * 0.8, -len * 0.18) * tilt(ctx, 0.5), shade(pal.boots, 1))
@@ -482,6 +506,7 @@ local function buildBoot(ctx: Ctx, g: Instance, name: string, x: number, deckTop
 	prim(ctx, g, "Wedge", `{name}Toe`, Vector3.new(wid * 0.98, hgt * 0.45, len * 0.38), base * CFrame.new(0, 0.16 * s + hgt * 0.62, len * 0.3) * CFrame.Angles(0, math.pi, 0), shade(pal.boots, -1))
 	prim(ctx, g, "Block", `{name}ToeBumper`, Vector3.new(wid * 1.02, 0.2 * s, 0.22 * s), base * CFrame.new(0, 0.22 * s, len * 0.48), pal.bootSole)
 	-- Binding strap across the instep, and an ankle strap when there is a binding.
+	ctx.bone = ctx.root
 	local strapColor = st.binding or pal.accent
 	prim(ctx, g, "Block", `{name}Strap`, Vector3.new(wid * 1.16, 0.14 * s, 0.32 * s), base * CFrame.new(0, 0.16 * s + hgt * 0.62, len * 0.05) * tilt(ctx, 0.4), strapColor)
 	if st.binding then
@@ -501,20 +526,25 @@ local function buildLegs(ctx: Ctx, deckTop: number): (Vector3, Vector3)
 	local hips = {}
 	for _, dir in { 1, -1 } do
 		local name = if dir > 0 then "Front" else "Back"
-		local ankle = buildBoot(ctx, g, `{name}Boot`, dir * stance, deckTop)
+		local side = if dir > 0 then "L" else "R"
+		local ankle = buildBoot(ctx, g, `{name}Boot`, dir * stance, deckTop, `{side}Ankle`)
 		local hip = Vector3.new(dir * 0.3, hipY, -0.06)
 		local mid = (ankle + hip) / 2
 		local knee = Vector3.new(mid.X * 1.08, mid.Y - 0.05, mid.Z + p.KneeBend)
 		local th = p.LegThickness
+		ctx.bone = ctx.bones[`{side}Knee`]
 		limb(ctx, g, `{name}Shin`, ankle + Vector3.new(0, -0.1, 0), knee, th * 0.98, th * 0.9, pal.pants, 3)
+		joint(ctx, g, `{name}Knee`, knee, th * 1.02, shade(pal.pants, 1))
+		ctx.bone = ctx.bones[`{side}Hip`]
 		limb(ctx, g, `{name}Thigh`, knee, hip, th * 0.92, th, pal.pants, 3)
 		-- Knee and hip joints so the bend reads as a rounded shape.
-		joint(ctx, g, `{name}Knee`, knee, th * 1.02, shade(pal.pants, 1))
 		joint(ctx, g, `{name}Hip`, hip, th * 1.08, shade(pal.pants, 0))
 		-- Cuff over the boot, slightly flared.
+		ctx.bone = ctx.bones[`{side}Knee`]
 		prim(ctx, g, "Block", `{name}Cuff`, Vector3.new(th * 1.12, th * 0.42, th * 1.12), CFrame.new(ankle + Vector3.new(0, 0.05, 0.03)) * tilt(ctx), shade(pal.pants, -1))
 		prim(ctx, g, "Block", `{name}CuffBevel`, Vector3.new(th * 1.04, th * 0.4, th * 1.04), CFrame.new(ankle + Vector3.new(0, 0.05, 0.03)) * CFrame.Angles(0, rad(45), 0), shade(pal.pants, -0.5))
 		-- Cargo pocket on the outside of the thigh.
+		ctx.bone = ctx.bones[`{side}Hip`]
 		local thighMid = (knee + hip) / 2
 		prim(ctx, g, "Block", `{name}Pocket`, Vector3.new(0.08, th * 0.5, th * 0.45), CFrame.new(thighMid + Vector3.new(dir * th * 0.5, -0.05, 0.03)) * tilt(ctx, 0.5), shade(pal.pants, 1.5))
 		table.insert(hips, hip)
@@ -537,7 +567,8 @@ local function buildTorso(ctx: Ctx, hipCentre: Vector3): CFrame
 	local torso = CFrame.new(hipCentre) * CFrame.Angles(0, rad(p.TorsoTwist), 0) * CFrame.Angles(rad(p.TorsoLean), 0, 0)
 	local lower = pal.jacketLower or pal.jacket
 
-	-- Pant waistband under the jacket.
+	-- Pant waistband under the jacket (with the pelvis); the jacket above goes with the waist.
+	ctx.bone = ctx.bones.Hips
 	prim(ctx, g, "Block", "Waist", Vector3.new(w * 0.62, 0.24, d * 0.8), torso * CFrame.new(0, 0.04, 0), shade(pal.pants, 0))
 
 	local y = 0.12
@@ -547,6 +578,7 @@ local function buildTorso(ctx: Ctx, hipCentre: Vector3): CFrame
 		local cf = torso * CFrame.new(0, y + sh / 2, (i - 3) * 0.02) * tilt(ctx, 0.6)
 		local sw, sd = w * sec.w, d * sec.d
 		local steps = (i % 2) * 0.8 - 0.4 + jitter(ctx, 0.3)
+		ctx.bone = if i == 1 then ctx.bones.Hips else ctx.bones.Waist
 		prim(ctx, g, "Block", `Torso{i}`, Vector3.new(sw * 0.84, sh * 1.08, sd), cf, shade(color, steps))
 		prim(ctx, g, "Block", `Torso{i}Side`, Vector3.new(sw, sh * 1.04, sd * 0.7), cf, shade(color, steps - 1))
 		y += sh
@@ -557,8 +589,10 @@ local function buildTorso(ctx: Ctx, hipCentre: Vector3): CFrame
 		prim(ctx, g, "Wedge", `Chest{side}`, Vector3.new(w * 0.4, h * 0.22, d * 0.14), cf, shade(pal.jacket, 1.5))
 	end
 	-- Hem band at the waist, two-tone line where the hoodie changes colour.
+	ctx.bone = ctx.bones.Hips
 	prim(ctx, g, "Block", "Hem", Vector3.new(w * 0.66, 0.12, d * 0.94), torso * CFrame.new(0, 0.16, 0), shade(lower, -1.5))
 	-- Rounded shoulders.
+	ctx.bone = ctx.bones.Waist
 	for _, side in { -1, 1 } do
 		joint(ctx, g, `Shoulder{side}`, (torso * CFrame.new(side * w * 0.44, 0.12 + h * 0.92, 0)).Position, p.ArmThickness * 1.45, shade(pal.jacket, 0.5))
 	end
@@ -575,6 +609,7 @@ local function buildHead(ctx: Ctx, torso: CFrame)
 	local p = ctx.p
 	local pal = ctx.palette
 	local g = newGroup(ctx, "Head")
+	ctx.bone = ctx.bones.Neck
 	local hs = p.HeadSize
 	local neckTop = torso * CFrame.new(0, 0.12 + p.TorsoHeight + 0.1, 0.04)
 	prim(ctx, g, "Block", "Neck", Vector3.new(hs * 0.36, 0.3, hs * 0.36), neckTop, shade(pal.skin, -1.5))
@@ -634,47 +669,131 @@ local function buildHead(ctx: Ctx, torso: CFrame)
 	end
 end
 
-local function buildArmsAndHandle(ctx: Ctx, torso: CFrame, hipCentre: Vector3)
+--[[
+	Rest joint pivots (studs, rider space) for these proportions, mirror-
+	symmetric across X = 0. The builders place the art around the same
+	points, and RiderBuilder.rigDef hands them to the animator.
+]]
+local JOINTS = { "Hips", "Waist", "Neck", "LShoulder", "LElbow", "LWrist", "RShoulder", "RElbow", "RWrist", "LHip", "LKnee", "LAnkle", "RHip", "RKnee", "RAnkle" }
+local PARENT = {
+	Hips = "Root",
+	Waist = "Hips",
+	Neck = "Waist",
+	LShoulder = "Waist",
+	LElbow = "LShoulder",
+	LWrist = "LElbow",
+	RShoulder = "Waist",
+	RElbow = "RShoulder",
+	RWrist = "RElbow",
+	LHip = "Hips",
+	LKnee = "LHip",
+	LAnkle = "LKnee",
+	RHip = "Hips",
+	RKnee = "RHip",
+	RAnkle = "RKnee",
+}
+RiderBuilder.JOINTS = JOINTS
+RiderBuilder.PARENT = PARENT
+
+type Rest = { joints: { [string]: Vector3 }, head: Vector3, hipCentre: Vector3, deckTop: number, handLength: number }
+
+local function restJoints(p: Proportions, board: BoardStyle, acc: Accessories): Rest
+	local bc = CONFIG.Board
+	local deckTop = if acc.Board then bc.Thickness * 0.7 else 0
+	local s = p.BootSize
+	local plate = if board.binding then 0.08 * s else 0
+	local hipY = deckTop + plate + 0.88 * s + 1.95 - p.Crouch
+	local hipCentre = Vector3.new(0, hipY, -0.06)
+	local torso = CFrame.new(hipCentre) * CFrame.Angles(0, rad(p.TorsoTwist), 0) * CFrame.Angles(rad(p.TorsoLean), 0, 0)
+	local w, h = p.TorsoWidth, p.TorsoHeight
+	local j: { [string]: Vector3 } = {}
+	j.Hips = hipCentre
+	j.Waist = (torso * CFrame.new(0, 0.12 + h * 0.36, 0)).Position
+	j.Neck = (torso * CFrame.new(0, 0.12 + h, 0.04)).Position
+	local rg = CONFIG.Rig.RestGrip
+	for _, dir in { 1, -1 } do
+		local side = if dir > 0 then "L" else "R"
+		local ankle = Vector3.new(dir * bc.Stance / 2, deckTop + plate + 0.16 * s + 0.64 * s, -1.3 * s * 0.12)
+		local hip = Vector3.new(dir * 0.3, hipY, -0.06)
+		local mid = (ankle + hip) / 2
+		j[side .. "Hip"] = hip
+		j[side .. "Knee"] = Vector3.new(mid.X * 1.08, mid.Y - 0.05, mid.Z + p.KneeBend)
+		j[side .. "Ankle"] = ankle
+		local shoulder = (torso * CFrame.new(dir * w * 0.44, 0.12 + h * 0.9, 0)).Position
+		local grip = hipCentre + Vector3.new(dir * rg.X, rg.Y, rg.Z)
+		local elbow = (shoulder + grip) / 2 + Vector3.new(dir * 0.15, -0.18, 0.12)
+		j[side .. "Shoulder"] = shoulder
+		j[side .. "Elbow"] = elbow
+		j[side .. "Wrist"] = grip - (grip - elbow).Unit * (p.HandSize * 0.5)
+	end
+	local neckTop = torso * CFrame.new(0, 0.12 + h + 0.1, 0.04)
+	local head = (neckTop * CFrame.new(0, 0.1 + p.HeadSize * 0.5, 0)).Position
+	return { joints = j, head = head, hipCentre = hipCentre, deckTop = deckTop, handLength = p.HandSize * 0.5 }
+end
+
+local function buildArms(ctx: Ctx, rest: Rest)
 	local p = ctx.p
 	local pal = ctx.palette
 	local g = newGroup(ctx, "Arms")
-	local hc = CONFIG.Handle
-	local w, h = p.TorsoWidth, p.TorsoHeight
-	-- Handle low in front of the lead hip, bar across the body.
-	local gripFront = hipCentre + Vector3.new(0.95, -0.12, 0.42)
-	local gripBack = gripFront + Vector3.new(-0.55, 0, 0.95).Unit * hc.Length * 0.8
 	local sleeves = pal.sleeves or pal.jacket
-	for _, side in { 1, -1 } do
-		local name = if side > 0 then "Front" else "Back"
-		local shoulder = (torso * CFrame.new(side * w * 0.44, 0.12 + h * 0.9, 0)).Position
-		local grip = if side > 0 then gripFront else gripBack
-		local mid = (shoulder + grip) / 2
-		local elbow = mid + Vector3.new(side * 0.15, -0.18, 0.12)
+	for _, side in { "L", "R" } do
+		local name = if side == "L" then "Front" else "Back"
+		local shoulder = rest.joints[side .. "Shoulder"]
+		local elbow = rest.joints[side .. "Elbow"]
+		local wrist = rest.joints[side .. "Wrist"]
+		local grip = wrist + (wrist - elbow).Unit * rest.handLength
+		ctx.bone = ctx.bones[side .. "Shoulder"]
 		limb(ctx, g, `{name}UpperArm`, shoulder, elbow, p.ArmThickness, p.ArmThickness * 0.92, pal.jacket, 2)
+		ctx.bone = ctx.bones[side .. "Elbow"]
 		joint(ctx, g, `{name}Elbow`, elbow, p.ArmThickness * 0.98, shade(sleeves, 0.5))
-		limb(ctx, g, `{name}Forearm`, elbow, grip, p.ArmThickness * 0.88, p.ArmThickness * 0.74, sleeves, 2)
+		limb(ctx, g, `{name}Forearm`, elbow, wrist, p.ArmThickness * 0.88, p.ArmThickness * 0.76, sleeves, 2)
+		ctx.bone = ctx.bones[side .. "Wrist"]
 		glove(ctx, g, `{name}Glove`, grip, (grip - elbow).Unit, pal.gloves)
 	end
-	if ctx.acc.Handle then
-		local hg = newGroup(ctx, "Handle")
-		local centre = (gripFront + gripBack) / 2
-		local barDir = (gripBack - gripFront).Unit
-		-- Cylinder's long axis is X, so turn X onto the bar direction.
-		local bar = CFrame.lookAt(centre, centre + barDir) * CFrame.Angles(0, math.pi / 2, 0)
-		local barPart = prim(ctx, hg, "Cylinder", "Bar", Vector3.new(hc.Length, hc.Radius * 2, hc.Radius * 2), bar, pal.handle)
-		for k, sgn in { -1, 1 } do
-			prim(ctx, hg, "Cylinder", `EndCap{k}`, Vector3.new(0.08, hc.Radius * 2.6, hc.Radius * 2.6), bar * CFrame.new(sgn * hc.Length / 2, 0, 0), pal.accent)
-		end
-		-- Short rope stub toward the carrier (+X). The game replaces this with the live rope.
-		local ropeStart = centre + Vector3.new(0.1, 0, 0)
-		local ropeEnd = ropeStart + Vector3.new(hc.RopeStub, 0.6, -0.2)
-		local ropeCf = CFrame.lookAt((ropeStart + ropeEnd) / 2, ropeEnd) * CFrame.Angles(0, math.pi / 2, 0)
-		prim(ctx, hg, "Cylinder", "RopeStub", Vector3.new((ropeEnd - ropeStart).Magnitude, 0.05, 0.05), ropeCf, pal.handle)
-		local att = Instance.new("Attachment")
-		att.Name = "RopeAttachment"
-		att.Parent = barPart
-		att.WorldPosition = ropeStart
+end
+
+--[[
+	The tow handle, its own Model ("Handle") with an anchored bar as its
+	PrimaryPart, built about the origin with the bar along X. The client sets
+	its CFrame from the animator every frame. Attachments: RopeAttachment
+	(the rope Beam's end, at the middle), GripL and GripR (the two hands).
+]]
+local function buildHandle(ctx: Ctx): Model
+	local pal = ctx.palette
+	local hc = CONFIG.Handle
+	local hg = Instance.new("Model")
+	hg.Name = "Handle"
+	hg.Parent = ctx.model
+	local bar = CFrame.new()
+	local barPart = Instance.new("Part")
+	barPart.Name = "Bar"
+	barPart.Shape = Enum.PartType.Cylinder
+	barPart.Size = Vector3.new(hc.Length, hc.Radius * 2, hc.Radius * 2)
+	barPart.CFrame = bar
+	barPart.Color = pal.handle
+	barPart.Material = CONFIG.Material
+	barPart.Anchored = true
+	barPart.CanCollide = false
+	barPart.CanQuery = false
+	barPart.CanTouch = false
+	barPart.Parent = hg
+	hg.PrimaryPart = barPart
+	local saved = ctx.bone
+	ctx.bone = barPart
+	for k, sgn in { -1, 1 } do
+		prim(ctx, hg, "Cylinder", `EndCap{k}`, Vector3.new(0.08, hc.Radius * 2.6, hc.Radius * 2.6), bar * CFrame.new(sgn * hc.Length / 2, 0, 0), pal.accent)
 	end
+	ctx.bone = saved
+	local att = Instance.new("Attachment")
+	att.Name = "RopeAttachment"
+	att.Parent = barPart
+	for name, x in { GripL = -hc.GripSpacing / 2, GripR = hc.GripSpacing / 2 } do
+		local a = Instance.new("Attachment")
+		a.Name = name
+		a.Position = Vector3.new(x, 0, 0)
+		a.Parent = barPart
+	end
+	return hg
 end
 
 -- ===================================================================
@@ -691,14 +810,7 @@ local function resolvePalette(spec: (string | Palette)?): (Palette, Accessories)
 	return spec :: Palette, { Helmet = true, Hair = true, Ponytail = false, Handle = true, Board = true }
 end
 
---[[
-	Build a rider Model. The Model is not parented; set Parent yourself.
-	PrimaryPart is "Root", an invisible anchored block at the centre of the
-	board base. Every other part is welded to Root, so moving the rider is
-	one PivotTo call. The tow handle carries an Attachment "RopeAttachment".
-]]
-function RiderBuilder.build(options: BuildOptions?): Model
-	local opts = options or {}
+local function resolve(opts: BuildOptions): (Palette, Accessories, Proportions, BoardStyle)
 	local palette, accessories = resolvePalette(opts.palette)
 	local accTable = accessories :: any
 	for k, v in (opts.accessories or {}) :: { [string]: boolean } do
@@ -708,6 +820,28 @@ function RiderBuilder.build(options: BuildOptions?): Model
 	for k, v in (opts.proportions or {}) :: { [string]: number } do
 		proportions[k] = v
 	end
+	local boardSpec = opts.board or CONFIG.DefaultBoard
+	local boardStyle: BoardStyle
+	if type(boardSpec) == "string" then
+		local found = (CONFIG.BoardStyles :: any)[boardSpec]
+		assert(found, `Unknown board style "{boardSpec}"`)
+		boardStyle = found
+	else
+		boardStyle = boardSpec :: BoardStyle
+	end
+	return palette, accessories, proportions :: Proportions, boardStyle
+end
+
+--[[
+	Build a rider Model. The Model is not parented; set Parent yourself.
+	PrimaryPart is "Root", an invisible anchored block at the centre of the
+	board base: the board and bindings are welded to it, and the body hangs
+	off it through Motor6Ds (Root -> BoneHips -> ...). Moving the rider is
+	one PivotTo call; posing it is setting each Motor6D's Transform.
+]]
+function RiderBuilder.build(options: BuildOptions?): Model
+	local opts = options or {}
+	local palette, accessories, proportions, boardStyle = resolve(opts)
 
 	local model = Instance.new("Model")
 	model.Name = opts.name or "WakeRider"
@@ -724,37 +858,97 @@ function RiderBuilder.build(options: BuildOptions?): Model
 	root.Parent = model
 	model.PrimaryPart = root
 
-	local boardSpec = opts.board or CONFIG.DefaultBoard
-	local boardStyle: BoardStyle
-	if type(boardSpec) == "string" then
-		local found = (CONFIG.BoardStyles :: any)[boardSpec]
-		assert(found, `Unknown board style "{boardSpec}"`)
-		boardStyle = found
-	else
-		boardStyle = boardSpec :: BoardStyle
+	local rest = restJoints(proportions, boardStyle, accessories)
+	-- One invisible bone part per joint, at its pivot, rest orientation identity.
+	local bones: { [string]: BasePart } = {}
+	local bonesFolder = Instance.new("Model")
+	bonesFolder.Name = "Bones"
+	bonesFolder.Parent = model
+	for _, j in JOINTS do
+		local b = Instance.new("Part")
+		b.Name = "Bone" .. j
+		b.Size = Vector3.new(0.2, 0.2, 0.2)
+		b.CFrame = CFrame.new(rest.joints[j])
+		b.Transparency = 1
+		b.Anchored = false
+		b.Massless = true
+		b.CanCollide = false
+		b.CanQuery = false
+		b.CanTouch = false
+		b.Parent = bonesFolder
+		bones[j] = b
+	end
+	for _, j in JOINTS do
+		local parentName = PARENT[j]
+		local part0 = if parentName == "Root" then root else bones[parentName]
+		local origin0 = if parentName == "Root" then root.CFrame.Position else rest.joints[parentName]
+		local m = Instance.new("Motor6D")
+		m.Name = j
+		m.Part0 = part0
+		m.Part1 = bones[j]
+		m.C0 = CFrame.new(rest.joints[j] - origin0)
+		m.C1 = CFrame.new()
+		m.Parent = part0
 	end
 
 	local ctx: Ctx = {
 		model = model,
 		root = root,
+		bone = nil,
+		bones = bones,
 		rng = Random.new(opts.seed or CONFIG.Seed),
 		palette = palette,
 		board = boardStyle,
-		p = proportions :: Proportions,
+		p = proportions,
 		acc = accessories,
 	}
 
-	local deckTop = if accessories.Board then buildBoard(ctx).Y else 0
-	local hipFront, hipBack = buildLegs(ctx, deckTop)
-	local hipCentre = (hipFront + hipBack) / 2
-	local torso = buildTorso(ctx, hipCentre)
+	if accessories.Board then
+		buildBoard(ctx)
+	end
+	buildLegs(ctx, rest.deckTop)
+	local torso = buildTorso(ctx, rest.hipCentre)
 	buildHead(ctx, torso)
-	buildArmsAndHandle(ctx, torso, hipCentre)
+	buildArms(ctx, rest)
+	if accessories.Handle then
+		buildHandle(ctx)
+	end
+	ctx.bone = nil
 
 	if proportions.Scale ~= 1 then
 		model:ScaleTo(proportions.Scale)
 	end
 	return model
+end
+
+--[[
+	The animator's RigDef for riders built with these options: rest joint
+	pivots relative to the board base, in metres (studs * MetresPerStud *
+	Scale), plus the measurements the animation needs. Mirror-symmetric.
+]]
+function RiderBuilder.rigDef(options: BuildOptions?): any
+	local opts = options or {}
+	local _, accessories, proportions, boardStyle = resolve(opts)
+	local rest = restJoints(proportions, boardStyle, accessories)
+	local k = CONFIG.Rig.MetresPerStud * proportions.Scale
+	local function m(v: Vector3)
+		return { x = v.X * k, y = v.Y * k, z = v.Z * k }
+	end
+	local joints = {}
+	for _, j in JOINTS do
+		joints[j] = m(rest.joints[j])
+	end
+	return {
+		name = "roblox",
+		rest = joints,
+		headCentre = m(rest.head),
+		handLength = rest.handLength * k,
+		boardLength = CONFIG.Board.Length * k,
+		boardWidth = CONFIG.Board.Width * k,
+		deckTop = rest.deckTop * k,
+		barLength = CONFIG.Handle.Length * k,
+		gripSpacing = CONFIG.Handle.GripSpacing * k,
+	}
 end
 
 --- Names of the built-in palettes, for menus and tests.

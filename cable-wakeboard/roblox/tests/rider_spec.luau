@@ -22,7 +22,8 @@ for _, name in RiderBuilder.paletteNames() do
 	for _, d in model:GetDescendants() do
 		local cls = d.ClassName
 		check(not FORBIDDEN[cls], `{name}: forbidden {cls}`)
-		if d:IsA("BasePart") and d.Name ~= "Root" then
+		local isBone = string.sub(d.Name, 1, 4) == "Bone" and d.Transparency == 1
+		if d:IsA("BasePart") and d.Name ~= "Root" and not isBone and d.Name ~= "Bar" then
 			parts += 1
 			check(ALLOWED[cls], `{name}: unexpected class {cls}`)
 			check(d.Material == Enum.Material.SmoothPlastic, `{name}: {d.Name} not SmoothPlastic`)
@@ -49,6 +50,32 @@ for _, name in RiderBuilder.paletteNames() do
 	local att
 	for _, d in model:GetDescendants() do if d.Name == "RopeAttachment" then att = d end end
 	check(att ~= nil, `{name}: no RopeAttachment`)
+	-- The rig: one Motor6D per joint, Part1 a bone, chained to the Root.
+	local motors = {}
+	for _, d in model:GetDescendants() do
+		if d.ClassName == "Motor6D" then motors[d.Name] = d end
+	end
+	for _, j in RiderBuilder.JOINTS do
+		local m = motors[j]
+		check(m ~= nil, `{name}: no Motor6D {j}`)
+		if m then
+			check(m.Part1 and m.Part1.Name == "Bone" .. j, `{name}: Motor6D {j} Part1 is not its bone`)
+			local parent = RiderBuilder.PARENT[j]
+			check(m.Part0 and m.Part0.Name == (if parent == "Root" then "Root" else "Bone" .. parent), `{name}: Motor6D {j} Part0 is not its parent bone`)
+		end
+	end
+	-- The animator's rig: mirror-symmetric rest, rider-sized, in metres.
+	local rig = RiderBuilder.rigDef({ palette = name })
+	local mirror = { L = "R", R = "L" }
+	for _, j in RiderBuilder.JOINTS do
+		local a = rig.rest[j]
+		local first = string.sub(j, 1, 1)
+		local m = if mirror[first] and j ~= "Hips" then mirror[first] .. string.sub(j, 2) else j
+		local b = rig.rest[m]
+		check(math.abs(a.x + b.x) < 1e-9 and math.abs(a.y - b.y) < 1e-9 and math.abs(a.z - b.z) < 1e-9, `{name}: rest {j} is not the mirror of {m}`)
+	end
+	check(rig.rest.LShoulder.x > 0, `{name}: lead side should be +X`)
+	check(rig.headCentre.y > 1.2 and rig.headCentre.y < 1.8, `{name}: head height {rig.headCentre.y} m out of range`)
 end
 
 -- Same seed, same rider; different seed, different facets.

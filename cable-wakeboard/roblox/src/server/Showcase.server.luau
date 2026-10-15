@@ -11,6 +11,8 @@ local shared = ReplicatedStorage:WaitForChild("WakeShared")
 local RiderBuilder = require(shared:WaitForChild("RiderBuilder"))
 local DuskLighting = require(shared:WaitForChild("DuskLighting"))
 local WaterSpray = require(shared:WaitForChild("WaterSpray"))
+local Anim = require(shared:WaitForChild("Anim"))
+local RiderRig = require(shared:WaitForChild("RiderRig"))
 
 local rgb = Color3.fromRGB
 
@@ -49,11 +51,19 @@ for i = 1, 14 do
 	rock.Parent = folder
 end
 
--- One rider per palette, side by side, angled to show the faceting.
+-- One rider per palette, side by side, angled to show the faceting. The rig
+-- rests upright; each is posed in a carve by the animation system.
+local POSES = { "Heelside", "Cruise", "Indy" }
 for i, name in RiderBuilder.paletteNames() do
-	local rider = RiderBuilder.build({ palette = name, name = `Rider{name}`, seed = 10 + i })
-	rider:PivotTo(CFrame.new((i - 2) * 8, 0.02, 0) * CFrame.Angles(0, math.rad(-35), 0))
+	local opts = { palette = name, name = `Rider{name}`, seed = 10 + i }
+	local rider = RiderBuilder.build(opts)
 	rider.Parent = folder
+	local mps = RiderBuilder.Config.Rig.MetresPerStud
+	local origin = { x = (i - 2) * 8 * mps, y = 0.02 * mps, z = 0 }
+	local pose = POSES[(i - 1) % #POSES + 1]
+	local frame = Anim.TestDriver.playTo(Anim.Animator.create(RiderBuilder.rigDef(opts)), Anim.TestDriver.SCENARIOS[pose], 0.5, origin)
+	RiderRig.apply(RiderRig.new(rider, mps), frame)
+	rider:PivotTo(rider:GetPivot() * CFrame.Angles(0, math.rad(-35), 0))
 	local spray = WaterSpray.attach(rider)
 	WaterSpray.setIntensity(spray, 0.6)
 end

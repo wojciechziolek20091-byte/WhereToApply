@@ -43,6 +43,16 @@ end
 C.__index = function(self, k)
 	if k == "Position" then return self.p end
 	if k == "LookVector" then return -self.b end
+	if k == "UpVector" then return self.u end
+	if k == "Inverse" then
+		return function(c)
+			-- Transpose the rotation, rotate the negated position.
+			local r, u, b = c.r, c.u, c.b
+			local nr, nu, nb = vec(r.X, u.X, b.X), vec(r.Y, u.Y, b.Y), vec(r.Z, u.Z, b.Z)
+			local p = -c.p
+			return cf(nr * p.X + nu * p.Y + nb * p.Z, nr, nu, nb)
+		end
+	end
 	return nil
 end
 local I = { vec(1, 0, 0), vec(0, 1, 0), vec(0, 0, 1) }
@@ -50,6 +60,15 @@ CFrame = {}
 function CFrame.new(x, y, z)
 	if type(x) == "table" then return cf(x, I[1], I[2], I[3]) end
 	return cf(vec(x or 0, y or 0, z or 0), I[1], I[2], I[3])
+end
+-- CFrame.new(x, y, z, qx, qy, qz, qw): position plus a unit quaternion (standard rotation).
+local baseNew = CFrame.new
+function CFrame.new(x, y, z, qx, qy, qz, qw)
+	if qw == nil then return baseNew(x, y, z) end
+	local r = vec(1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy + qw * qz), 2 * (qx * qz - qw * qy))
+	local u = vec(2 * (qx * qy - qw * qz), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz + qw * qx))
+	local b = vec(2 * (qx * qz + qw * qy), 2 * (qy * qz - qw * qx), 1 - 2 * (qx * qx + qy * qy))
+	return cf(vec(x, y, z), r, u, b)
 end
 function CFrame.Angles(rx, ry, rz)
 	local function rotX(t) local c, s = math.cos(t), math.sin(t) return cf(vec(), vec(1, 0, 0), vec(0, c, s), vec(0, -s, c)) end
@@ -149,9 +168,19 @@ end
 function Inst:IsA(cls)
 	local c = rawget(self, "_props").ClassName
 	if cls == "BasePart" then return c == "Part" or c == "WedgePart" or c == "CornerWedgePart" end
+	if cls == "Motor6D" then return c == "Motor6D" end
 	return c == cls
 end
 function Inst:ScaleTo(_s) rawget(self, "_props").Scaled = _s end
+function Inst:FindFirstChild(name, recursive)
+	for _, c in (if recursive then self:GetDescendants() else rawget(self, "_children")) do
+		if c.Name == name then return c end
+	end
+	return nil
+end
+function Inst:PivotTo(c) if self.PrimaryPart then self.PrimaryPart.CFrame = c end end
+function Inst:GetPivot() return if self.PrimaryPart then self.PrimaryPart.CFrame else CFrame.new() end
+warn = function(...) print("WARN", ...) end
 Instance = {
 	new = function(className)
 		local i = setmetatable({ _props = { ClassName = className, Name = className }, _children = {} }, Inst)

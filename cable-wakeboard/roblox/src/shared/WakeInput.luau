@@ -21,6 +21,14 @@ WakeInput.ACTIONS = {
 	LetGo = { "X", "ButtonY" },
 	Restart = { "Return", "ButtonStart" },
 	Debug = { "F3" },
+	-- Animation debugging (spec section 13): slow motion, skeleton overlay, pose scrubber.
+	SlowMo = { "F4" },
+	Skeleton = { "F6" },
+	Scrub = { "F7" },
+	ScrubPrev = { "LeftBracket" },
+	ScrubNext = { "RightBracket" },
+	ScrubBack = { "Minus" },
+	ScrubForward = { "Equals" },
 }
 
 WakeInput.CONTROLS_HELP = {
@@ -33,6 +41,7 @@ WakeInput.CONTROLS_HELP = {
 	"E: indy. E+R stalefish, E+N nose, E+T tail. Let go before landing",
 	"Box/rail: tap A/D to balance, hold to rotate 90. Shift: arms out. X: let go",
 	"Enter: restart   F3: debug",
+	"F4: slow motion   F6: skeleton   F7: pose scrubber ([ ] clip, - = phase)",
 }
 
 local function b(v)
