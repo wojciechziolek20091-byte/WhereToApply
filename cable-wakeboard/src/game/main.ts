@@ -1,11 +1,13 @@
 import { RIDER_PALETTES, type RiderPalette } from '../art/riders';
 import { BabylonRenderer } from '../render/babylon/BabylonRenderer';
+import { LOOKS } from '../render/babylon/looks';
 import { GrayboxRenderer, snapshotOf, type RenderSnapshot } from '../render/graybox';
 import { DEFAULT_CONFIG } from '../sim/config';
 import { DEFAULT_PARK } from '../sim/park';
 import { createRun, stepRun, type RunState } from '../sim/session';
 import { advanceStepper, createStepper } from '../sim/stepper';
 import type { SimState } from '../sim/world';
+import hudCss from './hud.css?inline';
 import { Hud } from './hud';
 import { Keyboard } from './keyboard';
 import { mountStartScreen, mountTouchControls } from './touch';
@@ -14,6 +16,11 @@ interface GameRenderer {
   render(sim: SimState, prev: RenderSnapshot, alpha: number, frameSeconds: number): void;
   setPalette?(palette: RiderPalette): void;
 }
+
+// The UI stylesheet ships inside the bundle so every host gets the same look.
+const style = document.createElement('style');
+style.textContent = hudCss;
+document.head.appendChild(style);
 
 const view = document.getElementById('view')!;
 const hudEl = document.getElementById('hud')!;
@@ -34,7 +41,8 @@ function createRenderer(): GameRenderer {
   canvas.style.display = 'block';
   canvas.style.touchAction = 'none';
   view.appendChild(canvas);
-  return new BabylonRenderer(canvas, run.sim, initialPalette);
+  const look = params.get('look') === 'dusk' ? LOOKS.dusk : LOOKS.day;
+  return new BabylonRenderer(canvas, run.sim, initialPalette, look);
 }
 
 const renderer = createRenderer();
@@ -61,6 +69,7 @@ function frame(now: number): void {
   last = now;
 
   if (keys.consume('KeyP')) paused = !paused;
+  if (keys.consume('KeyH')) hud.toggleHelp();
   if (keys.consume('Enter')) {
     run = createRun(DEFAULT_CONFIG, DEFAULT_PARK);
     prev = snapshotOf(run.sim);

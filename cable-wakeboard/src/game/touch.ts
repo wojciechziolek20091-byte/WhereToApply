@@ -64,7 +64,7 @@ export function mountStartScreen(
   ).join('');
   overlay.innerHTML = `
     <div class="start-card">
-      <p class="start-eyebrow">Full-size cable, 30 km/h, 4 towers, 2 kickers, a box and a rail</p>
+      <p class="start-eyebrow">Full-size cable, 30 km/h, 4 towers, 4 kickers, 3 boxes, 2 rails</p>
       <h1 class="start-title">Cable Wakeboard</h1>
       <p class="start-body">Cut out from the line, cut back in, and release the pop while the rope is loaded.
         Two laps per run, two falls and you are out. Three judges score the run.</p>

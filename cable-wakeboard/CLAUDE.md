@@ -52,10 +52,13 @@ src/art/      Engine-free art: mesh.ts (primitives and hulls -> flat-shaded tria
               arrays), riders.ts + riderParts.json (rider art exported from the Luau
               RiderBuilder by scripts/export-rider-art.sh). No engine imports.
 src/render/   babylon/: the game's engine (Babylon.js): BabylonRenderer.ts (scene,
-              rider, spray, chase camera), dusk.ts (palette). graybox.ts: old
+              rider, water, forest, buoys, other riders, spray, wake, chase
+              camera), looks.ts (DAY default, DUSK via ?look=dusk). graybox.ts: old
               three.js view, kept for debugging via ?renderer=graybox.
               Renderers read SimState; they never write it.
-src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts, main.ts loop.
+src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts (tiles, trick
+              popup, help on H), hud.css (imported ?inline and injected, so the
+              published page needs no CSS of its own), main.ts loop.
 scripts/      Tuning probes (vite-node).
 roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
               See roblox/README.md. RiderBuilder.luau is the source of truth for

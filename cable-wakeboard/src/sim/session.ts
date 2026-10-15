@@ -29,6 +29,17 @@ export interface RunState {
   score: RunScore | null;
   /** Tricks landed on the most recent tick, for the HUD. */
   latest: TrickRecord[];
+  /** Running points total shown in the HUD (not the judges' score). */
+  points: number;
+}
+
+/**
+ * Arcade points for one trick, for the HUD: difficulty scaled by how clean
+ * the landing was and how big the air was. Judges score the run separately.
+ */
+export function trickPoints(rec: Pick<TrickRecord, 'trick' | 'landingQuality' | 'height' | 'airTime'>): number {
+  const size = 1 + Math.min(rec.height, 4) / 4 + Math.min(rec.airTime, 2) / 4;
+  return Math.max(5, Math.round(10 * rec.trick.difficulty * (0.5 + 0.5 * rec.landingQuality) * size));
 }
 
 export function createRun(cfg: SimConfig = DEFAULT_CONFIG, park: ParkDef = DEFAULT_PARK): RunState {
@@ -45,6 +56,7 @@ export function createRun(cfg: SimConfig = DEFAULT_CONFIG, park: ParkDef = DEFAU
     endReason: null,
     score: null,
     latest: [],
+    points: 0,
   };
 }
 
@@ -86,6 +98,7 @@ export function stepRun(run: RunState, input: InputFrame): void {
       };
       run.tricks.push(rec);
       run.latest.push(rec);
+      run.points += trickPoints(rec);
       run.sinceAction = 0;
     } else if (e.type === 'jibDone' && s.rider.mode !== 'fallen') {
       const trick = classifyJib(e.time, e.alignedTime, e.crossedTime);
@@ -104,6 +117,7 @@ export function stepRun(run: RunState, input: InputFrame): void {
       };
       run.tricks.push(rec);
       run.latest.push(rec);
+      run.points += trickPoints(rec);
       run.sinceAction = 0;
     } else if (e.type === 'featureEnter') {
       run.sinceAction = 0;

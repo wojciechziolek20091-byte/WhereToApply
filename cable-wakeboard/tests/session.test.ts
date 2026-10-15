@@ -53,3 +53,24 @@ describe('run session', () => {
     expect(run.tricks[0]!.featureId).toBe('k1');
   });
 });
+
+import { trickPoints } from '../src/sim/session';
+
+describe('HUD points', () => {
+  const base = { name: 'x', key: 'x', family: 'jump' as const, difficulty: 1, spinDegrees: 0, spinDirection: null, invert: null, grab: null, switchStance: false, modifiers: [] };
+  it('rewards harder, cleaner and bigger tricks', () => {
+    const small = trickPoints({ trick: base, landingQuality: 0.5, height: 0.5, airTime: 0.5 });
+    const harder = trickPoints({ trick: { ...base, difficulty: 3 }, landingQuality: 0.5, height: 0.5, airTime: 0.5 });
+    const cleaner = trickPoints({ trick: base, landingQuality: 1, height: 0.5, airTime: 0.5 });
+    const bigger = trickPoints({ trick: base, landingQuality: 0.5, height: 3, airTime: 1.5 });
+    expect(harder).toBeGreaterThan(small);
+    expect(cleaner).toBeGreaterThan(small);
+    expect(bigger).toBeGreaterThan(small);
+  });
+
+  it('adds up during a run', () => {
+    const run = createRun(makeConfig({}));
+    runFor(run, 12);
+    expect(run.points).toBeGreaterThan(0);
+  });
+});
