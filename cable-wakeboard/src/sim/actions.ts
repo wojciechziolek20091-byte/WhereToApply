@@ -1,8 +1,9 @@
 import { createAirState } from './air';
+import { landingSpeedKeep } from './bodyPhysics';
 import { DT } from './config';
 import { transition } from './fsm';
 import { evaluateLanding, type LandingResult } from './landing';
-import { type Vec3, add, addScaled, headingOf, horizontalLength, scale, UP, vec3 } from './math/vec';
+import { type Vec3, add, addScaled, headingOf, horizontalLength, normalize, scale, sub, UP, vec3 } from './math/vec';
 import { updateTensionTracker } from './pop';
 import type { AirState, CrashReason, TakeoffSource } from './rider';
 import { type RopeResult, computeRopeTension } from './rope';
@@ -10,9 +11,17 @@ import type { SimState } from './world';
 
 /** Rider state transitions and helpers shared by the per-mode steps. */
 
-/** Hips position: the rope attaches here. Bent knees lower the hips. */
+/** Hips position: the handle is held here, so the rope's stretch is measured from it. Bent knees lower it. */
 export const hipPosition = (s: SimState): Vec3 =>
   addScaled(s.rider.pos, UP, s.cfg.rider.hipHeight * (1 - 0.35 * s.rider.legCompression));
+
+/**
+ * Where the pull reaches the body (section 11): through the arms to the
+ * shoulders. The stretch (and so the tension) is still measured at the
+ * handle; only the direction of the force changes. Off: the hips.
+ */
+const pullPoint = (s: SimState): Vec3 =>
+  s.cfg.physics.ropeAtShoulders ? addScaled(s.rider.pos, UP, s.cfg.physics.shoulderHeight * (1 - 0.35 * s.rider.legCompression)) : hipPosition(s);
 
 /** Off balance: a snap back to taut can yank the rider over. */
 const offBalance = (s: SimState): boolean =>
@@ -35,7 +44,8 @@ export function applyRope(s: SimState): RopeResult | null {
   const raw = computeRopeTension(s.carrier.pos, s.carrier.vel, hipPosition(s), rider.vel, cfg.rope.length + rider.handleDist, cfg.rope);
   const cap = rider.mode === 'ridingBlind' ? Math.min(cfg.rope.maxTension, cfg.blind.maxTension) : cfg.rope.maxTension;
   const tension = Math.min(raw.tension, cap);
-  const rope: RopeResult = { ...raw, tension, force: scale(raw.dir, tension) };
+  const dir = s.cfg.physics.ropeAtShoulders ? normalize(sub(s.carrier.pos, pullPoint(s))) : raw.dir;
+  const rope: RopeResult = { ...raw, dir, tension, force: scale(dir, tension) };
   const wasSlack = rider.ropeTension <= 0;
   if (rope.tension <= 0) {
     rider.slackTime += DT;
@@ -94,6 +104,7 @@ export function takeOff(
   r.vel = add(r.vel, vec3(0, popSpeed, 0));
   r.pos = addScaled(r.pos, UP, 1e-3);
   const air = createAirState(r, source, featureId, popSpeed, popQuality, s.cfg, spinStart);
+  if (s.inputs.steerAge <= s.cfg.physics.preWindWindow) air.preWind = s.inputs.lastSteerDir;
   r.air = air;
   r.ramp = null;
   r.jib = null;
@@ -121,7 +132,8 @@ export function touchDown(s: SimState, air: AirState, normal: Vec3, surfaceY: nu
     r.blindDir = air.rot.blindDir !== 0 ? air.rot.blindDir : r.blindDir;
     r.blindTime = 0;
   }
-  r.vel = vec3(r.vel.x, 0, r.vel.z);
+  const keep = landingSpeedKeep(s.cfg, landing.impact, landing.clean);
+  r.vel = vec3(r.vel.x * keep, 0, r.vel.z * keep);
   r.heading = horizontalLength(r.vel) > 0.5 ? headingOf(r.vel) : air.takeoffHeading;
   r.air = null;
   transition(s, 'landing', 'touchdown');

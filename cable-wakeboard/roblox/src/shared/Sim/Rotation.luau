@@ -23,6 +23,7 @@ function Rotation.createRotation(passWindow)
 		passTimer = 0,
 		stoppedByRope = false,
 		blindDir = 0,
+		spinTime = 0,
 	}
 end
 
@@ -78,6 +79,7 @@ function Rotation.stepSpin(rot, want, side, cfg, dt, rate)
 		end
 	end
 	rot.maxSpin = math.max(rot.maxSpin, math.abs(rot.spinAngle))
+	rot.spinTime = if rot.spinRate ~= 0 then rot.spinTime + dt else 0
 end
 
 function Rotation.stepFlip(rot, want, cfg, dt, rateScale)

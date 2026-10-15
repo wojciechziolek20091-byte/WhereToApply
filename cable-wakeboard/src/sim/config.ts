@@ -318,7 +318,7 @@ export interface PhysicsConfig {
   preWind: boolean;
   preWindWindow: number;
   preWindBonus: number;
-  /** The rope pulls at the shoulders (height above the board, m), not the hips. */
+  /** The pull reaches the body at the shoulders (height above the board, m): its direction; the stretch stays at the handle. */
   ropeAtShoulders: boolean;
   shoulderHeight: number;
   /** Landings cost speed: this fraction per m/s of impact, times `sketchyCost` when not clean. */
@@ -516,8 +516,8 @@ export const DEFAULT_CONFIG: SimConfig = {
       [0.92, 0],
       [1, 0],
     ],
-    spinTuckIn: 0.12,
-    spinOpen: deg(90),
+    spinTuckIn: 0.03,
+    spinOpen: deg(45),
     preWind: true,
     preWindWindow: 0.2,
     preWindBonus: 0.12,

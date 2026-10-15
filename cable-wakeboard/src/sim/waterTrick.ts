@@ -36,8 +36,9 @@ export const airtimeFor = (h: number): number => 2 * Math.sqrt((2 * Math.max(0, 
 
 /**
  * Plan the trick at the pop. Returns the vertical speed and the trick state.
- * Rolls turn at the rate that fits the airtime, but never faster than the
- * rate that fits `minRollHeight`: a lower pop cannot finish the roll.
+ * Rolls turn at the rate that fits the airtime. Below `minRollHeight` they
+ * turn at the rate of a whole `minRollHeight` airtime, so a lower pop cannot
+ * finish the roll (with margin: the rope can stretch the air a little).
  */
 export function planWaterTrick(
   tension: number,
@@ -49,7 +50,8 @@ export function planWaterTrick(
   const vy = Math.sqrt(2 * GRAVITY * height);
   const airtime = airtimeFor(height);
   const kind: WaterTrickState['kind'] = input.back ? 'backroll' : input.forward ? 'frontroll' : 'raley';
-  const rollTime = Math.max(airtime, airtimeFor(cfg.waterTrick.minRollHeight)) * 0.85;
+  const minRoll = cfg.waterTrick.minRollHeight;
+  const rollTime = height >= minRoll ? airtime * 0.85 : airtimeFor(minRoll) * 1.15;
   return {
     vy,
     trick: {

@@ -1,4 +1,5 @@
 -- Air: flight, spins, flips, grabs, handle passes, water tricks. Mirrors src/sim/air.ts.
+local BodyPhysics = require(script.Parent.BodyPhysics)
 local Config = require(script.Parent.Config)
 local Edge = require(script.Parent.Edge)
 local Handle = require(script.Parent.Handle)
@@ -57,6 +58,7 @@ function Air.createAirState(r, source, featureId, popSpeed, popQuality, cfg, spi
 		fromBlind = fromBlind,
 		lipPop = false,
 		overFeature = nil,
+		preWind = 0,
 	}
 end
 
@@ -83,11 +85,14 @@ function Air.stepAir(r, air, ropeForce, input, mem, cfg)
 	local steerForSpin = if air.trick then WaterTrick.stepWaterTrick(air.trick, input, mem, cfg) else mem.steerDir
 	local toes = Edge.toeSign({ stance = r.stance, switchStance = air.takeoffSwitch })
 	local boardYaw = r.heading + air.rot.spinAngle
+	-- Section 11: tuck sets the rate within a turn; a pre-wound spin is faster.
+	local spinDir = if steerForSpin ~= 0 then steerForSpin else air.rot.spinDir
+	local spinRate = cfg.spin.rate * BodyPhysics.spinRateScale(cfg, air.rot) * BodyPhysics.preWindScale(cfg, air.preWind, spinDir)
 	Rotation.stepSpin(air.rot, steerForSpin, function()
 		return Rotation.rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading)
-	end, cfg, DT, cfg.spin.rate)
+	end, cfg, DT, spinRate)
 	if not air.trick then
-		Rotation.stepFlip(air.rot, if input.forward then 1 elseif input.back then -1 else 0, cfg, DT, 1)
+		Rotation.stepFlip(air.rot, if input.forward then 1 elseif input.back then -1 else 0, cfg, DT, BodyPhysics.flipRateScale(cfg, air.rot.flipAngle))
 	end
 
 	air.grab = mem.grabChoice

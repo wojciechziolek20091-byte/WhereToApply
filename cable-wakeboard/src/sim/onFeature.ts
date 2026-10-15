@@ -17,6 +17,7 @@ import { createRotation, rotationSide } from './rotation';
 import type { SlideId } from './tricks/data';
 import type { SimState } from './world';
 import { applyRope, crash, takeOff } from './actions';
+import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
 
 /**
@@ -367,7 +368,7 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
     return true;
   }
   if (r.handle === 'passing') r.handle = 'inFront';
-  const speed = Math.max(dot(r.vel, surface.tangent), s.cfg.feature.stallSpeed + 0.5);
+  const speed = Math.max(dot(r.vel, surface.tangent) * landingSpeedKeep(s.cfg, landing.impact, landing.clean), s.cfg.feature.stallSpeed + 0.5);
   r.air = null;
   mountMain(s, feature, local.u, local.v, speed, 'ollieOn', false, boardAngle);
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });

@@ -14,3 +14,4 @@ export { DEFAULT_PARK, FLAT_PARK, type ParkDef, type FeatureDef } from './park';
 export { classifyAir, classifySlide, type TrickResult, type TrickToken } from './tricks/classify';
 export { scoreCombo, comboName, type ComboEntry, type ComboScore } from './scoring/combo';
 export * as tricks from './tricks/data';
+export * from './bodyPhysics';

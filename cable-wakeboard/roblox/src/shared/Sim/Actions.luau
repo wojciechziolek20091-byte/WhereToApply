@@ -1,6 +1,7 @@
 -- Rider state transitions shared by the per-mode steps: rope, crash, takeoff,
 -- touchdown. Mirrors src/sim/actions.ts.
 local Air = require(script.Parent.Air)
+local BodyPhysics = require(script.Parent.BodyPhysics)
 local Config = require(script.Parent.Config)
 local Fsm = require(script.Parent.Fsm)
 local Landing = require(script.Parent.Landing)
@@ -12,9 +13,18 @@ local Vec = require(script.Parent.Vec)
 local DT = Config.DT
 local Actions = {}
 
--- Hips position: the rope attaches here. Bent knees lower the hips.
+-- Hips position: the handle is held here, so the rope's stretch is measured from it. Bent knees lower it.
 function Actions.hipPosition(s)
 	return Vec.addScaled(s.rider.pos, Vec.UP, s.cfg.rider.hipHeight * (1 - 0.35 * s.rider.legCompression))
+end
+
+-- Where the pull reaches the body (section 11): the shoulders. Only the force's
+-- direction changes; the stretch stays at the handle. Off: the hips.
+local function pullPoint(s)
+	if s.cfg.physics.ropeAtShoulders then
+		return Vec.addScaled(s.rider.pos, Vec.UP, s.cfg.physics.shoulderHeight * (1 - 0.35 * s.rider.legCompression))
+	end
+	return Actions.hipPosition(s)
 end
 
 local function offBalance(s)
@@ -41,9 +51,11 @@ function Actions.applyRope(s)
 	)
 	local cap = if rider.mode == "ridingBlind" then math.min(cfg.rope.maxTension, cfg.blind.maxTension) else cfg.rope.maxTension
 	local tension = math.min(raw.tension, cap)
+	local dir = if cfg.physics.ropeAtShoulders then Vec.normalize(Vec.sub(s.carrier.pos, pullPoint(s))) else raw.dir
 	local rope = table.clone(raw)
+	rope.dir = dir
 	rope.tension = tension
-	rope.force = Vec.scale(raw.dir, tension)
+	rope.force = Vec.scale(dir, tension)
 	local wasSlack = rider.ropeTension <= 0
 	if rope.tension <= 0 then
 		rider.slackTime += DT
@@ -91,6 +103,9 @@ function Actions.takeOff(s, source, featureId, popSpeed, popQuality, spinStart)
 	r.vel = Vec.add(r.vel, Vec.vec3(0, popSpeed, 0))
 	r.pos = Vec.addScaled(r.pos, Vec.UP, 1e-3)
 	local air = Air.createAirState(r, source, featureId, popSpeed, popQuality, s.cfg, spinStart or 0)
+	if s.inputs.steerAge <= s.cfg.physics.preWindWindow then
+		air.preWind = s.inputs.lastSteerDir
+	end
 	r.air = air
 	r.ramp = nil
 	r.jib = nil
@@ -119,7 +134,8 @@ function Actions.touchDown(s, air, normal, surfaceY)
 		r.blindDir = if air.rot.blindDir ~= 0 then air.rot.blindDir else r.blindDir
 		r.blindTime = 0
 	end
-	r.vel = Vec.vec3(r.vel.x, 0, r.vel.z)
+	local keep = BodyPhysics.landingSpeedKeep(s.cfg, landing.impact, landing.clean)
+	r.vel = Vec.vec3(r.vel.x * keep, 0, r.vel.z * keep)
 	r.heading = if Vec.horizontalLength(r.vel) > 0.5 then Vec.headingOf(r.vel) else air.takeoffHeading
 	r.air = nil
 	Fsm.transition(s, "landing", "touchdown")

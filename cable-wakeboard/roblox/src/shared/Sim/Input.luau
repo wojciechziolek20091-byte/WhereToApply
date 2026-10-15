@@ -30,6 +30,8 @@ function Input.createInputMemory()
 		passPressed = false,
 		steerDir = 0,
 		steerHeldTime = 0,
+		lastSteerDir = 0,
+		steerAge = 0,
 		steerTap = 0,
 		grabTime = 0,
 		grabChoice = nil,
@@ -69,6 +71,12 @@ function Input.updateInputMemory(m, input, cfg, dt)
 		m.steerHeldTime = 0
 	elseif dir ~= 0 then
 		m.steerHeldTime += dt
+	end
+	if dir ~= 0 then
+		m.lastSteerDir = dir
+		m.steerAge = 0
+	else
+		m.steerAge += dt
 	end
 
 	if not input.grab then

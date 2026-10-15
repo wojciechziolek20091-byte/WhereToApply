@@ -71,7 +71,7 @@ export function cutAndPop(
  * A sim on flat water with no features, starting on the longest straight (the
  * east side, s = 107..249) so cut-and-pop tests stay clear of the corners.
  */
-export const flatSim = () => createSim(DEFAULT_CONFIG, FLAT_PARK, 125);
+export const flatSim = (cfg = DEFAULT_CONFIG) => createSim(cfg, FLAT_PARK, 125);
 
 /** A sim with debug asserts and one feature on the east straight, `s` metres after the rider's start. */
 export function featureSim(def: FeatureDef, cfgOverrides: Parameters<typeof makeConfig>[0] = {}): SimState {

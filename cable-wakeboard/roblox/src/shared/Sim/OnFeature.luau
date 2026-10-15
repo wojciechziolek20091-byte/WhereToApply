@@ -2,6 +2,7 @@
 -- sliding the main (90-degree steps, balance, handle passes), landing on a main.
 -- Mirrors src/sim/onFeature.ts.
 local Actions = require(script.Parent.Actions)
+local BodyPhysics = require(script.Parent.BodyPhysics)
 local Config = require(script.Parent.Config)
 local DetMath = require(script.Parent.DetMath)
 local Edge = require(script.Parent.Edge)
@@ -368,7 +369,10 @@ function OnFeature.airOverFeature(s, air)
 	if r.handle == "passing" then
 		r.handle = "inFront"
 	end
-	local speed = math.max(Vec.dot(r.vel, surface.tangent), s.cfg.feature.stallSpeed + 0.5)
+	local speed = math.max(
+		Vec.dot(r.vel, surface.tangent) * BodyPhysics.landingSpeedKeep(s.cfg, landing.impact, landing.clean),
+		s.cfg.feature.stallSpeed + 0.5
+	)
 	r.air = nil
 	mountMain(s, feature, l.u, l.v, speed, "ollieOn", false, boardAngle)
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })

@@ -163,7 +163,7 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     const ts = traceRun(11, TICKS, 'test');
     const lu = luauTrace(11, 'test');
     expect(firstDivergence(ts, lu)).toBeNull();
-    const events = ts.map((r) => String(r[25] ?? '')).join(',');
+    const events = ts.map((r) => String(r[28] ?? '')).join(',');
     expect(events).toContain('featureEnter');
     expect(events).toContain('slideDone');
   });

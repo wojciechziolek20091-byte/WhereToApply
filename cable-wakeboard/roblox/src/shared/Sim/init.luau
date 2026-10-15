@@ -10,6 +10,7 @@
 local Sim = {
 	Actions = require(script.Actions),
 	Air = require(script.Air),
+	BodyPhysics = require(script.BodyPhysics),
 	Cable = require(script.Cable),
 	Config = require(script.Config),
 	DetMath = require(script.DetMath),

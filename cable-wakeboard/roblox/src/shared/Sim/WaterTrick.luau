@@ -37,7 +37,8 @@ function WaterTrick.planWaterTrick(tension, timing, input, cfg)
 	local vy = math.sqrt(2 * GRAVITY * height)
 	local airtime = WaterTrick.airtimeFor(height)
 	local kind = if input.back then "backroll" elseif input.forward then "frontroll" else "raley"
-	local rollTime = math.max(airtime, WaterTrick.airtimeFor(cfg.waterTrick.minRollHeight)) * 0.85
+	local minRoll = cfg.waterTrick.minRollHeight
+	local rollTime = if height >= minRoll then airtime * 0.85 else WaterTrick.airtimeFor(minRoll) * 1.15
 	return vy, {
 		kind = kind,
 		sBend = 0,

@@ -5,6 +5,7 @@ import { updateHandle } from './handle';
 import type { InputFrame, InputMemory } from './input';
 import { type Vec3, add, addScaled, headingOf, horizontalLength, length, scale, vec3 } from './math/vec';
 import type { AirState, RiderState, TakeoffSource } from './rider';
+import { flipRateScale, preWindScale, spinRateScale } from './bodyPhysics';
 import { createRotation, rotationSide, stepFlip, stepSpin } from './rotation';
 import { stepWaterTrick } from './waterTrick';
 
@@ -60,6 +61,7 @@ export function createAirState(
     fromBlind,
     lipPop: false,
     overFeature: null,
+    preWind: 0,
   };
 }
 
@@ -87,8 +89,11 @@ export function stepAir(r: RiderState, air: AirState, ropeForce: Vec3, input: In
   const steerForSpin = air.trick ? stepWaterTrick(air.trick, input, mem, cfg) : mem.steerDir;
   const toes = toeSign({ stance: r.stance, switchStance: air.takeoffSwitch });
   const boardYaw = r.heading + air.rot.spinAngle;
-  stepSpin(air.rot, steerForSpin, () => rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading), cfg, DT, cfg.spin.rate);
-  if (!air.trick) stepFlip(air.rot, input.forward ? 1 : input.back ? -1 : 0, cfg, DT, 1);
+  // Section 11: tuck sets the rate within a turn; a pre-wound spin is faster.
+  const spinDir = steerForSpin !== 0 ? steerForSpin : air.rot.spinDir;
+  const spinRate = cfg.spin.rate * spinRateScale(cfg, air.rot) * preWindScale(cfg, air.preWind, spinDir);
+  stepSpin(air.rot, steerForSpin, () => rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading), cfg, DT, spinRate);
+  if (!air.trick) stepFlip(air.rot, input.forward ? 1 : input.back ? -1 : 0, cfg, DT, flipRateScale(cfg, air.rot.flipAngle));
 
   air.grab = mem.grabChoice;
   if (air.grab) air.grabTimes[air.grab] += DT;

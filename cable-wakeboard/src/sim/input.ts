@@ -63,6 +63,9 @@ export interface InputMemory {
   /** Direction A/D is held (-1, 0, 1) and for how long (s). */
   steerDir: number;
   steerHeldTime: number;
+  /** The last A/D direction held and how long ago it was let go (0 while held), for the pre-wind. */
+  lastSteerDir: number;
+  steerAge: number;
   /** A/D released this tick after a short press: its direction, else 0. */
   steerTap: number;
   /** Grab chord: seconds since E went down, and the grab it resolved to. */
@@ -78,6 +81,8 @@ export const createInputMemory = (): InputMemory => ({
   passPressed: false,
   steerDir: 0,
   steerHeldTime: 0,
+  lastSteerDir: 0,
+  steerAge: 0,
   steerTap: 0,
   grabTime: 0,
   grabChoice: null,
@@ -107,6 +112,10 @@ export function updateInputMemory(m: InputMemory, input: InputFrame, cfg: SimCon
   } else if (dir !== 0) {
     m.steerHeldTime += dt;
   }
+  if (dir !== 0) {
+    m.lastSteerDir = dir;
+    m.steerAge = 0;
+  } else m.steerAge += dt;
 
   if (!input.grab) {
     m.grabTime = 0;

@@ -91,6 +91,8 @@ export interface RotationState {
   stoppedByRope: boolean;
   /** Spin direction that took the rider blind, or 0. */
   blindDir: number;
+  /** Seconds since the current spin started (0 when not spinning): its tuck. */
+  spinTime: number;
 }
 
 /** Raley, backroll, frontroll and S-bend: the parts physics needs while they run. */
@@ -145,6 +147,8 @@ export interface AirState {
   fromBlind: boolean;
   /** Kicker: popped at the lip. */
   lipPop: boolean;
+  /** A/D held just before the pop (-1, 0, 1): a spin that way gets the pre-wind bonus. */
+  preWind: number;
   /** Feature part ('id:main' / 'id:ramp') the board is above, for the clearance check. */
   overFeature: string | null;
 }

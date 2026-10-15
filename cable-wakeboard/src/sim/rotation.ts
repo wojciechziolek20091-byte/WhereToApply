@@ -28,6 +28,7 @@ export function createRotation(passWindow: number): RotationState {
     passTimer: 0,
     stoppedByRope: false,
     blindDir: 0,
+    spinTime: 0,
   };
 }
 
@@ -87,6 +88,7 @@ export function stepSpin(rot: RotationState, want: number, side: () => RotationS
     if (c.done) rot.spinTarget = null;
   }
   rot.maxSpin = Math.max(rot.maxSpin, Math.abs(rot.spinAngle));
+  rot.spinTime = rot.spinRate !== 0 ? rot.spinTime + dt : 0;
 }
 
 /** One tick of flip: `want` +1 front flip (W), -1 tantrum (S), 0 released. */
