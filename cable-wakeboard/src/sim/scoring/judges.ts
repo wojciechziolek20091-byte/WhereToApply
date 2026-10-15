@@ -30,7 +30,7 @@ const toScale = (x: number): number => clamp(1 + 9 * clamp01(x), 1, 10);
  */
 export function criteriaFromMetrics(m: RunMetrics): CriteriaScores {
   if (m.trickCount === 0) return { execution: 1, intensity: 1, composition: 1 };
-  const exec = 0.7 * m.avgLandingQuality + 0.3 * m.avgPopQuality - 0.15 * m.earlySpinFraction;
+  const exec = 0.7 * m.avgLandingQuality + 0.3 * m.avgPopQuality - 0.15 * m.sketchyFraction;
   const execution = clamp(toScale(exec) - 2.5 * m.falls, 1, 10);
   const intensity = toScale(0.55 * (m.topDifficulty / 6) + 0.3 * (m.avgHeight / 4) + 0.15 * (m.avgAirTime / 2));
   const variety = Math.min(1, m.uniqueTricks / 6) * (m.uniqueTricks / m.trickCount);

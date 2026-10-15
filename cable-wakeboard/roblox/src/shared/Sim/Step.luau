@@ -4,110 +4,172 @@ local Air = require(script.Parent.Air)
 local Cable = require(script.Parent.Cable)
 local Config = require(script.Parent.Config)
 local Edge = require(script.Parent.Edge)
+local Fsm = require(script.Parent.Fsm)
 local Hydro = require(script.Parent.Hydro)
+local Input = require(script.Parent.Input)
 local OnFeature = require(script.Parent.OnFeature)
 local Pop = require(script.Parent.Pop)
 local Posture = require(script.Parent.Posture)
 local Vec = require(script.Parent.Vec)
+local WaterTrick = require(script.Parent.WaterTrick)
 
 local DT, GRAVITY = Config.DT, Config.GRAVITY
 local Step = {}
 
--- On the water: rope, planing forces, edge and heading.
-local function stepRiding(s, input)
-	local rider, cfg = s.rider, s.cfg
+Step.hipPosition = Actions.hipPosition
+Step.takeOff = Actions.takeOff
+
+-- On the water: riding, riding blind, loaded, or the landing grace.
+local function stepWater(s, input)
+	local r, cfg = s.rider, s.cfg
+	local mem = s.inputs
 	local m = cfg.rider.mass
-	local released = Actions.popReleased(s, input)
-	local compression = rider.legCompression
-	Posture.updatePosture(rider, input.handleIn, input.load, rider.ropeTension, cfg.posture, DT)
-	Edge.updateEdge(rider, if rider.hasHandle then input.edge else 0, cfg.edge, DT)
+	local blind = r.mode == "ridingBlind"
 
+	if blind and not r.spinOut and not mem.popReleased then
+		r.blindTime += DT
+		local pressed = mem.steerDir ~= 0 and mem.steerHeldTime == 0
+		if pressed and mem.steerDir == -r.blindDir then
+			r.spinOut = { time = cfg.blind.spinOutTime, dir = mem.steerDir }
+		elseif pressed or r.blindTime > cfg.blind.maxRideTime then
+			Actions.crash(s, "caughtEdgeBlind")
+			return
+		end
+	end
+
+	local steer = if blind then input.steer * cfg.blind.steerFactor else input.steer
+	local edgeLimit = if blind then cfg.blind.maxEdge else 1
+	local request = 0
+	if not (r.mode == "landing" or r.handle == "dropped") then
+		request = math.max(-edgeLimit, math.min(edgeLimit, Edge.carveToEdge(r, steer)))
+	end
+	Posture.updatePosture(r, if input.armsOut then 0 else 1, input.pop, r.ropeTension, cfg.posture, DT)
+	Edge.updateEdge(r, request, cfg.edge, DT)
 	local rope = Actions.applyRope(s)
-	local hydro = Hydro.computeHydroForces(rider.vel, rider.heading, Edge.edgeNorm(rider, cfg.edge), cfg.hydro)
-	rider.edgeLoad = hydro.edgeLoad
-	Pop.updateLoadTracker(rider.load, rider.edgeLoad, cfg.pop, DT)
-
-	local horizontalForce = Vec.add(Vec.vec3(rope.force.x, 0, rope.force.z), hydro.force)
-	rider.vel = Vec.addScaled(rider.vel, Vec.scale(horizontalForce, 1 / m), DT)
-	rider.vel = Vec.vec3(rider.vel.x, 0, rider.vel.z)
-	rider.pos = Vec.addScaled(rider.pos, rider.vel, DT)
-	rider.pos = Vec.vec3(rider.pos.x, 0, rider.pos.z)
-	Edge.updateHeading(rider, rider.ropeHeading, rope.tension, Vec.horizontalLength(rider.vel), cfg.edge, DT)
-	rider.loadHeld = input.load
-
-	if released then
-		-- Releasing on flat water, including just before a feature: popping too early.
-		local pop = Pop.computePop(
-			Pop.flatPopInputs(rider.load, rider.edgeLoad, rope.tension, rider.connection, compression, cfg.pop),
-			cfg.pop
-		)
-		Actions.takeOff(s, "flat", nil, pop.speed, pop.quality, rider.load.peakEdgeLoad, input)
+	if not rope then
 		return
 	end
+	local hydro = Hydro.computeHydroForces(r.vel, r.heading, Edge.edgeNorm(r, cfg.edge), cfg.hydro)
+	r.edgeLoad = hydro.edgeLoad
+	local horizontalForce = Vec.add(Vec.vec3(rope.force.x, 0, rope.force.z), hydro.force)
+	r.vel = Vec.addScaled(r.vel, Vec.scale(horizontalForce, 1 / m), DT)
+	r.vel = Vec.vec3(r.vel.x, 0, r.vel.z)
+	r.pos = Vec.addScaled(r.pos, r.vel, DT)
+	r.pos = Vec.vec3(r.pos.x, 0, r.pos.z)
+	Edge.updateHeading(r, r.ropeHeading, rope.tension, Vec.horizontalLength(r.vel), cfg.edge, DT)
+	if input.pop then
+		r.popCharge = Pop.ollieCharge(mem.popHeldTime, cfg)
+	end
+
+	if r.spinOut then
+		r.spinOut.time -= DT
+		if r.spinOut.time <= 0 then
+			r.spinOut = nil
+			r.switchStance = not r.switchStance
+			r.handle = "inFront"
+			r.blindDir = 0
+			Fsm.transition(s, "riding", "spinOut")
+			table.insert(s.events, { type = "blindSpinOut", tick = s.tick })
+		end
+		return
+	end
+
+	if r.mode == "landing" then
+		if r.modeTime >= cfg.landing.graceTime then
+			Fsm.transition(s, if r.handle == "behind" then "ridingBlind" else "riding", "graceOver")
+		else
+			return
+		end
+	end
+
+	if mem.popReleased then
+		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
+		if r.mode == "waterTrickLoad" then
+			local vy, trick = WaterTrick.planWaterTrick(r.tensionSmooth, Pop.waterTrickTiming(r, cfg, DT), input, cfg)
+			local air = Actions.takeOff(s, "waterTrick", nil, vy, trick.timing)
+			air.trick = trick
+			return
+		end
+		Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, Pop.ollieSpeed(charge, cfg), charge)
+		return
+	end
+	if r.mode == "riding" and WaterTrick.canArm(r, cfg) then
+		Fsm.transition(s, "waterTrickLoad", "loaded")
+	elseif r.mode == "waterTrickLoad" and WaterTrick.shouldDisarm(r, cfg) then
+		Fsm.transition(s, "riding", "unloaded")
+	end
+
 	if OnFeature.tryEnterFeature(s) then
 		return
 	end
-	if not input.load and rope.force.y > m * GRAVITY * cfg.hydro.liftOffFactor then
-		-- A loading rider is pressing into the water; otherwise a big pull lifts them off.
-		Actions.takeOff(s, "lineLift", nil, 0, 0, rider.load.peakEdgeLoad, input)
+	if not input.pop and rope.force.y > m * GRAVITY * cfg.hydro.liftOffFactor and r.mode ~= "ridingBlind" then
+		Actions.takeOff(s, "lineLift", nil, 0, 0)
 	end
 end
 
 local function stepAirborne(s, input)
-	local rider, cfg = s.rider, s.cfg
-	local air = rider.air
-	assert(air, "air mode without AirState")
-	Posture.updatePosture(rider, input.handleIn, input.load, rider.ropeTension, cfg.posture, DT)
-	Edge.updateEdge(rider, 0, cfg.edge, DT)
-	rider.edgeLoad = 0
-	rider.extendTimer = math.max(0, rider.extendTimer - DT)
+	local r, cfg = s.rider, s.cfg
+	local air = r.air
+	if not air then
+		error("air mode without AirState")
+	end
+	Posture.updatePosture(r, if input.armsOut then 0 else 1, false, r.ropeTension, cfg.posture, DT)
+	Edge.updateEdge(r, 0, cfg.edge, DT)
+	r.edgeLoad = 0
 	local rope = Actions.applyRope(s)
-	Air.stepAir(rider, air, rope.force, input, cfg)
-	rider.loadHeld = input.load
-	if OnFeature.touchDownOnFeature(s, air) then
+	if not rope then
 		return
 	end
-	if rider.pos.y <= 0 and rider.vel.y < 0 then
+	if Air.stepAir(r, air, rope.force, input, s.inputs, cfg) then
+		table.insert(s.events, { type = "handlePass", tick = s.tick })
+	end
+	if OnFeature.airOverFeature(s, air) then
+		return
+	end
+	if r.pos.y <= 0 and r.vel.y < 0 then
 		Actions.touchDown(s, air, Vec.UP, 0)
 	end
 end
 
-local function stepFallen(s)
-	local rider, cfg = s.rider, s.cfg
-	rider.vel = Vec.addScaled(rider.vel, Vec.scale(rider.vel, -cfg.hydro.fallenDrag / cfg.rider.mass), DT)
-	rider.pos = Vec.addScaled(rider.pos, rider.vel, DT)
-	rider.fallTimer = math.max(0, rider.fallTimer - DT)
-	rider.ropeTension = 0
-	rider.ropeForce = Vec.vec3()
-	rider.edgeLoad = 0
+local function stepCrashed(s)
+	local r, cfg = s.rider, s.cfg
+	r.vel = Vec.addScaled(r.vel, Vec.scale(r.vel, -cfg.hydro.fallenDrag / cfg.rider.mass), DT)
+	r.pos = Vec.addScaled(r.pos, r.vel, DT)
+	r.crashTimer = math.max(0, r.crashTimer - DT)
+	r.ropeTension = 0
+	r.ropeForce = Vec.vec3()
+	r.edgeLoad = 0
 end
 
--- Advance the whole sim by one fixed tick. Deterministic: depends only on state and input.
+-- Advance the whole sim by one fixed tick.
 function Step.stepSim(s, input)
 	s.events = {}
+	Input.updateInputMemory(s.inputs, input, s.cfg, DT)
 	Cable.stepCarrier(s.carrier, s.path, s.cfg.cable.carrierSpeed, DT)
-	local rider = s.rider
-	local mode = rider.mode
-	if mode == "riding" then
-		stepRiding(s, input)
-	elseif mode == "air" then
+	local r = s.rider
+	local mode = r.mode
+	if Fsm.onWater(mode) then
+		stepWater(s, input)
+	elseif Fsm.inAir(mode) then
 		stepAirborne(s, input)
-	elseif mode == "feature" then
-		OnFeature.stepFeature(s, input)
-	elseif mode == "fallen" then
-		stepFallen(s)
+	elseif mode == "onKicker" or mode == "onSafety" then
+		OnFeature.stepRamp(s, input, s.inputs)
+	elseif mode == "onFeature" then
+		OnFeature.stepSlide(s, input, s.inputs)
+	else
+		stepCrashed(s)
 	end
-	-- Losing the handle on the water or a feature is an immediate fall; in the
-	-- air it is judged on touchdown.
-	if rider.mode ~= "fallen" and Actions.checkGrip(s, input) and rider.mode ~= "air" then
-		Actions.fallRider(s, "droppedHandle")
+
+	if input.letGo and r.handle ~= "dropped" and r.mode ~= "crashed" then
+		if Fsm.inAir(r.mode) then
+			r.handle = "dropped"
+		else
+			Actions.crash(s, "letGo")
+		end
 	end
-	rider.modeTime += DT
+	r.modeTime += DT
 	s.tick += 1
 	s.time = s.tick * DT
 end
-
-Step.hipPosition = Actions.hipPosition
-Step.takeOff = Actions.takeOff
 
 return Step

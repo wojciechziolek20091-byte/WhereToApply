@@ -6,7 +6,7 @@ export interface PostureRider {
   waistHinge: number;
   connection: number;
   legCompression: number;
-  hasHandle: boolean;
+  handle: 'inFront' | 'behind' | 'passing' | 'dropped';
 }
 
 /** 0 with the handle at the hips, 1 with arms fully out. */
@@ -15,7 +15,7 @@ export const handleNorm = (r: Pick<PostureRider, 'handleDist'>, cfg: PostureConf
 
 /** 0..1: how well the rider's posture transmits rope load. */
 export function connectionFactor(r: PostureRider, cfg: PostureConfig): number {
-  if (!r.hasHandle) return 0;
+  if (r.handle === 'dropped') return 0;
   return clamp01(1 - cfg.handleWeight * handleNorm(r, cfg) - cfg.hingeWeight * r.waistHinge);
 }
 

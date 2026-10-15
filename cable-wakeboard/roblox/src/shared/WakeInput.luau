@@ -1,62 +1,68 @@
--- Held keys -> the sim's InputFrame. Mirrors Keyboard.frame() in
--- src/game/keyboard.ts, so a key does the same thing on the web and in Roblox.
--- Pure: `held` is a set of key names (Enum.KeyCode names, e.g. held.Space = true),
--- so this runs (and is tested) outside Studio too.
-local Sim = require(script.Parent.Sim)
-
+-- Actions and their default bindings, and held actions -> the sim's raw
+-- InputFrame. Twin of Keyboard.frame() in src/game/keyboard.ts, so the keys do
+-- the same thing on the web and in Roblox. Pure: the client binds ACTIONS with
+-- ContextActionService (so keys can be rebound and gamepads work) and passes
+-- the set of held action names.
 local WakeInput = {}
 
--- Grab keys, checked in order; the first held wins.
-local GRAB_KEYS = {
-	{ "J", "indy" },
-	{ "K", "melon" },
-	{ "L", "mute" },
-	{ "I", "stalefish" },
-	{ "U", "nose" },
-	{ "O", "tail" },
+-- Action name -> default inputs (Enum.KeyCode names). Rebind by editing this table.
+WakeInput.ACTIONS = {
+	SteerLeft = { "A", "Left", "DPadLeft" },
+	SteerRight = { "D", "Right", "DPadRight" },
+	Pop = { "Space", "ButtonA" },
+	Forward = { "W", "Up", "DPadUp" },
+	Back = { "S", "Down", "DPadDown" },
+	HandlePass = { "Q", "ButtonX" },
+	Grab = { "E", "ButtonB" },
+	GrabStalefish = { "R", "ButtonL1" },
+	GrabNose = { "N", "ButtonR1" },
+	GrabTail = { "T", "ButtonL2" },
+	ArmsOut = { "LeftShift", "RightShift" },
+	LetGo = { "X", "ButtonY" },
+	Restart = { "Return", "ButtonStart" },
+	Debug = { "F3" },
 }
 
 WakeInput.CONTROLS_HELP = {
-	"A/D or arrows: carve (water), spin (air), lean to balance (rail)",
-	"F on a rail: turn the board across (boardslide)",
-	"Space: hold to load, release to pop",
-	"W / S held at pop: front / back invert",
-	"Shift: arms out (bad posture)",
-	"J K L I U O: indy melon mute stalefish nose tail",
-	"R: raley   Q: let go   Enter: restart",
+	"A/D: carve (water), rotate the board (box/rail), spin (air)",
+	"Space: hold to charge, release to pop. Edge hard away from the line until LOADED (1000 N) for a raley",
+	"S + Space / W + Space when LOADED: backroll / frontroll",
+	"W / S in the air: front flip / tantrum. A/D in a raley: S-bend",
+	"Q: handle pass in the window (no pass on a backside spin = to blind)",
+	"Blind: tap A/D the way you came to spin out, or pop and spin out",
+	"E: indy. E+R stalefish, E+N nose, E+T tail. Let go before landing",
+	"Box/rail: tap A/D to balance, hold to rotate 90. Shift: arms out. X: let go",
+	"Enter: restart   F3: debug",
 }
 
 local function b(v)
 	return if v then 1 else 0
 end
 
-function WakeInput.frame(rider, held)
-	-- +1 = to the rider's right of travel / clockwise seen from above.
-	local steer = b(held.D or held.Right) - b(held.A or held.Left)
-	local up = b(held.W or held.Up)
-	local down = b(held.S or held.Down)
-	local airborne = rider.mode == "air"
-	local onRail = rider.jib ~= nil
-	-- Spin input is in frontside units; clockwise yaw is frontside when -toeSign is +1.
-	local switchStance = if rider.air then rider.air.takeoffSwitch else rider.switchStance
-	local toes = Sim.Edge.toeSign({ stance = rider.stance, switchStance = switchStance })
-	local spin = if airborne then -toes * steer elseif onRail and held.F then 1 else 0
-	local grab = nil
-	for _, pair in GRAB_KEYS do
-		if held[pair[1]] then
-			grab = pair[2]
-			break
-		end
+-- `held` is a set of action names; `analogSteer` (thumbstick, -1..1) overrides A/D when set.
+function WakeInput.frame(held, analogSteer)
+	local steer = b(held.SteerRight) - b(held.SteerLeft)
+	if analogSteer and math.abs(analogSteer) > 0.5 then
+		steer = if analogSteer > 0 then 1 else -1
+	end
+	local grabMod = nil
+	if held.GrabStalefish then
+		grabMod = "stalefish"
+	elseif held.GrabNose then
+		grabMod = "nose"
+	elseif held.GrabTail then
+		grabMod = "tail"
 	end
 	return {
-		edge = if airborne then 0 else Sim.Edge.carveToEdge(rider, steer),
-		load = held.Space == true,
-		handleIn = if held.LeftShift or held.RightShift then 0 else 1,
-		spin = spin,
-		flip = up - down,
-		raley = held.R == true,
-		grab = grab,
-		release = held.Q == true,
+		steer = steer,
+		pop = held.Pop == true,
+		forward = held.Forward == true,
+		back = held.Back == true,
+		pass = held.HandlePass == true,
+		grab = held.Grab == true,
+		grabMod = grabMod,
+		armsOut = held.ArmsOut == true,
+		letGo = held.LetGo == true,
 	}
 end
 

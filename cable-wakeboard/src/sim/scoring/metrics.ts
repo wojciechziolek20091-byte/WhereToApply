@@ -1,4 +1,4 @@
-import type { FallKind } from '../rider';
+import type { CrashReason } from '../rider';
 import type { TrickResult } from '../tricks/classify';
 
 /** One trick landed during a run. */
@@ -13,16 +13,17 @@ export interface TrickRecord {
   distance: number;
   /** 0..1 from evaluateLanding(). */
   landingQuality: number;
-  /** 0..1 from computePop(). */
+  /** 0..1 pop timing. */
   popQuality: number;
-  spunBeforePeak: boolean;
+  /** Landed clean (both errors under landing.cleanThreshold). */
+  clean: boolean;
   featureId: string | null;
 }
 
-export interface FallRecord {
+export interface CrashRecord {
   tick: number;
   pass: number;
-  kind: FallKind;
+  reason: CrashReason;
 }
 
 /** Aggregates the judges look at. */
@@ -31,7 +32,7 @@ export interface RunMetrics {
   falls: number;
   avgLandingQuality: number;
   avgPopQuality: number;
-  earlySpinFraction: number;
+  sketchyFraction: number;
   avgHeight: number;
   avgAirTime: number;
   /** Mean difficulty of the best five tricks. */
@@ -49,7 +50,7 @@ const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0
 
 export function computeRunMetrics(
   tricks: TrickRecord[],
-  falls: FallRecord[],
+  falls: CrashRecord[],
   featureCount: number,
   deadWater: number,
   runTime: number,
@@ -62,7 +63,7 @@ export function computeRunMetrics(
     falls: falls.length,
     avgLandingQuality: mean(tricks.map((t) => t.landingQuality)),
     avgPopQuality: mean(airs.map((t) => t.popQuality)),
-    earlySpinFraction: airs.length ? airs.filter((t) => t.spunBeforePeak).length / airs.length : 0,
+    sketchyFraction: airs.length ? airs.filter((t) => !t.clean).length / airs.length : 0,
     avgHeight: mean(airs.map((t) => t.height)),
     avgAirTime: mean(airs.map((t) => t.airTime)),
     topDifficulty: mean(best),

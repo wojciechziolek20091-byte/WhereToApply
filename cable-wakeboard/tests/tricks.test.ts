@@ -1,131 +1,84 @@
-import { createAirState } from '../src/sim/air';
 import { DEFAULT_CONFIG } from '../src/sim/config';
-import { neutralInput } from '../src/sim/input';
-import { evaluateLanding } from '../src/sim/landing';
-import { TAU } from '../src/sim/math/scalar';
-import { UP, vec3 } from '../src/sim/math/vec';
+import type { LandingResult } from '../src/sim/landing';
 import type { AirState } from '../src/sim/rider';
-import { classifyAir, classifyJib } from '../src/sim/tricks/classify';
-import { createRider } from '../src/sim/world';
+import { createAirState } from '../src/sim/air';
+import { scoreCombo } from '../src/sim/scoring/combo';
+import { classifyAir } from '../src/sim/tricks/classify';
+import { POINTS } from '../src/sim/tricks/data';
+import { flatSim } from './helpers';
 
 const cfg = DEFAULT_CONFIG;
-// Regular rider: frontside spins are negative yaw (-toeSign).
-const FS = -1;
-const BS = 1;
+const deg = (d: number) => (d * Math.PI) / 180;
 
-function trick(patch: Partial<AirState>, stance: 'regular' | 'goofy' = 'regular') {
-  const r = createRider(cfg, vec3(), vec3(8, -2, 0), 0);
-  const base = createAirState(r, 'kicker', 'k1', 2, 0.5, 0, neutralInput(), cfg);
-  const air: AirState = { ...base, time: 1.2, ...patch };
-  Object.assign(r, { mode: 'air', air });
-  const landing = evaluateLanding(r, air, UP, cfg);
-  expect(landing.fall).toBeNull();
-  return classifyAir(air, landing, stance, cfg.air.minAirTime)!;
+/** An air state with the given rotations, as physics would leave it. */
+function air(p: Partial<{ spin: number; side: 'frontside' | 'backside'; flip: number; grab: { id: 'indy' | 'stalefish' | 'nose' | 'tail'; time: number }; passes: number; trick: 'raley' | 'backroll' | 'frontroll'; sBend: number; fromBlind: boolean; source: AirState['source'] }>): AirState {
+  const s = flatSim();
+  const a = createAirState(s.rider, p.source ?? 'flat', null, 5, 1, cfg);
+  a.time = 1;
+  a.rot.spinAngle = deg(p.spin ?? 0);
+  a.rot.spinSide = p.spin ? (p.side ?? 'backside') : null;
+  a.rot.flipAngle = deg(p.flip ?? 0);
+  a.rot.passes = p.passes ?? 0;
+  if (p.grab) a.grabTimes[p.grab.id] = p.grab.time;
+  a.fromBlind = !!p.fromBlind;
+  if (p.trick) {
+    a.trick = { kind: p.trick, sBend: p.sBend ?? 0, airtime: 1.5, u: 1, extension: 0, rollAngle: p.trick === 'raley' && !p.sBend ? 0 : Math.PI * 2, rollRate: p.trick === 'raley' && !p.sBend ? 0 : 5, timing: 1, height: 2, sBendKeyHeld: false };
+  }
+  return a;
 }
+const landing = (a: AirState, toBlind = false): LandingResult => ({
+  crash: null,
+  impact: 3,
+  quality: 0.9,
+  clean: true,
+  yawError: 0,
+  flipError: 0,
+  halfTurns: Math.round(a.rot.spinAngle / Math.PI),
+  flips: Math.round(Math.abs(a.rot.flipAngle) / (2 * Math.PI)),
+  toBlind,
+});
+const name = (a: AirState, toBlind = false) => classifyAir(a, landing(a, toBlind), cfg)?.name;
 
-describe('jumps', () => {
-  it('names backside and frontside by approach', () => {
-    expect(trick({ approach: 'heelside' }).name).toBe('Backside Kicker Air');
-    expect(trick({ approach: 'toeside' }).name).toBe('Frontside Kicker Air');
-    expect(trick({ approach: 'heelside', source: 'flat' }).name).toBe('Backside Air Trick');
+describe('trick names (spec 11.2)', () => {
+  it('spins, grabs and blind landings', () => {
+    expect(name(air({ spin: 360, side: 'backside', grab: { id: 'indy', time: 0.5 }, passes: 1 }))).toBe('Backside 360 Indy');
+    expect(name(air({ spin: 180, side: 'frontside' }))).toBe('Frontside 180');
+    expect(name(air({ spin: 180, side: 'backside' }), true)).toBe('Backside 180 to Blind');
+    expect(name(air({ spin: -180, fromBlind: true, source: 'blindPop' }))).toBe('Blind 180 Out');
   });
 
-  it('ignores a tiny hop', () => {
-    const r = createRider(cfg, vec3(), vec3(8, -1, 0), 0);
-    const air = { ...createAirState(r, 'flat', null, 1, 0.2, 0, neutralInput(), cfg), time: 0.1 };
-    r.air = air;
-    expect(classifyAir(air, evaluateLanding(r, air, UP, cfg), 'regular', cfg.air.minAirTime)).toBeNull();
+  it('flips, rolls, S-bends and Mobes', () => {
+    expect(name(air({ flip: -360 }), true)).toBe('Tantrum to Blind');
+    expect(name(air({ flip: 360, grab: { id: 'nose', time: 0.3 } }))).toBe('Front Flip Nose');
+    expect(name(air({ trick: 'raley' }))).toBe('Raley');
+    expect(name(air({ trick: 'raley', sBend: 1 }))).toBe('S-Bend');
+    expect(name(air({ trick: 'backroll', spin: 360, grab: { id: 'stalefish', time: 0.5 } }))).toBe('Mobe Stalefish');
+    expect(name(air({ trick: 'backroll', spin: 180 }))).toBe('Backroll 180');
+  });
+
+  it('plain hops and short grabs', () => {
+    expect(name(air({}))).toBe('Ollie');
+    expect(name(air({ grab: { id: 'tail', time: 0.1 } }))).toBe('Ollie'); // under one 0.25 s interval
   });
 });
 
-describe('spins', () => {
-  it.each([
-    [Math.PI, 180],
-    [TAU, 360],
-    [3 * Math.PI, 540],
-  ])('counts %f rad as %i', (angle, degrees) => {
-    const t = trick({ spinAngle: FS * angle, spinStarted: true, passedPeak: true });
-    expect(t.spinDegrees).toBe(degrees);
-    expect(t.name).toBe(`Frontside ${degrees}`);
+describe('points (spec 11.4)', () => {
+  it('adds up the tokens', () => {
+    const t = classifyAir(air({ spin: 360, side: 'backside', grab: { id: 'indy', time: 0.6 }, passes: 1 }), landing(air({})), cfg)!;
+    const expected = POINTS.spinPer180 * 2 * POINTS.backsideSpinFactor + POINTS.handlePass + POINTS.grabPerInterval * 2;
+    expect(t.points).toBeCloseTo(expected, 9);
+    expect(t.quality).toBeCloseTo(1 + cfg.landing.cleanBonus, 9);
+    const mobe = classifyAir(air({ trick: 'backroll', spin: 360 }), landing(air({})), cfg)!;
+    expect(mobe.points).toBeCloseTo(450 + 300 * POINTS.backsideSpinFactor + POINTS.mobeBonus, 9);
   });
 
-  it('rates more rotation, blind and switch as harder', () => {
-    const fs180 = trick({ spinAngle: FS * Math.PI, spinStarted: true });
-    const fs360 = trick({ spinAngle: FS * TAU, spinStarted: true });
-    const bs180 = trick({ spinAngle: BS * Math.PI, spinStarted: true });
-    // Riding switch flips which way is frontside.
-    const sw180 = trick({ spinAngle: -FS * Math.PI, spinStarted: true, takeoffSwitch: true });
-    expect(fs360.difficulty).toBeGreaterThan(fs180.difficulty);
-    expect(bs180.name).toBe('Backside 180');
-    expect(bs180.modifiers).toContain('blind');
-    expect(bs180.difficulty).toBeGreaterThan(fs180.difficulty);
-    expect(sw180.name).toBe('Switch Frontside 180');
-    expect(sw180.difficulty).toBeGreaterThan(fs180.difficulty);
-  });
-
-  it('flips the frontside direction for goofy riders', () => {
-    expect(trick({ spinAngle: -FS * Math.PI, spinStarted: true }, 'goofy').name).toBe('Frontside 180');
-  });
-});
-
-describe('the six basic inverts', () => {
-  it.each([
-    ['heelside', -1, 'flip', 'Tantrum'],
-    ['heelside', -1, 'roll', 'Heelside Backroll'],
-    ['heelside', 1, 'flip', 'Heelside Frontflip'],
-    ['toeside', -1, 'roll', 'Toeside Backroll'],
-    ['toeside', 1, 'flip', 'Toeside Frontflip'],
-    ['toeside', 1, 'roll', 'Frontroll'],
-  ] as const)('%s %i %s is a %s', (approach, flipDir, axis, name) => {
-    const t = trick({ approach, flipDir, axis, flipAngle: TAU });
-    expect(t.family).toBe('invert');
-    expect(t.name).toBe(name);
-  });
-
-  it('falls back to a generic name off the table', () => {
-    expect(trick({ approach: 'heelside', flipDir: 1, axis: 'roll', flipAngle: TAU }).name).toBe('Heelside Frontroll');
-  });
-});
-
-describe('combos, raleys and grabs', () => {
-  it('a toeside frontroll with a frontside 180 is a scarecrow', () => {
-    const t = trick({ approach: 'toeside', flipDir: 1, axis: 'roll', flipAngle: TAU, spinAngle: FS * Math.PI, spinStarted: true });
-    expect(t.name).toBe('Scarecrow');
-    expect(t.family).toBe('combo');
-  });
-
-  it('other invert spins are named as a combination', () => {
-    const t = trick({ approach: 'heelside', flipDir: -1, axis: 'roll', flipAngle: TAU, spinAngle: FS * Math.PI, spinStarted: true });
-    expect(t.name).toBe('Heelside Backroll to Frontside 180');
-  });
-
-  it('names raleys by approach', () => {
-    expect(trick({ approach: 'heelside', raleyPeak: 1 }).name).toBe('Raley');
-    expect(trick({ approach: 'toeside', raleyPeak: 1 }).name).toBe('Toeside Raley');
-  });
-
-  it('adds grabs to the name and difficulty', () => {
-    const plain = trick({ spinAngle: FS * TAU, spinStarted: true });
-    const grabbed = trick({ spinAngle: FS * TAU, spinStarted: true, grabbed: 'indy' });
-    expect(grabbed.name).toBe('Frontside 360 Indy');
-    expect(grabbed.difficulty).toBeGreaterThan(plain.difficulty);
-    expect(grabbed.key).not.toBe(plain.key);
-  });
-});
-
-describe('jibs', () => {
-  it('names 50-50 and boardslide', () => {
-    expect(classifyJib(1.5, 1.4, 0)!.name).toBe('50-50');
-    expect(classifyJib(1.5, 0.2, 1.1)!.name).toBe('Boardslide');
-    expect(classifyJib(0.1, 0.1, 0)).toBeNull();
-  });
-});
-
-describe('non-tricks', () => {
-  it('rolling off the end of a slider without popping does not count', () => {
-    const r = createRider(cfg, vec3(), vec3(8, -2, 0), 0);
-    const air = { ...createAirState(r, 'slider', 'b1', 0, 0, 0, neutralInput(), cfg), time: 0.5 };
-    r.air = air;
-    expect(classifyAir(air, evaluateLanding(r, air, UP, cfg), 'regular', cfg.air.minAirTime)).toBeNull();
+  it('combo multiplier, repeat penalty and cap', () => {
+    const e = (name: string, points: number) => ({ name, points, quality: 1, comboFactor: 1 });
+    expect(scoreCombo([e('A', 100)], cfg.combo).total).toBe(100);
+    expect(scoreCombo([e('A', 100), e('B', 100)], cfg.combo).total).toBe(250);
+    expect(scoreCombo([e('A', 100), e('A', 100)], cfg.combo).total).toBe(Math.round(150 * 1.25));
+    const many = Array.from({ length: 20 }, (_, i) => e(`T${i}`, 10));
+    expect(scoreCombo(many, cfg.combo).multiplier).toBe(cfg.combo.maxMultiplier);
+    expect(scoreCombo([{ ...e('A', 100), comboFactor: 0.8 }], cfg.combo).total).toBe(80);
   });
 });

@@ -6,7 +6,21 @@ local Scalar = require(script.Parent.Scalar)
 
 local Cable = {}
 
+-- Two-tower system: one straight cable out and back (see src/sim/cable.ts).
+local function buildShuttlePath(cfg)
+	local a, b = cfg.towers[1], cfg.towers[2]
+	assert(a and b, "A two-tower system needs two towers")
+	local start = Vec.vec3(a.x, 0, a.z)
+	local span = Vec.sub(Vec.vec3(b.x, 0, b.z), start)
+	local len = Vec.length(span)
+	local line = { kind = "line", start = start, heading = Vec.headingOf(span), length = len, s0 = 0 }
+	return { segments = { line }, length = 2 * len, height = cfg.cableHeight, shuttle = true }
+end
+
 function Cable.buildCablePath(cfg)
+	if cfg.mode == "twoTower" then
+		return buildShuttlePath(cfg)
+	end
 	local n = #cfg.towers
 	assert(n >= 3, "A closed cable loop needs at least 3 towers")
 	local p = {}
@@ -57,11 +71,23 @@ function Cable.buildCablePath(cfg)
 		})
 		s += arcLen
 	end
-	return { segments = segments, length = s, height = cfg.cableHeight }
+	return { segments = segments, length = s, height = cfg.cableHeight, shuttle = false }
 end
 
 -- Point and heading on the cable at arc length s (wraps around the loop).
 function Cable.cablePointAt(path, s)
+	if path.shuttle then
+		local line = path.segments[1]
+		local phase = Scalar.mod(s, path.length)
+		local out = phase < line.length
+		local u = if out then phase else path.length - phase
+		local pos = Vec.addScaled(line.start, Vec.forwardOf(line.heading), u)
+		return {
+			pos = Vec.vec3(pos.x, path.height, pos.z),
+			heading = if out then line.heading else Scalar.wrapAngle(line.heading + math.pi),
+			segment = 0,
+		}
+	end
 	local ss = Scalar.mod(s, path.length)
 	local count = #path.segments
 	local index = count - 1

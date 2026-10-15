@@ -1,142 +1,132 @@
-import { DEFAULT_CONFIG } from '../src/sim/config';
-import { kickerHeightAt, sliderHeightAt, toLocal, toWorld } from '../src/sim/features';
-import { neutralInput, type InputFrame } from '../src/sim/input';
-import { vec3 } from '../src/sim/math/vec';
-import type { KickerDef, ParkDef, SliderDef } from '../src/sim/park';
 import type { SimEvent } from '../src/sim/events';
-import { stepSim } from '../src/sim/step';
-import { createSim, type SimState } from '../src/sim/world';
+import type { InputFrame } from '../src/sim/input';
+import type { FeatureDef, SliderDef } from '../src/sim/park';
+import { classifyAir, classifySlide } from '../src/sim/tricks/classify';
+import { featureSim, run, runUntil } from './helpers';
+import type { SimState } from '../src/sim/world';
 
-const kicker: KickerDef = { kind: 'kicker', id: 'k', name: 'K', s: 75, offset: 0, length: 4.5, width: 3.5, height: 1.1, lipAngle: 0.5 };
-const box: SliderDef = {
-  kind: 'slider',
-  id: 'b',
-  name: 'Box',
-  style: 'box',
-  s: 75,
-  offset: 0,
-  length: 10,
-  width: 0.6,
-  height: 0.5,
-  entryLength: 3,
-};
-const park = (...features: ParkDef['features']): ParkDef => ({ name: 'test', features });
+// The rider starts about 17 m behind the carrier (s 125), so near s 108; features sit at s 135.
+const kicker: FeatureDef = { kind: 'kicker', id: 'k', name: 'K', s: 135, offset: 0, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.5 };
+const box = (safety: 'flush' | 'gap', style: SliderDef['style'] = 'box'): FeatureDef => ({
+  kind: 'slider', id: 'b', name: 'B', style, s: 135, offset: 0, length: 8, width: style === 'box' ? 1 : 0.12, height: 0.5, entryLength: 3, safety,
+});
+const noBalance = { feature: { balanceEnabled: false } };
+const between = (a: number, b: number) => (t: number) => t >= a && t < b;
 
-/** Step until `stop` returns true for an event (max 20 s). Collects all events. */
-function runUntil(s: SimState, input: (tick: number) => Partial<InputFrame>, stop: (e: SimEvent) => boolean): SimEvent[] {
-  const all: SimEvent[] = [];
-  for (let t = 0; t < 60 * 20; t++) {
-    stepSim(s, { ...neutralInput(), ...input(t) });
-    all.push(...s.events);
-    if (s.events.some(stop)) return all;
-  }
-  throw new Error('condition never met');
+/** Play a script and collect every event. */
+function play(def: FeatureDef, script: (t: number, s: SimState) => Partial<InputFrame>, cfg = {}, seconds = 7): { s: SimState; events: SimEvent[] } {
+  const s = featureSim(def, cfg);
+  const events: SimEvent[] = [];
+  runUntil(s, seconds, script, (e) => {
+    events.push(e);
+    return false;
+  });
+  return { s, events };
 }
-const touchdown = (e: SimEvent) => e.type === 'landed' || e.type === 'fall';
+const crashOf = (events: SimEvent[]) => events.find((e) => e.type === 'crash');
+const modesOf = (events: SimEvent[]) => events.flatMap((e) => (e.type === 'transition' ? [e.to] : []));
 
-/** Tick the rider leaves the kicker lip with no input. */
-function lipTick(): number {
-  const s = createSim(DEFAULT_CONFIG, park(kicker));
-  let tick = -1;
-  runUntil(s, () => ({}), (e) => {
-    if (e.type === 'takeoff') tick = e.tick;
-    return e.type === 'takeoff';
-  });
-  return tick;
-}
-
-describe('feature geometry', () => {
-  it('kicker curve meets the lip angle', () => {
-    expect(kickerHeightAt(kicker, 0).height).toBe(0);
-    expect(kickerHeightAt(kicker, kicker.length).height).toBeCloseTo(kicker.height, 9);
-    expect(kickerHeightAt(kicker, kicker.length).slope).toBeCloseTo(Math.tan(kicker.lipAngle), 9);
-    expect(kickerHeightAt(kicker, kicker.length / 2).height).toBeLessThan(kicker.height / 2);
+describe('kicker (milestone 6)', () => {
+  it('rides up the ramp (no tricks on it) and launches with the ramp exit velocity', () => {
+    const { s, events } = play(kicker, (t) => ({ steer: between(3.3, 3.6)(t) ? 1 : 0 }));
+    expect(modesOf(events)).toEqual(expect.arrayContaining(['onKicker', 'airborne', 'landing']));
+    const landed = events.find((e) => e.type === 'landed');
+    if (landed?.type !== 'landed') throw new Error('no landing');
+    expect(landed.air.source).toBe('kicker');
+    expect(landed.air.peakHeight).toBeGreaterThan(1.6);
+    expect(landed.air.rot.spinAngle).toBe(0); // A/D on the ramp does nothing
+    expect(classifyAir(landed.air, landed.landing, s.cfg)?.name).toBe('Kicker Air');
   });
 
-  it('slider has an entry ramp then a flat top', () => {
-    expect(sliderHeightAt(box, 1.5).height).toBeCloseTo(box.height / 2, 9);
-    expect(sliderHeightAt(box, 5)).toEqual({ height: box.height, slope: 0, onTop: true });
-  });
-
-  it('local and world coordinates round-trip', () => {
-    const f = { def: kicker, origin: vec3(10, 0, -4), heading: 0.7 };
-    const w = toWorld(f, 2, -0.5, 0);
-    const l = toLocal(f, w);
-    expect(l.u).toBeCloseTo(2, 9);
-    expect(l.v).toBeCloseTo(-0.5, 9);
+  it('a pop within lipPopWindow of the lip adds height; too early or after the lip does not', () => {
+    const peak = (release: number) => {
+      const { events } = play(kicker, (t) => ({ pop: between(release - 0.4, release)(t) }));
+      const l = events.find((e) => e.type === 'landed');
+      return l?.type === 'landed' ? { peak: l.air.peakHeight, lip: l.air.lipPop } : null;
+    };
+    const plain = peak(3.55)!;
+    const popped = peak(3.7)!;
+    expect(plain.lip).toBe(false);
+    expect(popped.lip).toBe(true);
+    expect(popped.peak).toBeGreaterThan(plain.peak * 1.1);
   });
 });
 
-describe('kicker', () => {
-  const lip = lipTick();
-  const hit = (releaseOffset: number | null) => {
-    const s = createSim(DEFAULT_CONFIG, park(kicker));
-    const events = runUntil(
-      s,
-      (t) => ({ load: releaseOffset !== null && t >= lip + releaseOffset - 24 && t < lip + releaseOffset }),
-      touchdown,
-    );
-    const takeoff = events.find((e) => e.type === 'takeoff');
-    const end = events.find(touchdown)!;
-    return { takeoff, end };
-  };
-
-  it('launches off the lip without any pop and lands clean', () => {
-    const { takeoff, end } = hit(null);
-    expect(takeoff?.type === 'takeoff' && takeoff.source).toBe('kicker');
-    expect(end.type).toBe('landed');
-    if (end.type === 'landed') expect(end.air.peakHeight).toBeGreaterThan(kicker.height + 0.3);
+describe('obstacles (milestone 7)', () => {
+  it('flush safety: ride on without a pop', () => {
+    const { events } = play(box('flush'), () => ({}), noBalance);
+    expect(modesOf(events)).toEqual(expect.arrayContaining(['onSafety', 'onFeature', 'airborne']));
+    const slide = events.find((e) => e.type === 'slideDone');
+    if (slide?.type !== 'slideDone') throw new Error('no slide');
+    expect(slide.jib.entry).toBe('rideOn');
+    expect(classifySlide(slide.jib, featureSim(box('flush')).cfg)?.name).toBe('50-50');
   });
 
-  it('a pop released just before the lip goes higher than an early one or none', () => {
-    const peak = (r: ReturnType<typeof hit>) => (r.end.type === 'landed' ? r.end.air.peakHeight : 0);
-    const timed = hit(-4);
-    const early = hit(-20);
-    const none = hit(null);
-    expect(peak(timed)).toBeGreaterThan(peak(early));
-    expect(peak(early)).toBeGreaterThanOrEqual(peak(none));
+  it('gap safety: no pop or an early pop crashes; a pop in the window gets on, the centre is a Pop-on', () => {
+    expect(crashOf(play(box('gap'), () => ({}), noBalance).events)).toMatchObject({ reason: 'missedSafetyPop' });
+    expect(crashOf(play(box('gap'), (t) => ({ pop: between(3.1, 3.3)(t) }), noBalance).events)).toMatchObject({ reason: 'missedSafetyPop' });
+    const { s, events } = play(box('gap'), (t) => ({ pop: between(3.2, 3.5)(t) }), noBalance);
+    const slide = events.find((e) => e.type === 'slideDone');
+    if (slide?.type !== 'slideDone') throw new Error('no slide');
+    expect(slide.jib.entry).toBe('popOn');
+    expect(classifySlide(slide.jib, s.cfg)?.name).toBe('Pop-on 50-50');
   });
 
-  it('popping on the water before the ramp lands on the ramp and crashes', () => {
-    const { takeoff, end } = hit(-45);
-    expect(takeoff?.type === 'takeoff' && takeoff.source).toBe('flat');
-    expect(end.type === 'fall' && end.kind).toBe('featureCrash');
+  it('flush safety: an early pop makes a sketchy entry (combo multiplier)', () => {
+    const { s, events } = play(box('flush'), (t) => ({ pop: between(3.0, 3.35)(t) }), noBalance);
+    const slide = events.find((e) => e.type === 'slideDone');
+    if (slide?.type !== 'slideDone') throw new Error('no slide');
+    expect(slide.jib.sketchy).toBe(true);
+    expect(classifySlide(slide.jib, s.cfg)?.comboFactor).toBe(s.cfg.safety.sketchyMultiplier);
   });
 
-  it('hitting a kicker from the side is a crash', () => {
-    const s = createSim(DEFAULT_CONFIG, park({ ...kicker, yaw: Math.PI / 2, offset: -2 }));
-    const events = runUntil(s, () => ({}), touchdown);
-    expect(events.find(touchdown)).toMatchObject({ type: 'fall', kind: 'featureCrash' });
-  });
-});
-
-describe('slider', () => {
-  it('slides a centred box 50-50 and rolls off the end', () => {
-    const s = createSim(DEFAULT_CONFIG, park(box));
-    const events = runUntil(s, () => ({}), (e) => e.type === 'jibDone');
-    const done = events.find((e) => e.type === 'jibDone');
-    expect(done?.type === 'jibDone' && done.alignedTime).toBeGreaterThan(0.5);
-    expect(events.some((e) => e.type === 'fall')).toBe(false);
+  it('an ollie that comes down short clips the main', () => {
+    expect(crashOf(play(box('gap'), (t) => ({ pop: between(1.7, 2.3)(t) }), noBalance).events)).toMatchObject({ reason: 'shortOllie' });
   });
 
-  it('turns the board across for a boardslide', () => {
-    const s = createSim(DEFAULT_CONFIG, park(box));
-    const events = runUntil(s, () => ({ spin: 1 }), (e) => e.type === 'jibDone' || e.type === 'fall');
-    const done = events.find((e) => e.type === 'jibDone');
-    expect(done?.type === 'jibDone' && done.crossedTime).toBeGreaterThan(0.3);
+  it('holding A/D rotates the board 90 degrees: backboard (chest forward) and frontboard', () => {
+    const name = (steer: number) => {
+      const { s, events } = play(box('flush'), (t) => ({ steer: between(3.6, 3.8)(t) ? steer : 0 }), noBalance);
+      const slide = events.find((e) => e.type === 'slideDone');
+      return slide?.type === 'slideDone' ? classifySlide(slide.jib, s.cfg)?.name : null;
+    };
+    expect(name(-1)).toBe('50-50 to Backboard');
+    expect(name(1)).toBe('50-50 to Frontboard');
   });
 
-  it('leaning hard off balance falls off', () => {
-    const s = createSim(DEFAULT_CONFIG, park(box));
-    let onBox = false;
-    const events = runUntil(
-      s,
-      () => ({ edge: onBox ? 1 : 0 }),
-      (e) => {
-        if (e.type === 'featureEnter') onBox = true;
-        return e.type === 'fall' || e.type === 'jibDone';
-      },
-    );
-    expect(events.some((e) => e.type === 'fall' && e.kind === 'featureCrash')).toBe(true);
+  it('a backside 180 on the feature needs a handle pass in its window, else the handle drops', () => {
+    expect(crashOf(play(box('flush'), (t) => ({ steer: between(3.6, 4.0)(t) ? 1 : 0 }), noBalance).events)).toMatchObject({ reason: 'handleDropped' });
+    const { s, events } = play(box('flush'), (t) => ({ steer: between(3.6, 4.0)(t) ? 1 : 0, pass: between(3.85, 3.9)(t) }), noBalance);
+    expect(crashOf(events)).toBeUndefined();
+    const slide = events.find((e) => e.type === 'slideDone');
+    if (slide?.type !== 'slideDone') throw new Error('no slide');
+    expect(slide.jib.rot.passes).toBe(1);
+    expect(classifySlide(slide.jib, s.cfg)?.name).toContain('Switch 50-50');
+  });
+
+  it('balance drifts (faster on rails) and taps correct it; off by config', () => {
+    const rail = box('flush', 'rail');
+    const long = { ...rail, length: 30 } as FeatureDef;
+    expect(crashOf(play(long, () => ({}), {}, 9).events)).toMatchObject({ reason: 'fellOffFeature' });
+    expect(crashOf(play(long, () => ({}), noBalance, 9).events)).toBeUndefined();
+    // Tapping against the drift keeps the rider on.
+    const { events } = play(long, (_t, s) => {
+      const b = s.rider.jib?.balance ?? 0;
+      const tick = Math.round(s.time * 60);
+      return { steer: Math.abs(b) > 0.3 && tick % 12 < 2 ? (b > 0 ? -1 : 1) : 0 };
+    }, {}, 9);
+    expect(crashOf(events)).toBeUndefined();
+  });
+
+  it('pop off the main into the air; leaving a boardslide needs a spin off to land', () => {
+    const { events } = play(box('flush'), (t) => ({ pop: between(3.6, 4.0)(t) }), noBalance);
+    expect(crashOf(events)).toBeUndefined();
+    const sideways = play(box('flush'), (t) => ({ steer: between(3.6, 3.8)(t) ? -1 : 0 }), noBalance);
+    expect(crashOf(sideways.events)?.type).toBe('crash');
+    const spunOff = play(box('flush'), (t) => ({ steer: between(3.6, 3.8)(t) ? -1 : between(4.6, 4.75)(t) ? 1 : 0 }), noBalance);
+    const landed = spunOff.events.filter((e) => e.type === 'landed').at(-1);
+    if (landed?.type !== 'landed') throw new Error(`no landing: ${JSON.stringify(crashOf(spunOff.events))}`);
+    expect(classifyAir(landed.air, landed.landing, spunOff.s.cfg)?.name).toMatch(/90 Off|270 Off/);
+    void run;
   });
 });

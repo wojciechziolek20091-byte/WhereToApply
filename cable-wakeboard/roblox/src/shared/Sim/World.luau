@@ -1,6 +1,7 @@
 -- Sim state creation and respawn. Mirrors src/sim/world.ts.
 local Cable = require(script.Parent.Cable)
 local Config = require(script.Parent.Config)
+local Input = require(script.Parent.Input)
 local Park = require(script.Parent.Park)
 local Vec = require(script.Parent.Vec)
 
@@ -18,23 +19,28 @@ function World.createRider(cfg, pos, vel, heading)
 		edgeAngle = 0,
 		edgeLoad = 0,
 		ropeTension = 0,
+		tensionSmooth = 0,
+		tensionPeak = 0,
+		tensionPeakAge = 0,
+		tensionPrev = 0,
+		tensionPrev2 = 0,
 		ropeForce = Vec.vec3(),
 		ropeHeading = heading,
 		slackTime = 0,
-		overGripTime = 0,
-		hasHandle = true,
+		handle = "inFront",
 		handleDist = cfg.posture.handleInDist,
 		waistHinge = 0,
 		connection = 1,
 		legCompression = 0,
-		loadHeld = false,
-		extendTimer = 0,
-		load = { edgeLoadAtBase = 0, peakEdgeLoad = 0, peakAge = 0 },
+		popCharge = 0,
+		blindTime = 0,
+		spinOut = nil,
+		blindDir = 0,
 		air = nil,
 		ramp = nil,
 		jib = nil,
-		fallTimer = 0,
-		lastFall = nil,
+		crashTimer = 0,
+		lastCrash = nil,
 		modeTime = 0,
 	}
 end
@@ -66,6 +72,7 @@ function World.createSim(cfg, park, carrierStartS)
 		features = Park.resolvePark(park, path),
 		carrier = carrier,
 		rider = World.spawnRiderBehindCarrier({ cfg = cfg, path = path, carrier = carrier }),
+		inputs = Input.createInputMemory(),
 		events = {},
 	}
 end

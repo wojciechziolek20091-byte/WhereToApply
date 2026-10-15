@@ -8,7 +8,7 @@ function Posture.handleNorm(r, cfg)
 end
 
 function Posture.connectionFactor(r, cfg)
-	if not r.hasHandle then
+	if r.handle == "dropped" then
 		return 0
 	end
 	return Scalar.clamp01(1 - cfg.handleWeight * Posture.handleNorm(r, cfg) - cfg.hingeWeight * r.waistHinge)

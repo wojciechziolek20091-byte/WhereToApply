@@ -4,6 +4,7 @@ import { LOOKS } from '../render/babylon/looks';
 import { GrayboxRenderer, snapshotOf, type RenderSnapshot } from '../render/graybox';
 import { DEFAULT_CONFIG } from '../sim/config';
 import { DEFAULT_PARK } from '../sim/park';
+import { TEST_PARK } from '../sim/parkLayout';
 import { createRun, stepRun, type RunState } from '../sim/session';
 import { advanceStepper, createStepper } from '../sim/stepper';
 import type { SimState } from '../sim/world';
@@ -25,8 +26,10 @@ document.head.appendChild(style);
 const view = document.getElementById('view')!;
 const hudEl = document.getElementById('hud')!;
 const params = new URLSearchParams(location.search);
+/** `?park=test`: the spec's test map (kicker, flush funbox, gap box, 8 m rail on the line). */
+const PARK = params.get('park') === 'test' ? TEST_PARK : DEFAULT_PARK;
 
-let run: RunState = createRun(DEFAULT_CONFIG, DEFAULT_PARK);
+let run: RunState = createRun(DEFAULT_CONFIG, PARK);
 const initialPalette = (RIDER_PALETTES as string[]).includes(params.get('rider') ?? '')
   ? (params.get('rider') as RiderPalette)
   : 'Sheet';
@@ -73,8 +76,9 @@ function frame(now: number): void {
 
   if (keys.consume('KeyP')) paused = !paused;
   if (keys.consume('KeyH')) hud.toggleHelp();
+  if (keys.consume('F3')) hud.toggleDebug();
   if (keys.consume('Enter')) {
-    run = createRun(DEFAULT_CONFIG, DEFAULT_PARK);
+    run = createRun(DEFAULT_CONFIG, PARK);
     prev = snapshotOf(run.sim);
   }
 
@@ -82,7 +86,7 @@ function frame(now: number): void {
   if (!paused) {
     ({ alpha } = advanceStepper(stepper, frameSeconds, () => {
       prev = snapshotOf(run.sim);
-      stepRun(run, keys.frame(run.sim.rider));
+      stepRun(run, keys.frame());
     }));
   }
   renderer.render(run.sim, prev, alpha, frameSeconds);

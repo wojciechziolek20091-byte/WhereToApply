@@ -11,13 +11,16 @@ local Sim = {
 	Actions = require(script.Actions),
 	Air = require(script.Air),
 	Cable = require(script.Cable),
-	DetMath = require(script.DetMath),
 	Config = require(script.Config),
+	DetMath = require(script.DetMath),
 	Edge = require(script.Edge),
 	Features = require(script.Features),
+	Fsm = require(script.Fsm),
+	Handle = require(script.Handle),
 	Hydro = require(script.Hydro),
 	Input = require(script.Input),
 	Landing = require(script.Landing),
+	Noise = require(script.Noise),
 	OnFeature = require(script.OnFeature),
 	Park = require(script.Park),
 	ParkLayout = require(script.ParkLayout),
@@ -25,16 +28,18 @@ local Sim = {
 	Posture = require(script.Posture),
 	Rng = require(script.Rng),
 	Rope = require(script.Rope),
+	Rotation = require(script.Rotation),
 	Scalar = require(script.Scalar),
+	ScoringCombo = require(script.ScoringCombo),
 	ScoringJudges = require(script.ScoringJudges),
 	ScoringMetrics = require(script.ScoringMetrics),
 	Session = require(script.Session),
 	Step = require(script.Step),
 	Stepper = require(script.Stepper),
 	TricksClassify = require(script.TricksClassify),
-
 	TricksData = require(script.TricksData),
 	Vec = require(script.Vec),
+	WaterTrick = require(script.WaterTrick),
 	World = require(script.World),
 }
 
@@ -45,5 +50,7 @@ Sim.createRun = Sim.Session.createRun
 Sim.stepRun = Sim.Session.stepRun
 Sim.createSim = Sim.World.createSim
 Sim.stepSim = Sim.Step.stepSim
+Sim.transition = Sim.Fsm.transition
+Sim.scoreCombo = Sim.ScoringCombo.scoreCombo
 
 return Sim

@@ -172,3 +172,41 @@ kbd { font: inherit; display: inline-block; padding: 0 5px; margin-right: 4px; b
 @media (prefers-reduced-motion: reduce) {
   .popup.popup-show, .points-gain.gain-show { animation-duration: 0.01s; animation-delay: 1.2s; }
 }
+
+/* Tension meter: LOADED glow at the water-trick threshold. */
+.loaded-tag { position: absolute; right: 10px; bottom: -11px; font-size: 10px; font-weight: 900; letter-spacing: 0.1em; padding: 2px 6px; border-radius: 3px; background: var(--ui-pop); color: #2a1f00; opacity: 0; transition: opacity 0.12s; }
+.tile-rope.loaded { box-shadow: 0 0 0 2px var(--ui-pop), 0 0 18px rgba(255, 212, 58, 0.7); }
+.tile-rope.loaded .loaded-tag { opacity: 1; }
+
+/* Trick feed: the combo being built. */
+.feed { position: absolute; left: 50%; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); text-align: center; max-width: calc(100vw - 32px); }
+.feed ul { list-style: none; margin: 0 0 4px; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; }
+.feed li { font-size: 14px; font-weight: 800; padding: 3px 8px; border-radius: 4px; background: var(--ui-tile); }
+.feed li span { color: var(--ui-pop); margin-left: 4px; }
+.feed-total { display: inline-block; font-size: 20px; font-weight: 900; padding: 3px 10px; border-radius: 4px; background: var(--ui-tile); color: var(--ui-pop); }
+.feed-void { color: var(--ui-fall); }
+
+/* Pop timing bar. */
+.timing { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: min(320px, calc(100vw - 32px)); padding: 6px 10px; border-radius: 6px; background: var(--ui-tile); }
+.timing-track { position: relative; height: 10px; margin-top: 5px; border-radius: 5px; background: var(--ui-dim); }
+.timing-window { position: absolute; top: 0; bottom: 0; border-radius: 5px; background: var(--ui-tile-edge); }
+.timing-cursor { position: absolute; top: -4px; bottom: -4px; width: 3px; background: #ffffff; transform: translateX(-1px); }
+
+/* Handle-pass ring. */
+.ring { position: absolute; left: calc(50% + 70px); top: 40%; width: 72px; height: 72px; }
+.ring svg { transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 7; }
+.ring-track { stroke: rgba(0, 0, 0, 0.35); }
+.ring-window { stroke: var(--ui-tile-edge); }
+.ring-progress { stroke: #ffffff; stroke-width: 3; }
+.ring-label { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 900; }
+
+/* Balance meter on features. */
+.balance { position: absolute; left: 50%; top: 66%; transform: translateX(-50%); width: min(260px, calc(100vw - 32px)); padding: 6px 10px; border-radius: 6px; background: var(--ui-tile); text-align: center; }
+.balance-track { position: relative; height: 10px; margin-top: 5px; border-radius: 5px; background: linear-gradient(90deg, var(--ui-fall), var(--ui-tile-edge) 35%, var(--ui-tile-edge) 65%, var(--ui-fall)); }
+.balance-cursor { position: absolute; top: -4px; bottom: -4px; width: 4px; background: #ffffff; transform: translateX(-2px); }
+
+/* Debug overlay (F3). */
+.debug-panel { position: absolute; left: 12px; top: 96px; display: grid; gap: 2px; padding: 8px 10px; border-radius: 6px; background: rgba(10, 16, 24, 0.85); font: 12px/1.35 ui-monospace, Menlo, monospace; max-width: calc(100vw - 32px); }
+.debug-panel div { display: flex; justify-content: space-between; gap: 16px; }
+.debug-panel span { color: var(--ui-label); }

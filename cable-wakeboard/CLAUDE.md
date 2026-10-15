@@ -28,34 +28,41 @@ whenever `src/sim` or `roblox/src/shared/Sim` changes.
 ```
 src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, NO Date.
   math/       vec.ts (Vec3 helpers), scalar.ts (clamp, wrap, approach), rng.ts (seeded),
-              detmath.ts (sin, cos, tan, atan2, log, exp, pow from + - * / only)
+              detmath.ts (sin, cos, tan, atan2, log, exp, pow from + - * / only),
+              noise.ts (deterministic value noise, for feature balance)
   config.ts   SimConfig and DEFAULT_CONFIG. All tunables live here.
   cable.ts    Cable path (towers + filleted corners), carrier kinematics.
   park.ts     Park types (features, site) and resolvePark().
   parkLayout.ts The default park: layout from the user's sketch (docs/park-sketch.jpg),
               scenery from their park map. Features, start dock, site
-              (shore, island, buildings...). Luau copy is GENERATED:
-              `npx vite-node scripts/gen-park-luau.ts` -> Sim/ParkLayout.luau.
+              (shore, island, buildings...). TEST_PARK: the spec's test map.
+              Luau copies of parkLayout.ts AND config.ts are GENERATED:
+              `npx vite-node scripts/gen-luau-data.ts` -> Sim/ParkLayout.luau, Sim/Config.luau.
   features.ts Feature geometry queries.
   rope.ts     Rope tension (one-sided spring-damper).
   edge.ts     Edge angle build/release, heading, toeSign.
   hydro.ts    Water forces, edge load.
   posture.ts  Handle distance, waist hinge, connection.
-  pop.ts      Load tracker and computePop().
-  air.ts      Air integration and rotation.
-  landing.ts  Landing evaluation and fall kinds.
-  actions.ts  Shared rider transitions: applyRope, takeOff, touchDown, fallRider.
-  onFeature.ts Riding kickers and sliders, jib balance, landing on features.
-  rider.ts    RiderState.
-  input.ts    InputFrame (what the player asks for in one tick).
+  pop.ts      Ollie charge, smoothed tension + peak tracking, water-trick timing/height.
+  fsm.ts      Rider state machine: TRANSITIONS and transition() (asserts in debug).
+  rotation.ts Spin/flip tracker with carry, frontside/backside from the rope.
+  handle.ts   Handle system: pass zones and windows, spin to blind, coming out.
+  waterTrick.ts Arming (LOADED), planning and phases of raley/rolls/S-bend.
+  air.ts      Air integration: spins, flips, grabs, handle passes, water tricks.
+  landing.ts  Landing evaluation and crash reasons.
+  actions.ts  Shared transitions: applyRope (cap, smoothing, yank), crash, takeOff, touchDown.
+  onFeature.ts Kicker ramps and lip pop, safety pop window, slides (90-degree
+              steps, balance, passes), landing on a main, clearance check.
+  rider.ts    RiderState and the mode / handle / crash types.
+  input.ts    InputFrame (raw buttons) and InputMemory (presses, taps, grab chords).
   events.ts   SimEvent union emitted each tick.
   step.ts     stepSim(): one fixed tick, dispatching on rider.mode.
   world.ts    SimState, createSim().
   stepper.ts  FixedStepper accumulator.
   hash.ts     State hash for determinism tests.
-  tricks/     data.ts (catalogue), classify.ts.
-  scoring/    judges.ts (panel), metrics.ts.
-  session.ts  createRun/stepRun: passes, falls, respawn, trick log, scoring.
+  tricks/     data.ts (registry: names, points), classify.ts (tokens, names, points).
+  scoring/    combo.ts (combo score, shared with the Roblox server), judges.ts (panel), metrics.ts.
+  session.ts  createRun/stepRun: passes, crashes, respawn, trick log, combos, judges.
   index.ts    Public exports.
 src/art/      Engine-free art: site.ts (polygon helpers, ear clipping, triangle builder
               for the park site), mesh.ts (primitives and hulls -> flat-shaded triangle
@@ -69,14 +76,19 @@ src/render/   babylon/: the game's engine (Babylon.js). character.ts: the smooth
               camera), looks.ts (DAY default, DUSK via ?look=dusk). graybox.ts: old
               three.js view, kept for debugging via ?renderer=graybox.
               Renderers read SimState; they never write it.
-src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts (tiles, trick
-              popup, help on H), hud.css (imported ?inline and injected, so the
-              published page needs no CSS of its own), main.ts loop.
+src/game/     Browser glue: keyboard.ts (keys -> raw InputFrame), hud.ts (tension meter
+              with LOADED, trick feed and combo, pop timing bar, handle-pass ring,
+              balance meter, help on H, debug overlay on F3), hud.css (imported
+              ?inline and injected), main.ts loop (`?park=test` for the test map).
+src/render/pose.ts  Rider orientation shared by both renderers (twin: roblox RiderPose.luau).
 scripts/      Tuning probes (vite-node).
 roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
               src/shared/Sim/: the Luau twin of src/sim (one module per file,
-              same names, same fields). src/shared/WakeInput.luau: keys -> InputFrame
-              (twin of keyboard.ts). src/client/WakeClient.client.luau: Studio client.
+              same names, same fields). src/shared/WakeInput.luau: actions and
+              bindings -> InputFrame (twin of keyboard.ts). ComboValidator.luau:
+              server checks. src/client/WakeClient.client.luau: Studio client
+              (ContextActionService, Beam rope, HUD). src/server/WakeServer.server.luau:
+              RemoteEvents, validation, leaderstats.
               See roblox/README.md. The Roblox rider (RiderBuilder.luau, faceted) is
               no longer the web rider; src/art/riderParts.json (its export) is kept
               for the art tests and the old look, refresh it with
@@ -90,10 +102,12 @@ Data flow per frame: keyboard -> `InputFrame` -> `advanceStepper()` runs
 `stepRun()` 0..n times at 60 Hz -> `SimState` (+ `events` for that tick) ->
 renderer interpolates between the previous and current snapshot.
 
-Rider modes: `riding` (water) -> `feature` (kicker/slider) -> `air` -> back to
-`riding`/`feature`, or `fallen` (session respawns after `landing.fallRecovery`).
-Physics never names tricks: it emits `landed` with the `AirState`, and the
-session classifies it with `tricks/classify.ts`.
+Rider modes (fsm.ts): `riding`, `ridingBlind`, `waterTrickLoad`, `waterTrickAir`,
+`airborne`, `onKicker`, `onSafety`, `onFeature`, `landing`, `crashed`. Only
+`transition()` changes the mode; illegal moves throw with `debug.enabled`.
+Physics never names tricks: it emits `landed` (with the `AirState`) and
+`slideDone` (with the `JibState`); the session classifies them with
+`tricks/classify.ts` and chains them into combos.
 
 In the browser console, `cable()` returns the live `RunState`. `?cam=front|back|side`
 frames the rider close up for checking the character; `?cam=aerial` (drone view
@@ -114,6 +128,9 @@ from the south) and `?cam=map` (top-down, north up) show the whole park.
   return values.
 - Tunables go in `config.ts`, not inline magic numbers.
 - Tricks, grabs, spins, features are data. Add a trick by adding a row.
+- Controls follow docs/MECHANICS.md section 4: A/D steer (the sim picks the edge
+  from the stance), Space pop, S/W rolls (loaded) and flips (air), Q handle
+  pass, E (+R/N/T) grabs, Shift arms out, X let go.
 - When a mechanic changes, update `docs/MECHANICS.md` in the same commit.
 - Tests live in `tests/`, named after the module (`rope.test.ts`).
 
@@ -142,10 +159,10 @@ one to edit first (it has the unit tests); then mirror it line by line.
   round differently.
 - The Luau Sim must not touch Roblox APIs (`game`, `Instance`, `Vector3`,
   `task`, `os`, `math.random`), so it also runs in the plain `luau` CLI.
-- Park data: edit `src/sim/parkLayout.ts`, then regenerate the Luau copy
-  (`npx vite-node scripts/gen-park-luau.ts`); the parity test compares
-  DEFAULT_CONFIG and DEFAULT_PARK across the two. Towers live in both
-  `config.ts` and `Config.luau` (by hand).
+- Data: edit `src/sim/config.ts` or `src/sim/parkLayout.ts`, then regenerate
+  the Luau copies (`npx vite-node scripts/gen-luau-data.ts`); never edit
+  Config.luau or ParkLayout.luau by hand. The parity test compares
+  DEFAULT_CONFIG and DEFAULT_PARK across the two.
 - Parity tooling: `tests/parity/trace.ts` and `roblox/tests/sim_trace.luau` are
   twins (same scripted input, same trace fields); `tests/parity/luauBundle.ts`
   bundles the Luau modules for the CLI. A failure prints the first differing
@@ -160,15 +177,19 @@ To reverse the direction: reverse the tower order (keep s = 0 on the south
 straight), and re-project each feature's centre onto the new path (its side of
 the line flips sign; its `s` becomes the new centre minus half its length).
 
-## Tuning reference (defaults, flat water)
+## Tuning reference (defaults; full table in docs/TUNING.md)
 
 - Trailing flat behind the carrier: about 380 N at 8.3 m/s.
-- Hard cut: 1.5 to 2.8 kN, up to about 45 km/h, about 11 m out from the line.
-- Well-timed flat-water pop: about 4.7 m/s, 1.3 s air, 1.3 m peak.
-- A 1.1 m kicker (lip 0.5 rad) straight with no pop: about 1.1 s air, 1.8 m peak.
+- Hard heelside cut: passes 1000 N (smoothed) in about 0.9 s, peaks about 1.4 kN,
+  LOADED for about 1.2 s.
+- Ollie: 3.5 to 6.5 m/s (0.6 to 2 m of air) with 0 to 0.5 s of charge.
+- Raley released at the tension peak: about 2.5 m, 1.5 s of air.
+- A 1.2 m kicker straight: about 1.9 m peak; a lip pop adds about 15%.
 
-`tests/riding.test.ts`, `pop.test.ts` and `features.test.ts` pin these loosely;
-retune the numbers there if a deliberate tuning change moves them.
+Probes: `scripts/probe-tension.ts` (milestone 2 log), `probe-air.ts`,
+`probe-water.ts`, `probe-features.ts`, `probe-tuning.ts` (every trick 5 times).
+`tests/riding.test.ts`, `air.test.ts`, `waterTrick.test.ts` and
+`features.test.ts` pin these loosely.
 
 ## Gotchas
 
@@ -183,10 +204,13 @@ retune the numbers there if a deliberate tuning change moves them.
 - `tests/architecture.test.ts` fails if anything under `src/sim` or `src/art` imports three, Babylon
   or uses `Math.random` / `Date.now` / `performance` / `window` / `document`
   (comments are ignored).
-- Physics tests use `flatSim()` (no features) so riders do not hit a kicker
-  mid-test; feature tests build their own one-feature park.
+- Physics tests use `flatSim()` (no features, started on the long east
+  straight) so riders do not hit a kicker or a corner mid-test; feature tests
+  use `featureSim(def)` with a one-feature park.
 - `events` is cleared at the start of every tick. Consume them right after
   `stepSim()` / `stepRun()`.
-- The game layer converts screen-relative steering to the sim's edge and spin
-  conventions (`carveToEdge`, `-toeSign` for frontside). Keep the sim's input
-  in rider terms.
+- Input is raw buttons; the sim converts A/D to an edge (`carveToEdge`) and to
+  spin directions, and decides frontside/backside from the rope. Keep input
+  mapping (keyboard.ts, WakeInput.luau) free of game logic.
+- `cfg.debug.enabled` makes illegal transitions throw and logs `transition`
+  events; tests rely on it.

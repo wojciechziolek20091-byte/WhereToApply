@@ -7,7 +7,7 @@ const solid: RunMetrics = {
   falls: 0,
   avgLandingQuality: 0.8,
   avgPopQuality: 0.6,
-  earlySpinFraction: 0,
+  sketchyFraction: 0,
   avgHeight: 2,
   avgAirTime: 1.2,
   topDifficulty: 3,
@@ -37,8 +37,8 @@ describe('judging', () => {
     expect(criteriaFromMetrics({ ...solid, falls: 1 }).execution).toBeLessThan(criteriaFromMetrics(solid).execution);
   });
 
-  it('early spins hurt execution', () => {
-    expect(criteriaFromMetrics({ ...solid, earlySpinFraction: 1 }).execution).toBeLessThan(
+  it('sketchy landings hurt execution', () => {
+    expect(criteriaFromMetrics({ ...solid, sketchyFraction: 1 }).execution).toBeLessThan(
       criteriaFromMetrics(solid).execution,
     );
   });

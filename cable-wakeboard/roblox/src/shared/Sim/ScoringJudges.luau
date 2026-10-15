@@ -18,7 +18,7 @@ function ScoringJudges.criteriaFromMetrics(m)
 	if m.trickCount == 0 then
 		return { execution = 1, intensity = 1, composition = 1 }
 	end
-	local exec = 0.7 * m.avgLandingQuality + 0.3 * m.avgPopQuality - 0.15 * m.earlySpinFraction
+	local exec = 0.7 * m.avgLandingQuality + 0.3 * m.avgPopQuality - 0.15 * m.sketchyFraction
 	local execution = clamp(toScale(exec) - 2.5 * m.falls, 1, 10)
 	local intensity = toScale(0.55 * (m.topDifficulty / 6) + 0.3 * (m.avgHeight / 4) + 0.15 * (m.avgAirTime / 2))
 	local variety = math.min(1, m.uniqueTricks / 6) * (m.uniqueTricks / m.trickCount)

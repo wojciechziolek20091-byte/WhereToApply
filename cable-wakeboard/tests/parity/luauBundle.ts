@@ -16,7 +16,8 @@ setmetatable(__Sim, { __index = function(_, name) return { __module = name, Pare
 local function require(inst)
 	local name = inst.__module
 	if __cache[name] == nil then
-		__cache[name] = __src[name]({ __module = name, Parent = __Sim })
+		-- The folder's own module (init) sees the folder as its script.
+		__cache[name] = __src[name](if name == "init" then __Sim else { __module = name, Parent = __Sim })
 	end
 	return __cache[name]
 end

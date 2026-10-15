@@ -1,65 +1,71 @@
--- Airborne integration, spins, inverts, grabs and raleys. Mirrors src/sim/air.ts.
+-- Air: flight, spins, flips, grabs, handle passes, water tricks. Mirrors src/sim/air.ts.
 local Config = require(script.Parent.Config)
 local Edge = require(script.Parent.Edge)
-local Scalar = require(script.Parent.Scalar)
+local Handle = require(script.Parent.Handle)
+local Rotation = require(script.Parent.Rotation)
 local Vec = require(script.Parent.Vec)
-local Posture = require(script.Parent.Posture)
+local WaterTrick = require(script.Parent.WaterTrick)
 
 local DT, GRAVITY = Config.DT, Config.GRAVITY
 local Air = {}
 
-function Air.approachOf(r, cfg)
-	if Edge.edgeNorm(r, cfg.edge) < 0.2 then
-		return "neutral"
+function Air.passWindowFor(source, cfg)
+	local hp = cfg.handlePass
+	if source == "kicker" then
+		return hp.kickerWindow
 	end
-	return if r.edgeAngle > 0 then "heelside" else "toeside"
+	if source == "feature" then
+		return hp.obstacleAirWindow
+	end
+	if source == "waterTrick" then
+		return hp.waterTrickWindow
+	end
+	return hp.flatAirWindow
 end
 
--- Snapshot the takeoff. Inverts and raleys are committed here.
-function Air.createAirState(r, source, featureId, popSpeed, popQuality, edgeLoadAtBase, input, cfg)
-	local cut = Edge.cutAngle(Vec.headingOf(r.vel), r.ropeHeading)
-	local load = math.max(edgeLoadAtBase, r.edgeLoad)
+function Air.createAirState(r, source, featureId, popSpeed, popQuality, cfg, spinStart)
+	spinStart = spinStart or 0
+	local rot = Rotation.createRotation(Air.passWindowFor(source, cfg))
+	rot.spinAngle = spinStart
+	local fromBlind = source == "blindPop"
+	if fromBlind then
+		rot.spinSide = "backside"
+		rot.startDir = r.blindDir
+		rot.spinDir = r.blindDir
+		rot.progressOffset = math.pi
+		rot.zonesResolved = 1
+		rot.stoppedByRope = true
+		rot.blindDir = r.blindDir
+	end
 	return {
 		source = source,
 		featureId = featureId,
 		time = 0,
 		takeoffPos = r.pos,
 		takeoffHeading = Vec.headingOf(r.vel),
-		approach = Air.approachOf(r, cfg),
 		takeoffSwitch = r.switchStance,
-		cutAtTakeoff = cut,
-		edgeLoadAtTakeoff = load,
 		tensionAtTakeoff = r.ropeTension,
 		popSpeed = popSpeed,
 		popQuality = popQuality,
 		peakHeight = r.pos.y,
 		passedPeak = false,
-		spinAngle = 0,
-		spinStarted = false,
-		spunBeforePeak = false,
-		flipDir = Scalar.sign(input.flip),
-		flipAngle = 0,
-		axis = if math.abs(cut) > cfg.air.rollAxisCut then "roll" else "flip",
+		spinStart = spinStart,
+		rot = rot,
 		grab = nil,
-		grabTime = 0,
-		grabbed = nil,
-		raleyEligible = load >= cfg.raley.minEdgeLoad and r.ropeTension >= cfg.raley.minTension,
-		raleyExtension = 0,
-		raleyPeak = 0,
+		grabTimes = { indy = 0, stalefish = 0, nose = 0, tail = 0 },
+		trick = nil,
+		fromBlind = fromBlind,
+		lipPop = false,
+		overFeature = nil,
 	}
-end
-
--- Handle in spins fast, handle out spins slow.
-function Air.rotationFactor(r, cfg)
-	local grabbing = r.air ~= nil and r.air.grab ~= nil
-	return Scalar.lerp(1, cfg.air.handleOutRotation, Posture.handleNorm(r, cfg.posture)) * (if grabbing then 0.9 else 1)
 end
 
 local function airDrag(vel, cfg)
 	return Vec.scale(vel, -cfg.air.dragCoef * Vec.length(vel))
 end
 
-function Air.stepAir(r, air, ropeForce, input, cfg)
+-- One airborne tick. Returns true if a handle pass was made this tick.
+function Air.stepAir(r, air, ropeForce, input, mem, cfg)
 	local m = cfg.rider.mass
 	local force = Vec.add(Vec.add(Vec.vec3(0, -GRAVITY * m, 0), ropeForce), airDrag(r.vel, cfg))
 	r.vel = Vec.addScaled(r.vel, force, DT / m)
@@ -74,50 +80,24 @@ function Air.stepAir(r, air, ropeForce, input, cfg)
 		air.passedPeak = true
 	end
 
-	local rot = Air.rotationFactor(r, cfg)
-
-	-- Spins: rotate while held. Starting before the peak costs height.
-	if input.spin ~= 0 then
-		if not air.spinStarted then
-			air.spinStarted = true
-			if not air.passedPeak and r.vel.y > 0.5 then
-				air.spunBeforePeak = true
-				r.vel = Vec.vec3(r.vel.x, r.vel.y * (1 - cfg.air.earlySpinPenalty), r.vel.z)
-			end
-		end
-		-- +spin is frontside: chest opens toward travel, which is -toeSign in yaw.
-		local frontside = -Edge.toeSign({ stance = r.stance, switchStance = air.takeoffSwitch })
-		air.spinAngle += Scalar.sign(input.spin) * frontside * cfg.air.spinRate * rot * DT
+	local steerForSpin = if air.trick then WaterTrick.stepWaterTrick(air.trick, input, mem, cfg) else mem.steerDir
+	local toes = Edge.toeSign({ stance = r.stance, switchStance = air.takeoffSwitch })
+	local boardYaw = r.heading + air.rot.spinAngle
+	Rotation.stepSpin(air.rot, steerForSpin, function()
+		return Rotation.rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading)
+	end, cfg, DT, cfg.spin.rate)
+	if not air.trick then
+		Rotation.stepFlip(air.rot, if input.forward then 1 elseif input.back then -1 else 0, cfg, DT, 1)
 	end
 
-	-- Inverts: auto-rotate one full turn; holding the flip input keeps rotating.
-	if air.flipDir ~= 0 then
-		local keepGoing = Scalar.sign(input.flip) == air.flipDir
-		if air.flipAngle < Scalar.TAU or keepGoing then
-			air.flipAngle += cfg.air.invertRate * rot * DT
-		end
+	air.grab = mem.grabChoice
+	if air.grab then
+		air.grabTimes[air.grab] += DT
 	end
 
-	-- Grabs: must be held long enough to count.
-	if input.grab then
-		if air.grab == input.grab then
-			air.grabTime += DT
-		else
-			air.grab = input.grab
-			air.grabTime = 0
-		end
-		if air.grabTime >= cfg.air.minGrabTime then
-			air.grabbed = air.grab
-		end
-	else
-		air.grab = nil
-		air.grabTime = 0
-	end
-
-	-- Raley: swing the body up using the rope; must come back before landing.
-	local raleyTarget = if air.raleyEligible and input.raley and r.hasHandle then 1 else 0
-	air.raleyExtension = Scalar.approach(air.raleyExtension, raleyTarget, cfg.air.raleyRate * DT)
-	air.raleyPeak = math.max(air.raleyPeak, air.raleyExtension)
+	local handle, result = Handle.updateHandle(r.handle, air.rot, mem.passPressed, { rate = cfg.spin.rate, inAir = true }, cfg, DT)
+	r.handle = handle
+	return result.passed
 end
 
 return Air

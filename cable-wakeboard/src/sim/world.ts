@@ -2,6 +2,7 @@ import { type CablePath, type CarrierState, buildCablePath, cablePointAt, create
 import type { SimConfig } from './config';
 import { DEFAULT_CONFIG } from './config';
 import type { SimEvent } from './events';
+import { createInputMemory, type InputMemory } from './input';
 import { type Vec3, addScaled, forwardOf, vec3 } from './math/vec';
 import { DEFAULT_PARK, type ParkDef, type ResolvedFeature, resolvePark } from './park';
 import type { RiderState } from './rider';
@@ -14,6 +15,8 @@ export interface SimState {
   readonly features: ResolvedFeature[];
   carrier: CarrierState;
   rider: RiderState;
+  /** Button edges and timers (survives respawns). */
+  inputs: InputMemory;
   /** Events from the most recent tick only. */
   events: SimEvent[];
 }
@@ -30,23 +33,28 @@ export function createRider(cfg: SimConfig, pos: Vec3, vel: Vec3, heading: numbe
     edgeAngle: 0,
     edgeLoad: 0,
     ropeTension: 0,
+    tensionSmooth: 0,
+    tensionPeak: 0,
+    tensionPeakAge: 0,
+    tensionPrev: 0,
+    tensionPrev2: 0,
     ropeForce: vec3(),
     ropeHeading: heading,
     slackTime: 0,
-    overGripTime: 0,
-    hasHandle: true,
+    handle: 'inFront',
     handleDist: cfg.posture.handleInDist,
     waistHinge: 0,
     connection: 1,
     legCompression: 0,
-    loadHeld: false,
-    extendTimer: 0,
-    load: { edgeLoadAtBase: 0, peakEdgeLoad: 0, peakAge: 0 },
+    popCharge: 0,
+    blindTime: 0,
+    spinOut: null,
+    blindDir: 0,
     air: null,
     ramp: null,
     jib: null,
-    fallTimer: 0,
-    lastFall: null,
+    crashTimer: 0,
+    lastCrash: null,
     modeTime: 0,
   };
 }
@@ -84,6 +92,7 @@ export function createSim(
     features: resolvePark(park, path),
     carrier,
     rider: spawnRiderBehindCarrier(base),
+    inputs: createInputMemory(),
     events: [],
   };
 }

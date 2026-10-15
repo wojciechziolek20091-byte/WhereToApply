@@ -1,9 +1,10 @@
 import { createAirState } from './air';
 import { DT } from './config';
-import type { InputFrame } from './input';
+import { transition } from './fsm';
 import { evaluateLanding, type LandingResult } from './landing';
-import { type Vec3, add, addScaled, headingOf, horizontalLength, UP, vec3 } from './math/vec';
-import type { AirState, FallKind, RiderMode, TakeoffSource } from './rider';
+import { type Vec3, add, addScaled, headingOf, horizontalLength, scale, UP, vec3 } from './math/vec';
+import { updateTensionTracker } from './pop';
+import type { AirState, CrashReason, TakeoffSource } from './rider';
 import { type RopeResult, computeRopeTension } from './rope';
 import type { SimState } from './world';
 
@@ -13,29 +14,28 @@ import type { SimState } from './world';
 export const hipPosition = (s: SimState): Vec3 =>
   addScaled(s.rider.pos, UP, s.cfg.rider.hipHeight * (1 - 0.35 * s.rider.legCompression));
 
-export function setMode(s: SimState, mode: RiderMode): void {
-  if (s.rider.mode !== mode) {
-    s.rider.mode = mode;
-    s.rider.modeTime = 0;
-  }
-}
+/** Off balance: a snap back to taut can yank the rider over. */
+const offBalance = (s: SimState): boolean =>
+  s.rider.connection < 0.6 || s.rider.mode === 'landing' || s.rider.mode === 'ridingBlind';
 
-/** Rope tension this tick, with slack, snap and grip tracking. */
-export function applyRope(s: SimState): RopeResult {
+/**
+ * Rope tension this tick: one-sided spring-damper, capped at `rope.maxTension`
+ * (and at `blind.maxTension` while riding blind), smoothed for the HUD and
+ * trick logic. A hard snap back to taut while off balance crashes (rope yank).
+ * Returns null when the yank crashed the rider.
+ */
+export function applyRope(s: SimState): RopeResult | null {
   const { rider, cfg } = s;
-  if (!rider.hasHandle) {
+  if (rider.handle === 'dropped') {
     rider.ropeTension = 0;
     rider.ropeForce = vec3();
+    updateTensionTracker(rider, cfg, DT);
     return { tension: 0, dir: UP, force: vec3(), stretch: -1, stretchRate: 0 };
   }
-  const rope = computeRopeTension(
-    s.carrier.pos,
-    s.carrier.vel,
-    hipPosition(s),
-    rider.vel,
-    cfg.rope.length + rider.handleDist,
-    cfg.rope,
-  );
+  const raw = computeRopeTension(s.carrier.pos, s.carrier.vel, hipPosition(s), rider.vel, cfg.rope.length + rider.handleDist, cfg.rope);
+  const cap = rider.mode === 'ridingBlind' ? Math.min(cfg.rope.maxTension, cfg.blind.maxTension) : cfg.rope.maxTension;
+  const tension = Math.min(raw.tension, cap);
+  const rope: RopeResult = { ...raw, tension, force: scale(raw.dir, tension) };
   const wasSlack = rider.ropeTension <= 0;
   if (rope.tension <= 0) {
     rider.slackTime += DT;
@@ -48,36 +48,35 @@ export function applyRope(s: SimState): RopeResult {
   rider.ropeTension = rope.tension;
   rider.ropeForce = rope.force;
   rider.ropeHeading = headingOf(rope.dir);
-  rider.overGripTime = rope.tension > cfg.rope.gripLimit ? rider.overGripTime + DT : 0;
+  updateTensionTracker(rider, cfg, DT);
+  const onSurface = rider.mode !== 'airborne' && rider.mode !== 'waterTrickAir';
+  if (wasSlack && onSurface && raw.tension > cfg.rope.yankCrashImpulse && offBalance(s)) {
+    crash(s, 'ropeYank');
+    return null;
+  }
   return rope;
 }
 
-/** Let go, or have the handle ripped away. Returns true the tick it happens. */
-export function checkGrip(s: SimState, input: InputFrame): boolean {
-  const { rider, cfg } = s;
-  if (!rider.hasHandle) return false;
-  if (input.release || rider.overGripTime > cfg.rope.gripTime) {
-    rider.hasHandle = false;
-    rider.connection = 0;
-    rider.ropeTension = 0;
-    rider.ropeForce = vec3();
-    return true;
-  }
-  return false;
-}
-
-export function fallRider(s: SimState, kind: FallKind, landing: LandingResult | null = null): void {
+/**
+ * Every crash goes through here (spec section 12): the handle goes, the rope
+ * goes slack, the combo is voided by the session, and the rider waits
+ * `crash.respawnDelay` in the water.
+ */
+export function crash(s: SimState, reason: CrashReason, landing: LandingResult | null = null): void {
   const r = s.rider;
-  s.events.push({ type: 'fall', tick: s.tick, kind, air: r.air, landing });
-  setMode(s, 'fallen');
-  r.lastFall = kind;
-  r.fallTimer = s.cfg.landing.fallRecovery;
-  r.hasHandle = false;
+  s.events.push({ type: 'crash', tick: s.tick, reason, air: r.air, landing });
+  transition(s, 'crashed', reason);
+  r.lastCrash = reason;
+  r.crashTimer = s.cfg.crash.respawnDelay;
+  r.handle = 'dropped';
   r.connection = 0;
   r.edgeAngle = 0;
   r.air = null;
   r.ramp = null;
   r.jib = null;
+  r.spinOut = null;
+  r.ropeTension = 0;
+  r.ropeForce = vec3();
   r.pos = vec3(r.pos.x, 0, r.pos.z);
   r.vel = vec3(r.vel.x, 0, r.vel.z);
 }
@@ -89,40 +88,43 @@ export function takeOff(
   featureId: string | null,
   popSpeed: number,
   popQuality: number,
-  edgeLoadAtBase: number,
-  input: InputFrame,
-): void {
+  spinStart = 0,
+): AirState {
   const r = s.rider;
   r.vel = add(r.vel, vec3(0, popSpeed, 0));
   r.pos = addScaled(r.pos, UP, 1e-3);
-  r.air = createAirState(r, source, featureId, popSpeed, popQuality, edgeLoadAtBase, input, s.cfg);
+  const air = createAirState(r, source, featureId, popSpeed, popQuality, s.cfg, spinStart);
+  r.air = air;
   r.ramp = null;
   r.jib = null;
-  r.extendTimer = s.cfg.pop.extendTime;
-  setMode(s, 'air');
+  r.popCharge = 0;
+  transition(s, source === 'waterTrick' ? 'waterTrickAir' : 'airborne', source);
   s.events.push({ type: 'takeoff', tick: s.tick, source, popSpeed, popQuality });
+  return air;
 }
 
-/** Load released this tick with bent knees: the legs extend. */
-export const popReleased = (s: SimState, input: InputFrame): boolean =>
-  s.rider.loadHeld && !input.load && s.rider.legCompression > 0.15;
-
-/** Touch down on a surface. Returns the landing result. */
+/**
+ * Touch down on the water. Crashes if the landing fails; otherwise goes to
+ * the short `landing` grace state, then riding (or riding blind).
+ */
 export function touchDown(s: SimState, air: AirState, normal: Vec3, surfaceY: number): LandingResult {
   const r = s.rider;
   const landing = evaluateLanding(r, air, normal, s.cfg);
   r.pos = vec3(r.pos.x, surfaceY, r.pos.z);
-  if (landing.fall) {
-    fallRider(s, landing.fall, landing);
+  if (landing.crash) {
+    crash(s, landing.crash, landing);
     return landing;
   }
-  if (Math.abs(landing.halfTurns) % 2 === 1) r.switchStance = !r.switchStance;
+  if (Math.abs(Math.round(air.rot.spinAngle / Math.PI)) % 2 === 1) r.switchStance = !r.switchStance;
+  if (r.handle === 'passing') r.handle = 'inFront';
+  if (r.handle === 'behind') {
+    r.blindDir = air.rot.blindDir !== 0 ? air.rot.blindDir : r.blindDir;
+    r.blindTime = 0;
+  }
   r.vel = vec3(r.vel.x, 0, r.vel.z);
   r.heading = horizontalLength(r.vel) > 0.5 ? headingOf(r.vel) : air.takeoffHeading;
   r.air = null;
-  r.load = { edgeLoadAtBase: 0, peakEdgeLoad: 0, peakAge: 0 };
-  setMode(s, 'riding');
-  s.events.push({ type: 'landed', tick: s.tick, air, landing });
+  transition(s, 'landing', 'touchdown');
+  s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: false });
   return landing;
 }
-

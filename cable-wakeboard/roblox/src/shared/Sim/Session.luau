@@ -1,27 +1,19 @@
--- A competition run: `passesPerRun` laps of the cable, ended early by
--- `maxFalls` falls. Owns the sim, the trick log and the final score.
+-- A competition run: laps, crashes, the trick log, combos and the judges.
 -- Mirrors src/sim/session.ts.
 local Cable = require(script.Parent.Cable)
 local Config = require(script.Parent.Config)
+local Fsm = require(script.Parent.Fsm)
 local Park = require(script.Parent.Park)
+local ScoringCombo = require(script.Parent.ScoringCombo)
 local ScoringJudges = require(script.Parent.ScoringJudges)
 local ScoringMetrics = require(script.Parent.ScoringMetrics)
-local Scalar = require(script.Parent.Scalar)
 local Step = require(script.Parent.Step)
 local TricksClassify = require(script.Parent.TricksClassify)
 local Vec = require(script.Parent.Vec)
 local World = require(script.Parent.World)
 
 local DT = Config.DT
-
 local Session = {}
-
--- Arcade points for one trick, for the HUD: difficulty scaled by how clean
--- the landing was and how big the air was. Judges score the run separately.
-function Session.trickPoints(rec)
-	local size = 1 + math.min(rec.height, 4) / 4 + math.min(rec.airTime, 2) / 4
-	return math.max(5, Scalar.round(10 * rec.trick.difficulty * (0.5 + 0.5 * rec.landingQuality) * size))
-end
 
 function Session.createRun(cfg, park)
 	cfg = cfg or Config.DEFAULT_CONFIG
@@ -32,7 +24,7 @@ function Session.createRun(cfg, park)
 		startS = sim.carrier.s,
 		pass = 0,
 		tricks = {},
-		falls = {},
+		crashes = {},
 		sinceAction = 0,
 		deadWater = 0,
 		finished = false,
@@ -40,25 +32,60 @@ function Session.createRun(cfg, park)
 		score = nil,
 		latest = {},
 		points = 0,
+		combo = nil,
+		bestCombo = 0,
+		lastCombo = nil,
 	}
 end
 
+function Session.liveCombo(run)
+	if not run.combo then
+		return nil
+	end
+	return ScoringCombo.scoreCombo(run.combo.entries, run.sim.cfg.combo)
+end
+
+local function endCombo(run, voided)
+	local c = run.combo
+	if not c then
+		return
+	end
+	local score = ScoringCombo.scoreCombo(c.entries, run.sim.cfg.combo)
+	run.lastCombo = {
+		name = ScoringCombo.comboName(c.entries),
+		total = if voided then 0 else score.total,
+		multiplier = score.multiplier,
+		tricks = #c.entries,
+		voided = voided,
+		tick = run.sim.tick,
+	}
+	if not voided then
+		run.points += score.total
+		run.bestCombo = math.max(run.bestCombo, score.total)
+	end
+	run.combo = nil
+end
+
 local function finish(run, reason)
+	endCombo(run, false)
 	run.finished = true
 	run.endReason = reason
-	local metrics =
-		ScoringMetrics.computeRunMetrics(run.tricks, run.falls, #run.sim.features, run.deadWater, run.sim.time)
+	local metrics = ScoringMetrics.computeRunMetrics(run.tricks, run.crashes, #run.sim.features, run.deadWater, run.sim.time)
 	run.score = ScoringJudges.scoreRun(metrics, run.sim.cfg.scoring)
 end
 
-local function record(run, rec)
+local function addTrick(run, rec)
 	table.insert(run.tricks, rec)
 	table.insert(run.latest, rec)
-	run.points += Session.trickPoints(rec)
+	local t = rec.trick
+	if not run.combo then
+		run.combo = { entries = {}, sinceLanding = 0 }
+	end
+	table.insert(run.combo.entries, { name = t.name, points = t.points, quality = t.quality, comboFactor = t.comboFactor })
+	run.combo.sinceLanding = 0
 	run.sinceAction = 0
 end
 
--- One fixed tick of the run. Does nothing once finished.
 function Session.stepRun(run, input)
 	run.latest = {}
 	if run.finished then
@@ -69,9 +96,9 @@ function Session.stepRun(run, input)
 
 	for _, e in s.events do
 		if e.type == "landed" then
-			local trick = TricksClassify.classifyAir(e.air, e.landing, s.rider.stance, s.cfg.air.minAirTime)
+			local trick = TricksClassify.classifyAir(e.air, e.landing, s.cfg)
 			if trick then
-				record(run, {
+				addTrick(run, {
 					tick = e.tick,
 					pass = run.pass,
 					trick = trick,
@@ -80,31 +107,38 @@ function Session.stepRun(run, input)
 					distance = Vec.distance(Vec.horizontal(e.air.takeoffPos), Vec.horizontal(s.rider.pos)),
 					landingQuality = e.landing.quality,
 					popQuality = e.air.popQuality,
-					spunBeforePeak = e.air.spunBeforePeak,
+					clean = e.landing.clean,
 					featureId = e.air.featureId,
 				})
 			end
-		elseif e.type == "jibDone" and s.rider.mode ~= "fallen" then
-			local trick = TricksClassify.classifyJib(e.time, e.alignedTime, e.crossedTime)
+		elseif e.type == "slideDone" then
+			local trick = TricksClassify.classifySlide(e.jib, s.cfg)
 			if trick then
-				local balance = if s.rider.jib then s.rider.jib.balance else 0
-				record(run, {
+				addTrick(run, {
 					tick = e.tick,
 					pass = run.pass,
 					trick = trick,
 					airTime = 0,
 					height = 0,
 					distance = 0,
-					landingQuality = 1 - math.min(1, math.abs(balance)),
-					popQuality = 0,
-					spunBeforePeak = false,
-					featureId = e.featureId,
+					landingQuality = 1 - math.min(1, math.abs(e.jib.balance)),
+					popQuality = if e.jib.entry == "popOn" then 1 else 0,
+					clean = not e.jib.sketchy,
+					featureId = e.jib.featureId,
 				})
 			end
-		elseif e.type == "featureEnter" then
+		elseif e.type == "featureEnter" or e.type == "takeoff" then
 			run.sinceAction = 0
-		elseif e.type == "fall" then
-			table.insert(run.falls, { tick = e.tick, pass = run.pass, kind = e.kind })
+		elseif e.type == "crash" then
+			table.insert(run.crashes, { tick = e.tick, pass = run.pass, reason = e.reason })
+			endCombo(run, true)
+		end
+	end
+
+	if run.combo and Fsm.onWater(s.rider.mode) then
+		run.combo.sinceLanding += DT
+		if run.combo.sinceLanding > s.cfg.combo.linkWindow then
+			endCombo(run, false)
 		end
 	end
 
@@ -113,11 +147,11 @@ function Session.stepRun(run, input)
 		run.deadWater += DT
 	end
 
-	if #run.falls >= s.cfg.run.maxFalls then
+	if #run.crashes >= s.cfg.run.maxFalls then
 		finish(run, "falls")
 		return
 	end
-	if s.rider.mode == "fallen" and s.rider.fallTimer <= 0 then
+	if s.rider.mode == "crashed" and s.rider.crashTimer <= 0 then
 		s.rider = World.spawnRiderBehindCarrier(s)
 		run.sinceAction = 0
 	end

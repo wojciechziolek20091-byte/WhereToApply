@@ -1,32 +1,123 @@
+import type { SimConfig } from './config';
 import type { GrabId } from './tricks/data';
 
-/** Everything the player asks for in one tick. Device-agnostic. */
+/**
+ * Everything the player holds in one tick, as raw buttons. Device-agnostic:
+ * keyboard, gamepad and touch all fill this in. The sim works out presses,
+ * releases, taps and grab chords itself (InputMemory) so every platform
+ * behaves the same.
+ *
+ * | Key         | Water                       | Feature              | Air            |
+ * |-------------|-----------------------------|----------------------|----------------|
+ * | A / D       | carve (edge from stance)    | rotate board 90 deg  | spin           |
+ * | Space       | hold: charge; release: pop  | hold/release: pop off| -              |
+ * | S + Space   | backroll (when loaded)      | -                    | -              |
+ * | W + Space   | frontroll (when loaded)     | -                    | -              |
+ * | W / S       | -                           | -                    | front flip / tantrum |
+ * | Q           | -                           | handle pass          | handle pass    |
+ * | E (+R/N/T)  | -                           | -                    | indy (stalefish / nose / tail) |
+ */
 export interface InputFrame {
-  /** Edge request: +1 full heelside, -1 full toeside. See carveToEdge(). */
-  edge: number;
-  /** Hold to bend the knees and load; release to extend (pop). */
-  load: boolean;
-  /** 1 = handle pulled to the hips, 0 = arms fully out. */
-  handleIn: number;
-  /** In the air: spin request, +1 frontside, -1 backside. */
-  spin: number;
-  /** At takeoff: invert request, +1 front, -1 back. */
-  flip: number;
-  /** Hold for a raley. */
-  raley: boolean;
-  /** Held grab, if any. */
-  grab: GrabId | null;
-  /** Let go of the handle. */
-  release: boolean;
+  /** A/D: -1 = A (left), +1 = D (right of travel / clockwise from above). */
+  steer: number;
+  /** Space held. */
+  pop: boolean;
+  /** W held. */
+  forward: boolean;
+  /** S held. */
+  back: boolean;
+  /** Q held (handle pass). */
+  pass: boolean;
+  /** E held (grab). */
+  grab: boolean;
+  /** R / N / T held with E: stalefish / nose / tail. */
+  grabMod: Exclude<GrabId, 'indy'> | null;
+  /** Shift held: arms out (bad posture). */
+  armsOut: boolean;
+  /** X held: let go of the handle. */
+  letGo: boolean;
 }
 
 export const neutralInput = (): InputFrame => ({
-  edge: 0,
-  load: false,
-  handleIn: 1,
-  spin: 0,
-  flip: 0,
-  raley: false,
-  grab: null,
-  release: false,
+  steer: 0,
+  pop: false,
+  forward: false,
+  back: false,
+  pass: false,
+  grab: false,
+  grabMod: null,
+  armsOut: false,
+  letGo: false,
 });
+
+/** Edges and timers derived from the raw input, updated once per tick. Plain data. */
+export interface InputMemory {
+  prev: InputFrame;
+  /** Space pressed / released this tick. */
+  popPressed: boolean;
+  popReleased: boolean;
+  /** How long Space has been held, or was held when it was just released (s). */
+  popHeldTime: number;
+  /** Q pressed this tick. */
+  passPressed: boolean;
+  /** Direction A/D is held (-1, 0, 1) and for how long (s). */
+  steerDir: number;
+  steerHeldTime: number;
+  /** A/D released this tick after a short press: its direction, else 0. */
+  steerTap: number;
+  /** Grab chord: seconds since E went down, and the grab it resolved to. */
+  grabTime: number;
+  grabChoice: GrabId | null;
+}
+
+export const createInputMemory = (): InputMemory => ({
+  prev: neutralInput(),
+  popPressed: false,
+  popReleased: false,
+  popHeldTime: 0,
+  passPressed: false,
+  steerDir: 0,
+  steerHeldTime: 0,
+  steerTap: 0,
+  grabTime: 0,
+  grabChoice: null,
+});
+
+const steerDirOf = (steer: number): number => (steer > 0.5 ? 1 : steer < -0.5 ? -1 : 0);
+
+/**
+ * Advance the memory with this tick's input. Grab chords: E alone is an indy
+ * once `grab.chordWindow` has passed; R, N or T held when E goes down or
+ * within the window picks stalefish, nose or tail instead.
+ */
+export function updateInputMemory(m: InputMemory, input: InputFrame, cfg: SimConfig, dt: number): void {
+  const prev = m.prev;
+  m.popPressed = input.pop && !prev.pop;
+  m.popReleased = !input.pop && prev.pop;
+  if (m.popPressed) m.popHeldTime = 0;
+  else if (input.pop) m.popHeldTime += dt;
+  m.passPressed = input.pass && !prev.pass;
+
+  const dir = steerDirOf(input.steer);
+  m.steerTap = 0;
+  if (dir !== m.steerDir) {
+    if (m.steerDir !== 0 && m.steerHeldTime < cfg.feature.tapTime) m.steerTap = m.steerDir;
+    m.steerDir = dir;
+    m.steerHeldTime = 0;
+  } else if (dir !== 0) {
+    m.steerHeldTime += dt;
+  }
+
+  if (!input.grab) {
+    m.grabTime = 0;
+    m.grabChoice = null;
+  } else {
+    if (!prev.grab) m.grabTime = 0;
+    else m.grabTime += dt;
+    if (m.grabChoice === null || (m.grabChoice === 'indy' && input.grabMod && m.grabTime <= cfg.grab.chordWindow)) {
+      if (input.grabMod && m.grabTime <= cfg.grab.chordWindow) m.grabChoice = input.grabMod;
+      else if (m.grabTime >= cfg.grab.chordWindow) m.grabChoice = 'indy';
+    }
+  }
+  m.prev = { ...input };
+}

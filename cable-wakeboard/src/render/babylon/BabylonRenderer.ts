@@ -35,7 +35,6 @@ import {
 } from '../../art/site';
 import type { RiderPalette } from '../../art/riders';
 import { cablePointAt } from '../../sim/cable';
-import { toeSign } from '../../sim/edge';
 import { kickerHeightAt } from '../../sim/features';
 import { createRng, nextFloat, nextRange } from '../../sim/math/rng';
 import { clamp01 } from '../../sim/math/scalar';
@@ -45,6 +44,7 @@ import type { SimState } from '../../sim/world';
 import type { RenderSnapshot } from '../graybox';
 import { DAY, type Look } from './looks';
 import { buildCharacter, characterMaterial, type CharacterRig } from './character';
+import { riderPose } from '../pose';
 import { applyBasis, axisAngle, basisToQuaternion, col, mulBasis, yawBasis } from './rot';
 
 const v3 = (p: Vec3): Vector3 => new Vector3(p.x, p.y, p.z);
@@ -757,21 +757,12 @@ export class BabylonRenderer {
     this.carrier.position = v3(carrierPos);
     this.carrier.rotationQuaternion = basisToQuaternion(yawBasis(sim.carrier.heading));
 
-    // Rider orientation: yaw (travel + spin or rail angle), then invert, then edge tilt.
-    const toes = toeSign({ stance: r.stance, switchStance: r.air?.takeoffSwitch ?? r.switchStance });
-    let yaw = r.heading;
-    if (r.air) yaw += r.air.spinAngle;
-    if (r.jib) yaw += r.jib.boardAngle;
-    let basis = yawBasis(yaw);
-    if (r.air && r.air.flipDir !== 0) {
-      const axis = r.air.axis === 'flip' ? col(1, 0, 0) : col(1 / Math.SQRT2, 1 / Math.SQRT2, 0);
-      const sign = r.air.flipDir < 0 ? -toes : toes;
-      basis = mulBasis(basis, axisAngle(axis, sign * r.air.flipAngle));
-    }
-    const raley = r.air ? r.air.raleyExtension : 0;
-    // Rotating +a about X lifts the -Z side. The heel is on -toes, so a heelside
-    // edge (positive) dips the heel with -toes * edge; a raley leans the same way.
-    basis = mulBasis(basis, axisAngle(col(1, 0, 0), -toes * (r.edgeAngle + raley * 1.3)));
+    // Rider orientation: yaw (travel + spin or rail angle), then invert, then edge tilt (see pose.ts).
+    const pose = riderPose(r);
+    const toes = pose.toes;
+    let basis = yawBasis(pose.yaw);
+    if (pose.invert) basis = mulBasis(basis, axisAngle(col(...pose.invert.axis), pose.invert.angle));
+    basis = mulBasis(basis, axisAngle(col(1, 0, 0), pose.lean));
     this.rider.position = v3(riderPos);
     this.rider.rotationQuaternion = basisToQuaternion(basis);
     // Mirror across the travel axis when the toes point left (goofy or switch).
@@ -779,9 +770,11 @@ export class BabylonRenderer {
     this.rider.scaling = new Vector3(1, squat, toes);
 
     // Rope from the carrier to the handle in the rider's hands.
-    if (r.hasHandle) {
+    if (r.handle !== 'dropped') {
       const h = this.rig.handle;
-      const local = applyBasis(basis, { x: h.x, y: h.y * squat, z: h.z * toes });
+      // Blind: the handle is behind the back, on the heel side.
+      const hz = pose.handleBehind ? -h.z : h.z;
+      const local = applyBasis(basis, { x: h.x, y: h.y * squat, z: hz * toes });
       const handle = new Vector3(riderPos.x + local.x, riderPos.y + local.y, riderPos.z + local.z);
       this.rope = CreateLines('rope', { points: [v3(carrierPos), handle], instance: this.rope });
       this.rope.isVisible = true;
@@ -790,7 +783,7 @@ export class BabylonRenderer {
     }
 
     // Spray: strongest when carving hard at speed on the water.
-    const onWater = r.mode === 'riding' || r.mode === 'fallen';
+    const onWater = r.mode === 'riding' || r.mode === 'ridingBlind' || r.mode === 'waterTrickLoad' || r.mode === 'landing' || r.mode === 'crashed';
     const speed = horizontalLength(r.vel);
     const intensity = onWater ? clamp01((speed - 3) / 10) * (0.35 + 0.65 * clamp01(r.edgeLoad / 1400)) : 0;
     const fwd = { x: Math.cos(r.heading), z: Math.sin(r.heading) };

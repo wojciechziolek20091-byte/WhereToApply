@@ -28,9 +28,9 @@ function runLuau(tail: string): string {
   return execFileSync(LUAU!, [file], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
 }
 
-function luauTrace(seed: number): string[][] {
+function luauTrace(seed: number, park: 'default' | 'test' = 'default'): string[][] {
   const trace = readFileSync(TRACE_LUAU, 'utf8');
-  const out = runLuau(`local traceRun = (function()\n${trace}\nend)()\ntraceRun(${seed}, ${TICKS})`);
+  const out = runLuau(`local traceRun = (function()\n${trace}\nend)()\ntraceRun(${seed}, ${TICKS}, "${park}")`);
   return out.trimEnd().split('\n').map((line) => line.split('\t'));
 }
 
@@ -66,6 +66,57 @@ function firstDivergence(ts: TraceRow[], lu: string[][]): string | null {
   }
   return null;
 }
+
+describe.skipIf(!LUAU)('Roblox server validation (ComboValidator.luau)', () => {
+  it('accepts every combo a real run banks and rejects tampered ones', () => {
+    const validator = readFileSync(join(__dirname, '../roblox/src/shared/ComboValidator.luau'), 'utf8');
+    const out = runLuau(`local ComboValidator = (function()
+local script = { Parent = { Sim = { __module = "init" } } }
+${validator}
+end)()
+local cfg = Sim.Config.makeConfig({ run = { maxFalls = 99 } })
+local run = Sim.Session.createRun(cfg, Sim.ParkLayout.TEST_PARK)
+local rng = Sim.Rng.createRng(5)
+local input = Sim.Input.neutralInput()
+local hold, seen, ok, bad, tamperedCaught = 0, nil, 0, 0, 0
+for i = 1, 60 * 140 do
+	if hold <= 0 then
+		hold = 10 + math.floor(Sim.Rng.nextFloat(rng) * 50)
+		input = Sim.Input.neutralInput()
+		input.steer = ({ -1, 0, 0, 1 })[math.floor(Sim.Rng.nextFloat(rng) * 4) + 1]
+		input.pop = Sim.Rng.nextFloat(rng) < 0.4
+		input.pass = Sim.Rng.nextFloat(rng) < 0.3
+		input.grab = Sim.Rng.nextFloat(rng) < 0.2
+	end
+	hold -= 1
+	Sim.Session.stepRun(run, input)
+	local c = run.lastCombo
+	if c and c ~= seen then
+		seen = c
+		if not c.voided then
+			local tricks = {}
+			for k = #run.tricks - c.tricks + 1, #run.tricks do
+				local rec = run.tricks[k]
+				table.insert(tricks, { name = rec.trick.name, points = rec.trick.points, quality = rec.trick.quality,
+					comboFactor = rec.trick.comboFactor, tokens = rec.trick.tokens, airTime = rec.airTime,
+					spinDegrees = rec.trick.spinDegrees, tick = rec.tick })
+			end
+			local score, err = ComboValidator.validate(tricks, cfg)
+			if score and score.total == c.total then ok += 1 else bad += 1 print("REJECTED " .. tostring(err)) end
+			tricks[1].points *= 2
+			if not ComboValidator.validate(tricks, cfg) then tamperedCaught += 1 end
+		end
+	end
+end
+print(string.format("ok=%d bad=%d tampered=%d", ok, bad, tamperedCaught))`);
+    const m = /ok=(\d+) bad=(\d+) tampered=(\d+)/.exec(out);
+    expect(out).not.toContain('REJECTED');
+    expect(m).not.toBeNull();
+    expect(Number(m![1])).toBeGreaterThan(0);
+    expect(Number(m![2])).toBe(0);
+    expect(Number(m![3])).toBe(Number(m![1]));
+  });
+});
 
 describe.skipIf(!LUAU)('TypeScript and Luau site geometry agree', () => {
   it('triangulate every site polygon the same way (Roblox client vs web renderer)', () => {
@@ -107,4 +158,13 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
       expect(ts.at(-1)?.[0]).toBe('score');
     });
   }
+
+  it('test map (features on the line): identical trace, with kickers and slides ridden', () => {
+    const ts = traceRun(11, TICKS, 'test');
+    const lu = luauTrace(11, 'test');
+    expect(firstDivergence(ts, lu)).toBeNull();
+    const events = ts.map((r) => String(r[25] ?? '')).join(',');
+    expect(events).toContain('featureEnter');
+    expect(events).toContain('slideDone');
+  });
 });

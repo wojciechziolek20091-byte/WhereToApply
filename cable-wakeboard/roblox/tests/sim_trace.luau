@@ -2,9 +2,8 @@
 -- tests/parity/trace.ts: keep the two in lockstep (same RNG draws in the same
 -- order, same fields in the same order). Appended to the Sim bundle, which
 -- defines `Sim`; prints one tab-separated row per line.
-local GRAB_CHOICES = { "indy", "melon", "mute", "stalefish", "nose", "tail", false, false }
-local SPIN_CHOICES = { -1, 0, 0, 1 }
-local FLIP_CHOICES = { -1, 0, 0, 0, 1 }
+local STEER = { -1, -1, 0, 1, 1 }
+local MODS = { "stalefish", "nose", "tail", false, false, false }
 
 local function fmt(v)
 	if type(v) == "number" then
@@ -21,25 +20,28 @@ local function emit(row)
 	print(table.concat(out, "\t"))
 end
 
-local function traceRun(seed, ticks)
+local function traceRun(seed, ticks, park)
 	local Rng = Sim.Rng
-	local run = Sim.Session.createRun(Sim.Config.makeConfig({ run = { maxFalls = 99 } }))
+	local parkDef = if park == "test" then Sim.ParkLayout.TEST_PARK else Sim.Park.DEFAULT_PARK
+	local run = Sim.Session.createRun(Sim.Config.makeConfig({ run = { maxFalls = 99 } }), parkDef)
+	local straight = if park == "test" then 0.6 else 0
 	local rng = Rng.createRng(seed)
 	local input = Sim.Input.neutralInput()
 	local hold = 0
 	local i = 0
 	while i < ticks and not run.finished do
 		if hold <= 0 then
-			hold = 20 + math.floor(Rng.nextFloat(rng) * 70)
+			hold = 10 + math.floor(Rng.nextFloat(rng) * 50)
 			input = {
-				edge = Rng.nextRange(rng, -1, 1),
-				load = Rng.nextFloat(rng) < 0.4,
-				handleIn = Rng.nextRange(rng, 0.3, 1),
-				spin = SPIN_CHOICES[math.floor(Rng.nextFloat(rng) * 4) + 1],
-				flip = FLIP_CHOICES[math.floor(Rng.nextFloat(rng) * 5) + 1],
-				raley = Rng.nextFloat(rng) < 0.15,
-				grab = GRAB_CHOICES[math.floor(Rng.nextFloat(rng) * 8) + 1] or nil,
-				release = false,
+				steer = if Rng.nextFloat(rng) < straight then 0 else STEER[math.floor(Rng.nextFloat(rng) * 5) + 1],
+				pop = Rng.nextFloat(rng) < 0.35,
+				forward = Rng.nextFloat(rng) < 0.15,
+				back = Rng.nextFloat(rng) < 0.15,
+				pass = Rng.nextFloat(rng) < 0.2,
+				grab = Rng.nextFloat(rng) < 0.2,
+				grabMod = MODS[math.floor(Rng.nextFloat(rng) * 6) + 1] or nil,
+				armsOut = Rng.nextFloat(rng) < 0.05,
+				letGo = false,
 			}
 		end
 		hold -= 1
@@ -64,17 +66,22 @@ local function traceRun(seed, ticks)
 			r.edgeAngle,
 			r.edgeLoad,
 			r.ropeTension,
+			r.tensionSmooth,
 			r.connection,
-			if r.air then r.air.spinAngle else 0,
-			if r.air then r.air.flipAngle else 0,
+			r.handle,
+			if r.air then r.air.rot.spinAngle else 0,
+			if r.air then r.air.rot.flipAngle else 0,
+			if r.air and r.air.trick then r.air.trick.rollAngle else 0,
+			if r.jib then r.jib.boardAngle else 0,
+			if r.jib then r.jib.balance else 0,
 			run.pass,
 			#run.tricks,
-			#run.falls,
+			#run.crashes,
 			run.points,
 			if #types > 0 then table.concat(types, ",") else "-",
 		})
 		for _, rec in run.latest do
-			emit({ "trick", rec.tick, rec.trick.key, rec.trick.name, rec.trick.difficulty })
+			emit({ "trick", rec.tick, rec.trick.key, rec.trick.points, rec.trick.difficulty })
 		end
 		i += 1
 	end
@@ -82,7 +89,7 @@ local function traceRun(seed, ticks)
 		for _, j in run.score.judges do
 			emit({ "judge", j.execution, j.intensity, j.composition, j.total })
 		end
-		emit({ "score", run.score.total, run.endReason or "-" })
+		emit({ "score", run.score.total, run.endReason or "-", run.bestCombo })
 	end
 end
 

@@ -4,12 +4,17 @@
 	A thin, deliberately simple client. All game logic is in
 	ReplicatedStorage.WakeShared.Sim, which is the same code as the web game
 	(checked tick for tick by tests/parity.test.ts). This script only:
-	  - reads the keyboard into an InputFrame (WakeInput, same keys as the web),
-	  - runs Sim.Session.stepRun at a fixed 60 Hz,
+	  - binds WakeInput.ACTIONS with ContextActionService (keyboard and gamepad)
+	    and turns held actions into the sim's raw InputFrame,
+	  - runs Sim.Session.stepRun at a fixed 60 Hz (physics runs on the client),
 	  - builds the park from the user's map (Sim.Park.DEFAULT_PARK: shore, island,
 	    dock, terrace, buildings, roads) plus the sim's cable and features,
-	  - moves the RiderBuilder model, rope and carrier, and a chase camera,
-	  - shows points, passes, falls and the last trick.
+	  - moves the RiderBuilder model (RiderPose), the rope Beam (white to red with
+	    tension) and the carrier, and a chase camera,
+	  - shows the tension meter, LOADED, the trick feed and combo, handle-pass and
+	    balance prompts, and a debug overlay on F3,
+	  - sends TrickLanded / ComboEnded / Crashed to the server, which recomputes
+	    combo scores with Sim.ScoringCombo and keeps leaderstats.
 	Not yet checked in Studio: expect to tune the camera and scale. Rendering is
 	single-player and local; the sim does not use Roblox physics at all.
 ]]
@@ -17,13 +22,14 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
+local ContextActionService = game:GetService("ContextActionService")
 
 local shared = ReplicatedStorage:WaitForChild("WakeShared")
 local Sim = require(shared:WaitForChild("Sim"))
 local RiderBuilder = require(shared:WaitForChild("RiderBuilder"))
 local WakeInput = require(shared:WaitForChild("WakeInput"))
 local SiteGeometry = require(shared:WaitForChild("SiteGeometry"))
+local RiderPose = require(shared:WaitForChild("RiderPose"))
 
 -- Sim metres -> Roblox studs (1 stud = 0.28 m).
 local S = 1 / 0.28
@@ -255,62 +261,127 @@ end
 buildPark(run.sim)
 
 local carrier = part("Carrier", Vector3.new(2, 1, 1), CFrame.new(), Color3.fromRGB(240, 180, 40))
-local rope = part("Rope", Vector3.new(0.08, 0.08, 1), CFrame.new(), Color3.fromRGB(250, 250, 250))
+
+-- Rope: a Beam between the carrier and the handle, white to red as tension rises.
+local ropeFrom = Instance.new("Attachment")
+ropeFrom.Parent = carrier
+local ropeAnchor = part("RopeEnd", Vector3.new(0.2, 0.2, 0.2), CFrame.new(), Color3.new(1, 1, 1))
+ropeAnchor.Transparency = 1
+local ropeTo = Instance.new("Attachment")
+ropeTo.Parent = ropeAnchor
+local beam = Instance.new("Beam")
+beam.Attachment0 = ropeFrom
+beam.Attachment1 = ropeTo
+beam.Width0 = 0.12
+beam.Width1 = 0.12
+beam.FaceCamera = true
+beam.Parent = carrier
+
 local rider = RiderBuilder.build({ palette = "Sheet", name = "Rider" })
 rider.Parent = folder
 
--- Pose: yaw (travel + spin or rail angle), then invert, then edge tilt. As BabylonRenderer.
+-- Seconds since the crash, for the tumble.
+local crashSpin = 0
+
+-- Pose (RiderPose, twin of src/render/pose.ts): yaw, then invert, then lean.
 local function riderCFrame(r, pos)
-	local switchStance = if r.air then r.air.takeoffSwitch else r.switchStance
-	local toes = Sim.Edge.toeSign({ stance = r.stance, switchStance = switchStance })
-	local heading = r.heading + (if r.air then r.air.spinAngle else 0) + (if r.jib then r.jib.boardAngle else 0)
-	local cf = CFrame.new(stud(pos)) * yaw(heading)
-	if r.air and r.air.flipDir ~= 0 then
-		local axis = if r.air.axis == "flip" then Vector3.xAxis else Vector3.new(1, 1, 0).Unit
-		local sign = if r.air.flipDir < 0 then -toes else toes
-		cf *= CFrame.fromAxisAngle(axis, sign * r.air.flipAngle)
+	local pose = RiderPose.of(r)
+	local cf = CFrame.new(stud(pos)) * yaw(pose.yaw)
+	if pose.invert then
+		local a = pose.invert.axis
+		-- Board frame z points to the toes; the model's +Z is the toe side for a regular rider.
+		cf *= CFrame.fromAxisAngle(Vector3.new(a[1], a[2], a[3] * pose.toes).Unit, pose.invert.angle)
 	end
-	local raley = if r.air then r.air.raleyExtension else 0
-	cf *= CFrame.fromAxisAngle(Vector3.xAxis, -toes * (r.edgeAngle + raley * 1.3))
-	if r.mode == "fallen" then
-		cf *= CFrame.Angles(math.pi / 2, 0, 0)
+	cf *= CFrame.fromAxisAngle(Vector3.xAxis, pose.lean)
+	if r.mode == "crashed" then
+		-- Tumble into the water while waiting for the respawn.
+		local t = crashSpin
+		cf *= CFrame.Angles(math.pi / 2 + 0.3 * math.sin(t * 3), t * 2, 0) + Vector3.new(0, -0.4 * S, 0)
 	end
 	-- The web mirrors the model for goofy/switch; Roblox models cannot be mirrored, so it is not.
 	return cf
 end
 
--- HUD.
+-- HUD: tension meter (1000 N mark, LOADED), trick feed and combo, crash reason,
+-- handle-pass prompt, balance meter, debug overlay (F3).
 local gui = Instance.new("ScreenGui")
 gui.Name = "WakeHud"
 gui.ResetOnSpawn = false
-local label = Instance.new("TextLabel")
-label.BackgroundTransparency = 0.4
-label.BackgroundColor3 = Color3.new(0, 0, 0)
-label.TextColor3 = Color3.new(1, 1, 1)
-label.Font = Enum.Font.GothamBold
-label.TextSize = 18
-label.TextXAlignment = Enum.TextXAlignment.Left
-label.Size = UDim2.fromOffset(360, 120)
-label.Position = UDim2.fromOffset(12, 12)
-label.Parent = gui
+local function textLabel(name, size, pos, textSize)
+	local l = Instance.new("TextLabel")
+	l.Name = name
+	l.BackgroundTransparency = 0.35
+	l.BackgroundColor3 = Color3.fromRGB(34, 44, 58)
+	l.TextColor3 = Color3.new(1, 1, 1)
+	l.Font = Enum.Font.GothamBold
+	l.TextSize = textSize or 18
+	l.Size = size
+	l.Position = pos
+	l.Parent = gui
+	return l
+end
+local status = textLabel("Status", UDim2.fromOffset(420, 60), UDim2.fromOffset(12, 12), 16)
+status.TextXAlignment = Enum.TextXAlignment.Left
+local meter = Instance.new("Frame")
+meter.Name = "Tension"
+meter.Size = UDim2.fromOffset(300, 16)
+meter.Position = UDim2.new(0.5, -150, 0, 14)
+meter.BackgroundColor3 = Color3.fromRGB(34, 44, 58)
+meter.Parent = gui
+local meterFill = Instance.new("Frame")
+meterFill.BorderSizePixel = 0
+meterFill.BackgroundColor3 = Color3.fromRGB(143, 212, 60)
+meterFill.Parent = meter
+local meterMark = Instance.new("Frame")
+meterMark.Size = UDim2.new(0, 2, 1, 6)
+meterMark.Position = UDim2.new(1000 / 2000, -1, 0, -3)
+meterMark.BackgroundColor3 = Color3.new(1, 1, 1)
+meterMark.Parent = meter
+local loadedTag = textLabel("Loaded", UDim2.fromOffset(90, 22), UDim2.new(0.5, 160, 0, 10), 14)
+loadedTag.Text = "LOADED"
+loadedTag.BackgroundColor3 = Color3.fromRGB(255, 212, 58)
+loadedTag.TextColor3 = Color3.fromRGB(42, 31, 0)
+local feed = textLabel("Feed", UDim2.new(0, 520, 0, 64), UDim2.new(0.5, -260, 1, -140), 18)
+feed.TextWrapped = true
+local prompt = textLabel("Prompt", UDim2.fromOffset(220, 34), UDim2.new(0.5, -110, 0.55, 0), 18)
+local debugLabel = textLabel("Debug", UDim2.fromOffset(320, 200), UDim2.fromOffset(12, 84), 13)
+debugLabel.TextXAlignment = Enum.TextXAlignment.Left
+debugLabel.TextYAlignment = Enum.TextYAlignment.Top
+debugLabel.Font = Enum.Font.Code
+debugLabel.Visible = false
 gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 
--- Keyboard: held keys by Enum.KeyCode name.
+-- Remote events to the server (it validates and keeps the leaderboard).
+local remotes = ReplicatedStorage:WaitForChild("WakeRemotes")
+local TrickLanded = remotes:WaitForChild("TrickLanded")
+local ComboEnded = remotes:WaitForChild("ComboEnded")
+local Crashed = remotes:WaitForChild("Crashed")
+
+-- Input: ContextActionService actions (WakeInput.ACTIONS), so keys can be rebound and gamepads work.
 local held = {}
-UserInputService.InputBegan:Connect(function(input, processed)
-	if processed or input.UserInputType ~= Enum.UserInputType.Keyboard then
-		return
-	end
-	held[input.KeyCode.Name] = true
-	if input.KeyCode == Enum.KeyCode.Return then
+local analogSteer = 0
+local debugOpen = false
+local function onAction(name, state)
+	held[name] = state == Enum.UserInputState.Begin or state == Enum.UserInputState.Change
+	if name == "Restart" and state == Enum.UserInputState.Begin then
 		run = Sim.Session.createRun()
+	elseif name == "Debug" and state == Enum.UserInputState.Begin then
+		debugOpen = not debugOpen
+		debugLabel.Visible = debugOpen
 	end
-end)
-UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.Keyboard then
-		held[input.KeyCode.Name] = nil
+	return Enum.ContextActionResult.Sink
+end
+for name, keys in WakeInput.ACTIONS do
+	local codes = {}
+	for _, k in keys do
+		table.insert(codes, Enum.KeyCode[k])
 	end
-end)
+	ContextActionService:BindAction(name, onAction, false, table.unpack(codes))
+end
+ContextActionService:BindAction("SteerStick", function(_, _, inputObject)
+	analogSteer = inputObject.Position.X
+	return Enum.ContextActionResult.Pass
+end, false, Enum.KeyCode.Thumbstick1)
 
 local camera = workspace.CurrentCamera
 camera.CameraType = Enum.CameraType.Scriptable
@@ -319,13 +390,46 @@ local stepper = Sim.Stepper.createStepper()
 local prevRider = run.sim.rider.pos
 local prevCarrier = run.sim.carrier.pos
 local lastTrick = ""
+local lastCrash = ""
+local seenCombo = nil
 
 local function tick()
 	prevRider = run.sim.rider.pos
 	prevCarrier = run.sim.carrier.pos
-	Sim.Session.stepRun(run, WakeInput.frame(run.sim.rider, held))
+	Sim.Session.stepRun(run, WakeInput.frame(held, analogSteer))
 	for _, rec in run.latest do
-		lastTrick = `{rec.trick.name}  +{Sim.Session.trickPoints(rec)}`
+		lastTrick = `{rec.trick.name}  +{math.floor(rec.trick.points * rec.trick.quality + 0.5)}`
+		TrickLanded:FireServer({ name = rec.trick.name, points = rec.trick.points, tick = rec.tick })
+	end
+	for _, e in run.sim.events do
+		if e.type == "crash" then
+			lastCrash = e.reason
+			Crashed:FireServer(e.reason)
+		end
+	end
+	local c = run.lastCombo
+	if c and c ~= seenCombo then
+		seenCombo = c
+		if not c.voided then
+			-- Send the combo's tricks so the server can recompute the score with Sim.ScoringCombo.
+			local tricks = {}
+			for k = #run.tricks - c.tricks + 1, #run.tricks do
+				local rec = run.tricks[k]
+				if rec then
+					table.insert(tricks, {
+						name = rec.trick.name,
+						points = rec.trick.points,
+						quality = rec.trick.quality,
+						comboFactor = rec.trick.comboFactor,
+						tokens = rec.trick.tokens,
+						airTime = rec.airTime,
+						spinDegrees = rec.trick.spinDegrees,
+						tick = rec.tick,
+					})
+				end
+			end
+			ComboEnded:FireServer(tricks, c.total)
+		end
 	end
 end
 
@@ -333,6 +437,7 @@ RunService.RenderStepped:Connect(function(dt)
 	local _, alpha = Sim.Stepper.advanceStepper(stepper, math.min(dt, 0.25), tick)
 	local sim = run.sim
 	local r = sim.rider
+	crashSpin = if r.mode == "crashed" then crashSpin + dt else 0
 	local pos = Sim.Vec.lerpVec(prevRider, r.pos, alpha)
 	local cpos = Sim.Vec.lerpVec(prevCarrier, sim.carrier.pos, alpha)
 
@@ -340,21 +445,58 @@ RunService.RenderStepped:Connect(function(dt)
 	rider:PivotTo(cf)
 	carrier.CFrame = CFrame.new(stud(cpos)) * yaw(sim.carrier.heading)
 	local handle = rider:FindFirstChild("RopeAttachment", true)
-	if r.hasHandle and handle then
-		local a, c = stud(cpos), handle.WorldPosition
-		rope.Transparency = 0
-		rope.Size = Vector3.new(0.08, 0.08, (c - a).Magnitude)
-		rope.CFrame = CFrame.lookAt((a + c) / 2, c)
-	else
-		rope.Transparency = 1
+	beam.Enabled = r.handle ~= "dropped" and handle ~= nil
+	if handle then
+		-- Blind: the handle is behind the back, so the rope runs to the heel side.
+		local offset = if r.handle == "behind" then cf.LookVector * 0.6 else Vector3.zero
+		ropeAnchor.CFrame = CFrame.new(handle.WorldPosition + offset)
 	end
+	local tFrac = math.clamp(r.tensionSmooth / 2000, 0, 1)
+	beam.Color = ColorSequence.new(Color3.new(1, 1, 1):Lerp(Color3.fromRGB(230, 40, 30), tFrac))
 
-	-- Chase camera: behind and above the rider along the travel heading.
+	-- Chase camera: behind and above the rider along the travel heading, FOV widening with speed.
+	local speed = Sim.Vec.horizontalLength(r.vel)
 	local target = stud(pos) + Vector3.new(0, 1.2 * S, 0)
 	local back = Vector3.new(math.cos(r.heading), 0, math.sin(r.heading)) * (-7 * S)
 	camera.CFrame = camera.CFrame:Lerp(CFrame.lookAt(target + back + Vector3.new(0, 3 * S, 0), target), math.min(1, dt * 6))
+	camera.FieldOfView = 70 + math.clamp((speed - 8) * 1.5, 0, 12)
 
-	local speed = Sim.Vec.horizontalLength(r.vel) * 3.6
-	local status = if run.finished then `Run over ({run.endReason}): score {run.score and run.score.total or 0}. Enter to restart` else ""
-	label.Text = `  {run.points} pts   pass {run.pass + 1}/{sim.cfg.run.passesPerRun}   falls {#run.falls}/{sim.cfg.run.maxFalls}\n  {math.floor(speed)} km/h   {r.mode}\n  {lastTrick}\n  {status}`
+	-- HUD.
+	meterFill.Size = UDim2.new(tFrac, 0, 1, 0)
+	loadedTag.Visible = r.mode == "waterTrickLoad"
+	local live = Sim.Session.liveCombo(run)
+	local total = run.points + (if live then live.total else 0)
+	local statusText = if run.finished then `Run over ({run.endReason}): judges {run.score and run.score.total or 0}. Enter to restart` else ""
+	status.Text = `  {total} pts   best combo {run.bestCombo}   pass {run.pass + 1}/{sim.cfg.run.passesPerRun}   crashes {#run.crashes}/{sim.cfg.run.maxFalls}\n  {math.floor(speed * 3.6)} km/h   {r.mode}   {statusText}`
+	if run.combo and live then
+		feed.Text = `{Sim.ScoringCombo.comboName(run.combo.entries)}   x{string.format("%.2f", live.multiplier)} = {live.total}`
+	elseif lastCrash ~= "" and r.mode == "crashed" then
+		feed.Text = `Crash: {lastCrash}`
+	else
+		feed.Text = lastTrick
+	end
+	local rot = if r.air then r.air.rot elseif r.jib then r.jib.rot else nil
+	if rot and rot.spinSide and r.handle == "inFront" and rot.passTimer == 0 then
+		local w = Sim.Handle.passWindowOf(rot, { rate = sim.cfg.spin.rate, inAir = r.air ~= nil })
+		local p = Sim.Handle.handleProgress(rot)
+		prompt.Visible = w ~= nil and p > w.zone.start - 0.6
+		prompt.Text = if w and math.abs(p - w.centre) <= w.half then "PASS NOW (Q)" else "Handle pass: Q"
+	elseif r.jib and sim.cfg.feature.balanceEnabled then
+		prompt.Visible = true
+		local cells = math.floor((r.jib.balance + 1) * 5 + 0.5)
+		prompt.Text = "Balance " .. string.rep("-", math.clamp(cells, 0, 10)) .. "|" .. string.rep("-", math.clamp(10 - cells, 0, 10))
+	else
+		prompt.Visible = false
+	end
+	if debugOpen then
+		debugLabel.Text = table.concat({
+			`State     {r.mode}`,
+			`Tension   {math.floor(r.ropeTension)} / {math.floor(r.tensionSmooth)} N`,
+			`Edge      {string.format("%.2f", Sim.Edge.edgeNorm(r, sim.cfg.edge))}`,
+			`Spin      {if rot then math.floor(math.deg(rot.spinAngle)) else "-"}`,
+			`Flip      {if rot then math.floor(math.deg(rot.flipAngle)) else "-"}`,
+			`Handle    {r.handle}`,
+			`Last crash {r.lastCrash or "none"}`,
+		}, "\n")
+	end
 end)

@@ -20,6 +20,8 @@ export interface CableConfig {
   cableHeight: number;
   /** Constant carrier speed along the cable (m/s). 8.3 m/s is about 30 km/h. */
   carrierSpeed: number;
+  /** 'loop': carriers lap the towers. 'twoTower': one carrier shuttles between the first two towers. */
+  mode: 'loop' | 'twoTower';
 }
 
 export interface RopeConfig {
@@ -29,12 +31,14 @@ export interface RopeConfig {
   stiffness: number;
   /** Damping while taut (N per m/s of stretch rate). */
   damping: number;
-  /** Tension above which the handle is ripped out of the rider's hands (N). */
-  gripLimit: number;
-  /** How long tension can exceed gripLimit before the handle goes (s). */
-  gripTime: number;
   /** Stretch rate (m/s) above which going taut counts as a rope snap. */
   snapRate: number;
+  /** Tension cap (N). */
+  maxTension: number;
+  /** A snap back to taut above this tension while off-balance yanks the rider over (N). */
+  yankCrashImpulse: number;
+  /** Time constant of the smoothed tension used by the HUD and trick logic (s). */
+  smoothTau: number;
 }
 
 export interface RiderConfig {
@@ -100,63 +104,148 @@ export interface PostureConfig {
   standRate: number;
 }
 
-export interface PopConfig {
-  /** Pop from leg extension alone (m/s). */
-  base: number;
-  /** Extra pop at reference edge load (m/s). */
-  edgeGain: number;
-  edgeLoadRef: number;
-  /** Extra pop at reference tension (m/s). */
-  tensionGain: number;
-  tensionRef: number;
-  /** Upper bound on the pop impulse (m/s). */
-  maxPop: number;
-  /** Time over which the legs extend after release (s). */
-  extendTime: number;
-  /** Kicker timing: ideal release this long before leaving the lip (s). */
-  lipLead: number;
-  /** Kicker timing window half-width (s). Outside it the pop is absorbed. */
-  lipWindow: number;
-  /** Flat water: how long the peak edge load is remembered (s). */
-  peakMemory: number;
-  /** Minimum edge load for a flat-water pop to count as loaded (N). */
-  flatMinLoad: number;
+/** Degrees to radians, for writing angles the way the design spec states them. */
+export const deg = (d: number): number => (d * Math.PI) / 180;
+
+/** Ollie: charge with Space held, pop on release. */
+export interface OllieConfig {
+  /** Time to full charge (s). */
+  chargeTime: number;
+  /** Vertical speed at zero and full charge (m/s). */
+  minV: number;
+  maxV: number;
+  /** Clearance the board needs over an obstacle's main surface when ollied onto it (m). */
+  clearance: number;
 }
 
+/** Kicker lip pop. */
+export interface KickerConfig {
+  /** Releasing the pop this long or less before the lip counts as a lip pop (s). */
+  lipPopWindow: number;
+  /** Extra vertical speed from a lip pop, as a fraction of the launch's vertical speed. */
+  lipPopBonus: number;
+}
+
+/** Safety (sloped entry) of a box or rail. */
+export interface SafetyConfig {
+  /** The pop window is the last fraction of the safety's length... */
+  popWindowFraction: number;
+  /** ...but at least this long (m). */
+  popWindowMinMetres: number;
+  /** Centre fraction of the window that counts as a perfect pop-on. */
+  perfectFraction: number;
+  /** Combo multiplier for a sketchy pop-on (early pop onto a flush main). */
+  sketchyMultiplier: number;
+}
+
+/** Spins (around the vertical axis), from A/D. */
+export interface SpinConfig {
+  /** Full spin rate (rad/s). */
+  rate: number;
+  /** Time to reach full rate (s). */
+  accelTime: number;
+  /** After release, keep rotating to the next half turn only if it is this close (rad). */
+  maxCarry: number;
+}
+
+/** Flips (around the board's long axis), from W / S in the air. */
+export interface FlipConfig {
+  rate: number;
+  /** After release, keep rotating to the next whole turn only if it is this close (rad). */
+  maxCarry: number;
+}
+
+/** Handle-pass windows (s), by where the rotation happens. */
+export interface HandlePassConfig {
+  featureWindow: number;
+  kickerWindow: number;
+  obstacleAirWindow: number;
+  waterTrickWindow: number;
+  /** Ollies from flat water. */
+  flatAirWindow: number;
+  /** How long a pass takes (s). */
+  passTime: number;
+}
+
+/** Riding blind: handle behind the back. */
+export interface BlindConfig {
+  /** Seconds before riding blind catches an edge. */
+  maxRideTime: number;
+  /** Steering authority while blind. */
+  steerFactor: number;
+  /** Largest edge (fraction of max) while blind. */
+  maxEdge: number;
+  /** Tension cap while blind (N). */
+  maxTension: number;
+  /** Time to spin back out of blind on the water (s). */
+  spinOutTime: number;
+}
+
+/** Tension-based water tricks: raley, backroll, frontroll, S-bend. */
+export interface WaterTrickConfig {
+  /** Smoothed tension that arms a water trick (N). */
+  tensionThreshold: number;
+  /** Disarm below threshold minus this (N). */
+  hysteresis: number;
+  /** Edge needed to arm (fraction of max). */
+  minEdge: number;
+  /** Travel at least this far off the rope direction counts as sideways (rad). */
+  sidewaysAngle: number;
+  /** Release within this of the tension peak for full timing (s). */
+  peakWindow: number;
+  /** How far back the tension history looks for the peak (s). */
+  historyTime: number;
+  /** Height at 1000 N and perfect timing (m), and the cap (m). */
+  baseHeight: number;
+  maxHeight: number;
+  /** Rolls below this height cannot finish (m). */
+  minRollHeight: number;
+  /** Raley extension still showing at touchdown that crashes (rad of body angle). */
+  maxLandingExtension: number;
+  /** Raley phases as fractions of the trick's airtime. */
+  popPhaseEnd: number;
+  extensionEnd: number;
+  swingDownEnd: number;
+  /** While spinning, grabbing or S-bending, the swing-down runs this much slower. */
+  heldSwingFactor: number;
+}
+
+/** S-bend: A/D in this part of the raley's airtime (fractions). */
+export interface SBendConfig {
+  windowStart: number;
+  windowEnd: number;
+}
+
+export interface GrabConfig {
+  /** After E, a modifier key within this time picks the grab (s). */
+  chordWindow: number;
+}
+
+/** Air flight. */
 export interface AirConfig {
   /** Quadratic air drag (N s^2/m^2). */
   dragCoef: number;
-  /** Spin rate with the handle in (rad/s). */
-  spinRate: number;
-  /** Invert rate with the handle in (rad/s). */
-  invertRate: number;
-  /** Rotation rate multiplier with the handle fully out. */
-  handleOutRotation: number;
-  /** Fraction of upward velocity lost when a spin starts before the peak. */
-  earlySpinPenalty: number;
-  /** Cut angle at takeoff above which an invert goes on the roll axis (rad). */
-  rollAxisCut: number;
-  /** Grab must be held this long to count (s). */
-  minGrabTime: number;
-  /** Raley body swing rate (1/s) out and back. */
-  raleyRate: number;
-  /** Ballistic time to stay airborne before tricks count (s). */
+  /** Shortest air that can count as a trick (s). */
   minAirTime: number;
 }
 
 export interface LandingConfig {
-  /** Board-to-travel misalignment that catches an edge (rad, mod PI). */
+  /** Board heading this far from forward or switch crashes (rad). */
   maxYawError: number;
-  /** Edge angle on touchdown that catches an edge (fraction of max). */
-  maxEdgeFraction: number;
-  /** Rotation residual that is over or under rotation (rad). */
+  /** Flip residual from a whole turn that crashes (rad). */
   maxFlipError: number;
+  /** Both errors under this is a clean landing (rad). */
+  cleanThreshold: number;
+  /** Bonus for a clean landing. */
+  cleanBonus: number;
+  /** DECISION: a grab still held on touchdown crashes (else: sketchy, combo multiplier halved). */
+  grabHeldCrashes: boolean;
   /** Normal impact speed a straight-legged rider can take (m/s). */
   stiffImpact: number;
   /** Extra normal impact speed per unit of leg compression (m/s). */
   absorbImpact: number;
-  /** Time spent fallen before respawn (s). */
-  fallRecovery: number;
+  /** Short grace state after touchdown (s). */
+  graceTime: number;
 }
 
 export interface FeatureConfig {
@@ -168,27 +257,45 @@ export interface FeatureConfig {
   mountAngle: number;
   /** Below this speed up a ramp the rider stalls and falls (m/s). */
   stallSpeed: number;
-}
-
-export interface JibConfig {
+  /** Slide friction on a box or rail main. */
   friction: number;
-  /** Board rotation rate on a rail toward 50-50 or boardslide (rad/s). */
-  boardRotateRate: number;
-  /** Sideways damping on a rail (1/s). */
-  lateralDamping: number;
-  /** Rope sideways pull that tips balance one unit per second (N). */
+  /** Time for each 90-degree board rotation on a feature (s). */
+  rotateTimePer90: number;
+  /** A/D held longer than this rotates the board; shorter is a balance tap (s). */
+  tapTime: number;
+  /** DECISION: balance can be switched off for early testing. */
+  balanceEnabled: boolean;
+  /** Balance drift rate on boxes and rails (per second at full noise). */
+  balanceDriftBox: number;
+  balanceDriftRail: number;
+  /** Noise frequency of the drift (1/s). */
+  balanceNoiseRate: number;
+  /** Balance moved by one tap. */
+  tapStrength: number;
+  /** The rope's sideways pull tips the balance: pull (N) for one unit per second. */
   ropeTip: number;
-  /** Balance drift per second per unit of lateral offset. */
-  drift: number;
-  /** Balance correction per second at full input. */
-  correction: number;
-  /** Balance kick from board angle off the two stable positions. */
-  angleDrift: number;
+  /** Sideways damping on a slide (1/s). */
+  lateralDamping: number;
 }
 
-export interface RaleyConfig {
-  minEdgeLoad: number;
-  minTension: number;
+export interface ComboConfig {
+  /** Riding time after a landing in which the next trick still links (s). */
+  linkWindow: number;
+  /** Points multiplier for repeating a trick name in one combo. */
+  repeatPenalty: number;
+  /** Combo multiplier per extra trick, and its cap. */
+  perTrick: number;
+  maxMultiplier: number;
+}
+
+export interface CrashConfig {
+  /** Time from a crash to the respawn (s). */
+  respawnDelay: number;
+}
+
+export interface DebugConfig {
+  /** Log state transitions as events and assert illegal ones. */
+  enabled: boolean;
 }
 
 export interface RunConfig {
@@ -215,14 +322,24 @@ export interface SimConfig {
   hydro: HydroConfig;
   edge: EdgeConfig;
   posture: PostureConfig;
-  pop: PopConfig;
+  ollie: OllieConfig;
+  kicker: KickerConfig;
+  safety: SafetyConfig;
+  spin: SpinConfig;
+  flip: FlipConfig;
+  handlePass: HandlePassConfig;
+  blind: BlindConfig;
+  waterTrick: WaterTrickConfig;
+  sBend: SBendConfig;
+  grab: GrabConfig;
   air: AirConfig;
   landing: LandingConfig;
   feature: FeatureConfig;
-  jib: JibConfig;
-  raley: RaleyConfig;
+  combo: ComboConfig;
+  crash: CrashConfig;
   run: RunConfig;
   scoring: ScoringConfig;
+  debug: DebugConfig;
 }
 
 export const DEFAULT_CONFIG: SimConfig = {
@@ -239,14 +356,16 @@ export const DEFAULT_CONFIG: SimConfig = {
     cornerRadius: 12,
     cableHeight: 9,
     carrierSpeed: 8.3,
+    mode: 'loop',
   },
   rope: {
     length: 18,
-    stiffness: 8000,
-    damping: 900,
-    gripLimit: 3200,
-    gripTime: 0.3,
+    stiffness: 4000,
+    damping: 600,
     snapRate: 2.5,
+    maxTension: 2500,
+    yankCrashImpulse: 1800,
+    smoothTau: 0.08,
   },
   rider: { mass: 80, hipHeight: 1.0, stance: 'regular' },
   hydro: {
@@ -262,7 +381,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     maxEdgeAngle: 0.7,
     edgeBuildRate: 1.0,
     edgeReleaseRate: 3.0,
-    maxCutAngle: 0.9,
+    maxCutAngle: 0.82,
     yawResponse: 3.5,
     carveCurvature: 0.12,
     maxYawRate: 2.5,
@@ -280,49 +399,67 @@ export const DEFAULT_CONFIG: SimConfig = {
     compressRate: 3.0,
     standRate: 4.0,
   },
-  pop: {
-    base: 1.0,
-    edgeGain: 2.2,
-    edgeLoadRef: 1500,
-    tensionGain: 1.6,
-    tensionRef: 1500,
-    maxPop: 4.5,
-    extendTime: 0.15,
-    lipLead: 0.06,
-    lipWindow: 0.25,
-    peakMemory: 0.6,
-    flatMinLoad: 400,
+  ollie: { chargeTime: 0.5, minV: 3.5, maxV: 6.5, clearance: 0.1 },
+  kicker: { lipPopWindow: 0.12, lipPopBonus: 0.2 },
+  safety: { popWindowFraction: 0.08, popWindowMinMetres: 1.0, perfectFraction: 0.4, sketchyMultiplier: 0.8 },
+  spin: { rate: deg(540), accelTime: 0.1, maxCarry: deg(90) },
+  flip: { rate: deg(400), maxCarry: deg(60) },
+  handlePass: {
+    featureWindow: 0.35,
+    kickerWindow: 0.18,
+    obstacleAirWindow: 0.25,
+    waterTrickWindow: 0.25,
+    flatAirWindow: 0.25,
+    passTime: 0.15,
   },
-  air: {
-    dragCoef: 0.4,
-    spinRate: 8.0,
-    invertRate: 7.0,
-    handleOutRotation: 0.6,
-    earlySpinPenalty: 0.35,
-    rollAxisCut: 0.45,
-    minGrabTime: 0.15,
-    raleyRate: 3.0,
-    minAirTime: 0.25,
+  blind: { maxRideTime: 3.0, steerFactor: 0.4, maxEdge: 0.5, maxTension: 900, spinOutTime: 0.4 },
+  waterTrick: {
+    tensionThreshold: 1000,
+    hysteresis: 100,
+    minEdge: 0.7,
+    sidewaysAngle: deg(35),
+    peakWindow: 0.15,
+    historyTime: 0.4,
+    baseHeight: 1.8,
+    maxHeight: 4.5,
+    minRollHeight: 1.4,
+    maxLandingExtension: deg(30),
+    popPhaseEnd: 0.15,
+    extensionEnd: 0.55,
+    swingDownEnd: 0.85,
+    heldSwingFactor: 0.5,
   },
+  sBend: { windowStart: 0.25, windowEnd: 0.45 },
+  grab: { chordWindow: 0.08 },
+  air: { dragCoef: 0.4, minAirTime: 0.25 },
   landing: {
-    maxYawError: 0.5,
-    maxEdgeFraction: 0.75,
-    maxFlipError: 0.7,
-    stiffImpact: 6.5,
-    absorbImpact: 4.0,
-    fallRecovery: 2.0,
+    maxYawError: deg(35),
+    maxFlipError: deg(40),
+    cleanThreshold: deg(12),
+    cleanBonus: 0.1,
+    grabHeldCrashes: true,
+    stiffImpact: 9.0,
+    absorbImpact: 2.0,
+    graceTime: 0.15,
   },
-  feature: { rampFriction: 0.06, mountHeight: 0.25, mountAngle: 1.0, stallSpeed: 0.8 },
-  jib: {
+  feature: {
+    rampFriction: 0.06,
+    mountHeight: 0.25,
+    mountAngle: 1.0,
+    stallSpeed: 0.8,
     friction: 0.08,
-    boardRotateRate: 7,
+    rotateTimePer90: 0.18,
+    tapTime: 0.15,
+    balanceEnabled: true,
+    balanceDriftBox: 0.9,
+    balanceDriftRail: 1.6,
+    balanceNoiseRate: 1.3,
+    tapStrength: 0.35,
+    ropeTip: 1400,
     lateralDamping: 6,
-    ropeTip: 700,
-    drift: 1.6,
-    correction: 2.5,
-    angleDrift: 1.2,
   },
-  raley: { minEdgeLoad: 1400, minTension: 1200 },
+  combo: { linkWindow: 2.0, repeatPenalty: 0.5, perTrick: 0.25, maxMultiplier: 4 },
+  crash: { respawnDelay: 2.5 },
   run: { passesPerRun: 2, maxFalls: 2, deadWaterTime: 8, respawnSlack: 0.98 },
   scoring: {
     judges: 3,
@@ -330,6 +467,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     judgeBias: 0.4,
     seed: 20261013,
   },
+  debug: { enabled: true },
 };
 
 /** Deep-ish copy with overrides per section, for tests and variants. */

@@ -1,18 +1,37 @@
 import { lapsAt } from './cable';
 import type { SimConfig } from './config';
 import { DEFAULT_CONFIG, DT } from './config';
+import { onWater } from './fsm';
 import type { InputFrame } from './input';
 import { distance, horizontal } from './math/vec';
 import { DEFAULT_PARK, type ParkDef } from './park';
-import { computeRunMetrics, type FallRecord, type TrickRecord } from './scoring/metrics';
+import { type ComboEntry, comboName, scoreCombo } from './scoring/combo';
+import { computeRunMetrics, type CrashRecord, type TrickRecord } from './scoring/metrics';
 import { type RunScore, scoreRun } from './scoring/judges';
 import { stepSim } from './step';
-import { classifyAir, classifyJib } from './tricks/classify';
+import { classifyAir, classifySlide } from './tricks/classify';
 import { createSim, type SimState, spawnRiderBehindCarrier } from './world';
+
+/** The combo being built: tricks chained within the link window. */
+export interface ComboState {
+  entries: ComboEntry[];
+  /** Riding time since the last landing (s); the combo banks when it passes `combo.linkWindow`. */
+  sinceLanding: number;
+}
+
+/** The last combo that ended, for the HUD feed. */
+export interface ComboResult {
+  name: string;
+  total: number;
+  multiplier: number;
+  tricks: number;
+  voided: boolean;
+  tick: number;
+}
 
 /**
  * A competition run: `passesPerRun` laps of the cable, ended early by
- * `maxFalls` falls. Owns the sim, the trick log and the final score.
+ * `maxFalls` crashes. Owns the sim, the trick log, combos and the final score.
  */
 export interface RunState {
   sim: SimState;
@@ -20,26 +39,21 @@ export interface RunState {
   startS: number;
   pass: number;
   tricks: TrickRecord[];
-  falls: FallRecord[];
+  crashes: CrashRecord[];
   /** Seconds since the last trick or feature. */
   sinceAction: number;
   deadWater: number;
   finished: boolean;
   endReason: 'passes' | 'falls' | null;
+  /** Judges' panel, at the end of the run. */
   score: RunScore | null;
   /** Tricks landed on the most recent tick, for the HUD. */
   latest: TrickRecord[];
-  /** Running points total shown in the HUD (not the judges' score). */
+  /** Banked combo points (the arcade score). */
   points: number;
-}
-
-/**
- * Arcade points for one trick, for the HUD: difficulty scaled by how clean
- * the landing was and how big the air was. Judges score the run separately.
- */
-export function trickPoints(rec: Pick<TrickRecord, 'trick' | 'landingQuality' | 'height' | 'airTime'>): number {
-  const size = 1 + Math.min(rec.height, 4) / 4 + Math.min(rec.airTime, 2) / 4;
-  return Math.max(5, Math.round(10 * rec.trick.difficulty * (0.5 + 0.5 * rec.landingQuality) * size));
+  combo: ComboState | null;
+  bestCombo: number;
+  lastCombo: ComboResult | null;
 }
 
 export function createRun(cfg: SimConfig = DEFAULT_CONFIG, park: ParkDef = DEFAULT_PARK): RunState {
@@ -49,7 +63,7 @@ export function createRun(cfg: SimConfig = DEFAULT_CONFIG, park: ParkDef = DEFAU
     startS: sim.carrier.s,
     pass: 0,
     tricks: [],
-    falls: [],
+    crashes: [],
     sinceAction: 0,
     deadWater: 0,
     finished: false,
@@ -57,20 +71,50 @@ export function createRun(cfg: SimConfig = DEFAULT_CONFIG, park: ParkDef = DEFAU
     score: null,
     latest: [],
     points: 0,
+    combo: null,
+    bestCombo: 0,
+    lastCombo: null,
   };
 }
 
+/** The combo's live score, for the HUD. */
+export const liveCombo = (run: RunState) => (run.combo ? scoreCombo(run.combo.entries, run.sim.cfg.combo) : null);
+
+function endCombo(run: RunState, voided: boolean): void {
+  const c = run.combo;
+  if (!c) return;
+  const score = scoreCombo(c.entries, run.sim.cfg.combo);
+  run.lastCombo = {
+    name: comboName(c.entries),
+    total: voided ? 0 : score.total,
+    multiplier: score.multiplier,
+    tricks: c.entries.length,
+    voided,
+    tick: run.sim.tick,
+  };
+  if (!voided) {
+    run.points += score.total;
+    run.bestCombo = Math.max(run.bestCombo, score.total);
+  }
+  run.combo = null;
+}
+
 function finish(run: RunState, reason: 'passes' | 'falls'): void {
+  endCombo(run, false);
   run.finished = true;
   run.endReason = reason;
-  const metrics = computeRunMetrics(
-    run.tricks,
-    run.falls,
-    run.sim.features.length,
-    run.deadWater,
-    run.sim.time,
-  );
+  const metrics = computeRunMetrics(run.tricks, run.crashes, run.sim.features.length, run.deadWater, run.sim.time);
   run.score = scoreRun(metrics, run.sim.cfg.scoring);
+}
+
+function addTrick(run: RunState, rec: TrickRecord): void {
+  run.tricks.push(rec);
+  run.latest.push(rec);
+  const t = rec.trick;
+  if (!run.combo) run.combo = { entries: [], sinceLanding: 0 };
+  run.combo.entries.push({ name: t.name, points: t.points, quality: t.quality, comboFactor: t.comboFactor });
+  run.combo.sinceLanding = 0;
+  run.sinceAction = 0;
 }
 
 /** One fixed tick of the run. Does nothing once finished. */
@@ -82,9 +126,9 @@ export function stepRun(run: RunState, input: InputFrame): void {
 
   for (const e of s.events) {
     if (e.type === 'landed') {
-      const trick = classifyAir(e.air, e.landing, s.rider.stance, s.cfg.air.minAirTime);
+      const trick = classifyAir(e.air, e.landing, s.cfg);
       if (!trick) continue;
-      const rec: TrickRecord = {
+      addTrick(run, {
         tick: e.tick,
         pass: run.pass,
         trick,
@@ -93,47 +137,46 @@ export function stepRun(run: RunState, input: InputFrame): void {
         distance: distance(horizontal(e.air.takeoffPos), horizontal(s.rider.pos)),
         landingQuality: e.landing.quality,
         popQuality: e.air.popQuality,
-        spunBeforePeak: e.air.spunBeforePeak,
+        clean: e.landing.clean,
         featureId: e.air.featureId,
-      };
-      run.tricks.push(rec);
-      run.latest.push(rec);
-      run.points += trickPoints(rec);
-      run.sinceAction = 0;
-    } else if (e.type === 'jibDone' && s.rider.mode !== 'fallen') {
-      const trick = classifyJib(e.time, e.alignedTime, e.crossedTime);
+      });
+    } else if (e.type === 'slideDone') {
+      const trick = classifySlide(e.jib, s.cfg);
       if (!trick) continue;
-      const rec: TrickRecord = {
+      addTrick(run, {
         tick: e.tick,
         pass: run.pass,
         trick,
         airTime: 0,
         height: 0,
         distance: 0,
-        landingQuality: 1 - Math.min(1, Math.abs(s.rider.jib?.balance ?? 0)),
-        popQuality: 0,
-        spunBeforePeak: false,
-        featureId: e.featureId,
-      };
-      run.tricks.push(rec);
-      run.latest.push(rec);
-      run.points += trickPoints(rec);
+        landingQuality: 1 - Math.min(1, Math.abs(e.jib.balance)),
+        popQuality: e.jib.entry === 'popOn' ? 1 : 0,
+        clean: !e.jib.sketchy,
+        featureId: e.jib.featureId,
+      });
+    } else if (e.type === 'featureEnter' || e.type === 'takeoff') {
       run.sinceAction = 0;
-    } else if (e.type === 'featureEnter') {
-      run.sinceAction = 0;
-    } else if (e.type === 'fall') {
-      run.falls.push({ tick: e.tick, pass: run.pass, kind: e.kind });
+    } else if (e.type === 'crash') {
+      run.crashes.push({ tick: e.tick, pass: run.pass, reason: e.reason });
+      endCombo(run, true);
     }
+  }
+
+  // The link window only runs while riding on the water.
+  if (run.combo && onWater(s.rider.mode)) {
+    run.combo.sinceLanding += DT;
+    if (run.combo.sinceLanding > s.cfg.combo.linkWindow) endCombo(run, false);
   }
 
   run.sinceAction += DT;
   if (run.sinceAction > s.cfg.run.deadWaterTime) run.deadWater += DT;
 
-  if (run.falls.length >= s.cfg.run.maxFalls) {
+  if (run.crashes.length >= s.cfg.run.maxFalls) {
     finish(run, 'falls');
     return;
   }
-  if (s.rider.mode === 'fallen' && s.rider.fallTimer <= 0) {
+  if (s.rider.mode === 'crashed' && s.rider.crashTimer <= 0) {
     s.rider = spawnRiderBehindCarrier(s);
     run.sinceAction = 0;
   }

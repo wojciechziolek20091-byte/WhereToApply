@@ -8,14 +8,12 @@ import { createRun, stepRun } from '../src/sim/session';
 function script(ticks: number, seed: number): InputFrame[] {
   const rng = createRng(seed);
   const out: InputFrame[] = [];
-  let edge = 0;
-  let load = false;
-  let spin = 0;
+  let steer = 0;
+  let pop = false;
   for (let i = 0; i < ticks; i++) {
-    if (i % 45 === 0) edge = Math.round(nextFloat(rng) * 2 - 1);
-    if (i % 30 === 0) load = nextFloat(rng) < 0.3;
-    if (i % 20 === 0) spin = nextFloat(rng) < 0.2 ? 1 : 0;
-    out.push({ ...neutralInput(), edge, load, spin, grab: nextFloat(rng) < 0.05 ? 'indy' : null });
+    if (i % 45 === 0) steer = Math.round(nextFloat(rng) * 2 - 1);
+    if (i % 30 === 0) pop = nextFloat(rng) < 0.3;
+    out.push({ ...neutralInput(), steer, pop, pass: nextFloat(rng) < 0.03, grab: nextFloat(rng) < 0.05, back: nextFloat(rng) < 0.1 });
   }
   return out;
 }
@@ -33,7 +31,7 @@ describe('determinism', () => {
     }
     expect(hashSim(a.sim)).toBe(hashSim(b.sim));
     expect(a.tricks.map((t) => t.trick.key)).toEqual(b.tricks.map((t) => t.trick.key));
-    expect(a.falls).toEqual(b.falls);
+    expect(a.crashes).toEqual(b.crashes);
   });
 
   it('state is plain data: a structured clone continues identically', () => {
@@ -52,7 +50,7 @@ describe('determinism', () => {
     const b = createRun(DEFAULT_CONFIG);
     for (let i = 0; i < 600; i++) {
       stepRun(a, inputs[i]!);
-      stepRun(b, { ...inputs[i]!, edge: 1 });
+      stepRun(b, { ...inputs[i]!, steer: 1 });
     }
     expect(hashSim(a.sim)).not.toBe(hashSim(b.sim));
   });

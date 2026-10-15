@@ -55,6 +55,15 @@ purpose-built park. Assumptions made to fill the gaps:
   (`roblox/src/shared/Sim`), deterministic math (`detmath`) in both so they
   stay bit-identical, a parity test that plays three full scripted runs through
   both and compares every tick, and a thin Roblox client (`WakeClient`) for Studio.
+- [x] **M14 Cable wakeboarding mechanics spec.** The user's spec, milestones
+  1-10, in the shared sim (both languages, parity-checked): 10-state rider FSM,
+  raw input with taps and grab chords, rope cap/smoothing/yank, LOADED water
+  tricks (raley, backroll, frontroll, S-bend, Mobe), ollie charge, spin/flip
+  tracker with carry, handle passes and riding blind, grabs, lip pop, safety pop
+  windows (flush/gap), slides with 90-degree steps and balance, crash reasons,
+  trick tokens and names, combos, HUD meters and F3 debug, 2-tower test cable,
+  spec test map, Roblox ContextActionService client, Beam rope, RemoteEvents,
+  server validation and leaderstats. Tuning table in docs/TUNING.md.
 - [x] **M13 Reversed cable.** Counter-clockwise travel; every feature keeps its
   spot on the water, turned to face the new direction.
 - [x] **M12 Sketch layout.** The cable layout follows the user's sketch
@@ -78,6 +87,13 @@ purpose-built park. Assumptions made to fill the gaps:
 - Water is static faceted geometry; no waves or wake trail.
 - The sim does not know about land: the shoreline and island are placed out of
   reach instead (tests/site.test.ts). Riding into the bank is not a fall yet.
+- No Roblox Studio session was available: the Roblox client and server scripts
+  compile and the shared Sim and ComboValidator are tested in the luau CLI, but
+  the Studio-only parts (ContextActionService, Beam, GUI, RemoteEvents,
+  leaderstats) have not been run in Studio. There is no ragdoll yet (the
+  RiderBuilder model is welded primitives): a crash tumbles the model.
+- Multiplayer: the rider is a local, client-side model; other players do not
+  see it yet.
 - The Roblox client (`roblox/src/client`) has not been run in Studio yet: the
   sim under it is verified, the camera, scale and HUD are a first pass. It does
   not mirror the rider for goofy/switch.

@@ -39,11 +39,11 @@ export const LAKESIDE_PARK: ParkDef = {
     { kind: 'kicker', id: 'k5', name: 'Inside kicker', s: 123, offset: -9, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.55 },
     { kind: 'kicker', id: 'k3', name: 'Small kicker', s: 167, offset: 8, length: 3.5, width: 2.8, height: 0.8, lipAngle: 0.45 },
     { kind: 'kicker', id: 'k2', name: 'Big kicker', s: 215, offset: 4, length: 6, width: 4.5, height: 1.8, lipAngle: 0.65 },
-    { kind: 'slider', id: 'r1', name: 'Kick rail', style: 'rail', s: 280, offset: 7, length: 8, width: 0.12, height: 0.7, entryLength: 3 },
-    { kind: 'slider', id: 't3', name: 'Roof pipe', style: 'tube', s: 362, offset: 8, length: 11, width: 0.4, height: 0.5, entryLength: 2.5 },
-    { kind: 'slider', id: 'b1', name: 'West box', style: 'box', s: 439.5, offset: 7, length: 12, width: 1, height: 0.5, entryLength: 3 },
-    { kind: 'slider', id: 't2', name: 'Long pipe', style: 'tube', s: 508, offset: -10, length: 12, width: 0.4, height: 0.55, entryLength: 2.5 },
-    { kind: 'slider', id: 't1', name: 'Inside pipe', style: 'tube', s: 543, offset: -5, length: 10, width: 0.4, height: 0.5, entryLength: 2.5 },
+    { kind: 'slider', id: 'r1', name: 'Kick rail', style: 'rail', s: 280, offset: 7, length: 8, width: 0.12, height: 0.7, entryLength: 3, safety: 'gap' },
+    { kind: 'slider', id: 't3', name: 'Roof pipe', style: 'tube', s: 362, offset: 8, length: 11, width: 0.4, height: 0.5, entryLength: 2.5, safety: 'flush' },
+    { kind: 'slider', id: 'b1', name: 'West box', style: 'box', s: 439.5, offset: 7, length: 12, width: 1, height: 0.5, entryLength: 3, safety: 'flush' },
+    { kind: 'slider', id: 't2', name: 'Long pipe', style: 'tube', s: 508, offset: -10, length: 12, width: 0.4, height: 0.55, entryLength: 2.5, safety: 'gap' },
+    { kind: 'slider', id: 't1', name: 'Inside pipe', style: 'tube', s: 543, offset: -5, length: 10, width: 0.4, height: 0.5, entryLength: 2.5, safety: 'flush' },
   ],
   site: {
     lake: [
@@ -176,4 +176,22 @@ export const LAKESIDE_PARK: ParkDef = {
     ],
     buoys: [{ x: 67, z: 19.7 }],
   },
+};
+
+/**
+ * Test map (spec section 16): a 1.2 m kicker, a flush funbox (safety + 6 m
+ * box), a gap box and an 8 m rail, all right on the cable line of the south
+ * and east straights so riding straight hits each one. Same lake and scenery
+ * as the default park. Open it with `?park=test`.
+ */
+export const TEST_PARK: ParkDef = {
+  name: 'Test map',
+  startS: 30,
+  features: [
+    { kind: 'kicker', id: 'tk', name: 'Test kicker', s: 40, offset: 0, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.5 },
+    { kind: 'slider', id: 'tf', name: 'Flush funbox', style: 'box', s: 120, offset: 0, length: 6, width: 1, height: 0.5, entryLength: 3, safety: 'flush' },
+    { kind: 'slider', id: 'tg', name: 'Gap box', style: 'box', s: 170, offset: 0, length: 6, width: 0.8, height: 0.5, entryLength: 3, safety: 'gap' },
+    { kind: 'slider', id: 'tr', name: '8 m rail', style: 'rail', s: 215, offset: 0, length: 8, width: 0.12, height: 0.6, entryLength: 3, safety: 'flush' },
+  ],
+  site: LAKESIDE_PARK.site,
 };

@@ -1,26 +1,23 @@
-import { carveToEdge, toeSign } from '../sim/edge';
 import type { InputFrame } from '../sim/input';
-import type { RiderState } from '../sim/rider';
 import type { GrabId } from '../sim/tricks/data';
 
-/** Grab keys, checked in order; the first held wins. */
-const GRAB_KEYS: [string, GrabId][] = [
-  ['KeyJ', 'indy'],
-  ['KeyK', 'melon'],
-  ['KeyL', 'mute'],
-  ['KeyI', 'stalefish'],
-  ['KeyU', 'nose'],
-  ['KeyO', 'tail'],
+/** Grab modifier keys (with E): stalefish, nose, tail. */
+const GRAB_MODS: [string, Exclude<GrabId, 'indy'>][] = [
+  ['KeyR', 'stalefish'],
+  ['KeyN', 'nose'],
+  ['KeyT', 'tail'],
 ];
 
 export const CONTROLS_HELP = [
-  'A/D or arrows: carve (water), spin (air), lean to balance (rail)',
-  'F on a rail: turn the board across (boardslide)',
-  'Space: hold to load, release to pop',
-  'W / S held at pop: front / back invert',
-  'Shift: arms out (bad posture)',
-  'J K L I U O: indy melon mute stalefish nose tail',
-  'R: raley   Q: let go   Enter: restart   P: pause',
+  'A/D or arrows: carve (water), rotate the board (box/rail), spin (air)',
+  'Space: hold to charge, release to pop. Edge hard away from the line until LOADED (1000 N) for a raley',
+  'S + Space / W + Space when LOADED: backroll / frontroll',
+  'W / S in the air: front flip / tantrum. A/D in a raley: S-bend',
+  'Q: handle pass, in the ring window (no pass on a backside spin = to blind)',
+  'Blind: tap A/D the way you came to spin out, or pop and spin out',
+  'E: indy. E+R stalefish, E+N nose, E+T tail. Let go before landing',
+  'Box/rail: tap A/D to balance, hold to rotate 90. Shift: arms out. X: let go',
+  'Enter: restart   P: pause   F3: debug   H: help',
 ];
 
 /** Tracks held keys and turns them into an InputFrame for the current rider. */
@@ -33,7 +30,7 @@ export class Keyboard {
     target.addEventListener('keydown', (e) => {
       if (!this.down.has(e.code)) this.pressed.add(e.code);
       this.down.add(e.code);
-      if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+      if (e.code === 'Space' || e.code === 'F3' || e.code.startsWith('Arrow')) e.preventDefault();
     });
     target.addEventListener('keyup', (e) => this.down.delete(e.code));
     target.addEventListener('blur', () => this.down.clear());
@@ -57,28 +54,20 @@ export class Keyboard {
     return had;
   }
 
-  frame(rider: RiderState): InputFrame {
+  /** The raw buttons for this tick. The sim works out presses, taps and chords. */
+  frame(): InputFrame {
     const right = this.held('KeyD') || this.held('ArrowRight') ? 1 : 0;
     const left = this.held('KeyA') || this.held('ArrowLeft') ? 1 : 0;
-    // +1 = to the rider's right of travel / clockwise seen from above.
-    const steer = right - left;
-    const up = this.held('KeyW') || this.held('ArrowUp') ? 1 : 0;
-    const down = this.held('KeyS') || this.held('ArrowDown') ? 1 : 0;
-    const airborne = rider.mode === 'air';
-    const onRail = rider.jib !== null;
-    // Spin input is in frontside units; clockwise yaw is frontside when -toeSign is +1.
-    const stance = { stance: rider.stance, switchStance: rider.air?.takeoffSwitch ?? rider.switchStance };
-    const spin = airborne ? -toeSign(stance) * steer : onRail && this.held('KeyF') ? 1 : 0;
-    const grab = GRAB_KEYS.find(([code]) => this.held(code))?.[1] ?? null;
     return {
-      edge: airborne ? 0 : carveToEdge(rider, steer),
-      load: this.held('Space'),
-      handleIn: this.held('ShiftLeft') || this.held('ShiftRight') ? 0 : 1,
-      spin,
-      flip: up - down,
-      raley: this.held('KeyR'),
-      grab,
-      release: this.held('KeyQ'),
+      steer: right - left,
+      pop: this.held('Space'),
+      forward: this.held('KeyW') || this.held('ArrowUp'),
+      back: this.held('KeyS') || this.held('ArrowDown'),
+      pass: this.held('KeyQ'),
+      grab: this.held('KeyE'),
+      grabMod: GRAB_MODS.find(([code]) => this.held(code))?.[1] ?? null,
+      armsOut: this.held('ShiftLeft') || this.held('ShiftRight'),
+      letGo: this.held('KeyX'),
     };
   }
 }

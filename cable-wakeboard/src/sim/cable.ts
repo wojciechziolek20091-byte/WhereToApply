@@ -29,8 +29,11 @@ export type CableSegment = LineSegment | ArcSegment;
 
 export interface CablePath {
   segments: CableSegment[];
+  /** Arc length of one lap (for a shuttle: there and back). */
   length: number;
   height: number;
+  /** Two-tower system: the carrier runs out along the one line and back. */
+  shuttle: boolean;
 }
 
 export interface CablePoint {
@@ -48,6 +51,7 @@ export interface CablePoint {
  * passes inside the tower positions.
  */
 export function buildCablePath(cfg: CableConfig): CablePath {
+  if (cfg.mode === 'twoTower') return buildShuttlePath(cfg);
   const n = cfg.towers.length;
   if (n < 3) throw new Error('A closed cable loop needs at least 3 towers');
   const p = cfg.towers.map((t) => vec3(t.x, 0, t.z));
@@ -101,11 +105,34 @@ export function buildCablePath(cfg: CableConfig): CablePath {
     });
     s += arcLen;
   }
-  return { segments, length: s, height: cfg.cableHeight };
+  return { segments, length: s, height: cfg.cableHeight, shuttle: false };
+}
+
+/**
+ * Two-tower system (spec section 5.1, for testing): one straight cable from
+ * the first tower to the second. The carrier goes out and comes back; it
+ * reverses at each end instantly, so the rope goes slack and the rider turns.
+ */
+function buildShuttlePath(cfg: CableConfig): CablePath {
+  const [a, b] = cfg.towers;
+  if (!a || !b) throw new Error('A two-tower system needs two towers');
+  const start = vec3(a.x, 0, a.z);
+  const span = sub(vec3(b.x, 0, b.z), start);
+  const len = length(span);
+  const line: LineSegment = { kind: 'line', start, heading: headingOf(span), length: len, s0: 0 };
+  return { segments: [line], length: 2 * len, height: cfg.cableHeight, shuttle: true };
 }
 
 /** Point and heading on the cable at arc length `s` (wraps around the loop). */
 export function cablePointAt(path: CablePath, s: number): CablePoint {
+  if (path.shuttle) {
+    const line = path.segments[0] as LineSegment;
+    const phase = mod(s, path.length);
+    const out = phase < line.length;
+    const u = out ? phase : path.length - phase;
+    const pos = addScaled(line.start, forwardOf(line.heading), u);
+    return { pos: vec3(pos.x, path.height, pos.z), heading: out ? line.heading : wrapAngle(line.heading + Math.PI), segment: 0 };
+  }
   const ss = mod(s, path.length);
   // Few segments: a linear scan is fine and keeps this obviously correct.
   let index = path.segments.length - 1;

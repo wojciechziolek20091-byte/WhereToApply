@@ -19,11 +19,21 @@ default.project.json            Rojo project: shared -> ReplicatedStorage.WakeSh
                                 client -> StarterPlayer.StarterPlayerScripts.WakeClient
 src/shared/Sim/                 The game simulation, one ModuleScript per file (init.luau
                                 is the folder's module). Same code as ../src/sim.
-src/shared/WakeInput.luau       Held keys -> InputFrame, same keys as the web game
+src/shared/WakeInput.luau       ContextActionService action names and keys -> InputFrame
+                                (same controls as the web game), CONTROLS_HELP text
+src/shared/RiderPose.luau       Sim posture -> joint angles for the rider model (same as
+                                ../src/render/pose.ts)
+src/shared/ComboValidator.luau  Server-side checks of a reported combo: trick points,
+                                combo factors and totals against the sim's tables
 src/shared/SiteGeometry.luau    Polygon helpers (ear clipping) for drawing the park site
 src/client/WakeClient.client.luau  Plays the sim: the park from the sketch and map (water,
                                 banks, island, dock, terrace, buildings, roads), rider,
-                                rope, chase camera, HUD
+                                rope (Beam, white to red with tension), chase camera, HUD
+                                (tension, combo, timing, handle, balance), F3 debug,
+                                crash tumble; fires TrickLanded / ComboEnded / Crashed
+src/server/WakeServer.server.luau  Creates ReplicatedStorage.WakeRemotes, validates every
+                                ComboEnded with ComboValidator, keeps leaderstats
+                                (Points, Best Combo)
 src/shared/RiderBuilder.luau    RiderBuilder.build(options) -> Model
 src/shared/DuskLighting.luau    DuskLighting.apply(): sky, haze, sun, post effects
 src/shared/WaterSpray.luau      WaterSpray.attach(rider), setIntensity(emitter, 0..1)
@@ -47,7 +57,8 @@ conversion. Either:
   `ReplicatedStorage.WakeShared`, with `Sim` as a ModuleScript made from
   `Sim/init.luau` and every other `Sim/*.luau` as a child ModuleScript of it;
   `src/client/WakeClient.client.luau` as a LocalScript in
-  `StarterPlayer.StarterPlayerScripts`; then press Play.
+  `StarterPlayer.StarterPlayerScripts`; `src/server/WakeServer.server.luau` as a
+  Script in `ServerScriptService`; then press Play.
 - **By hand:** the same tree, pasting each file into a script of the same name.
 
 `Showcase.server.luau` (the style lineup) and `WakeClient` both build into the
@@ -62,6 +73,31 @@ Sim.Session.stepRun(run, Sim.Input.neutralInput()) -- one 60 Hz tick
 print(run.sim.rider.pos.x, run.points, run.pass)
 ```
 
+Riding physics runs on the client (one sim per player, 60 Hz). The server never
+simulates; it only checks what the client reports (`ComboValidator.validate`):
+each trick's points must match the trick tables, the multiplier and factors must
+follow `Config.combo`, and the total must add up. Rejected combos score nothing.
+
+## Controls
+
+| Keys | On water | In the air | On a box / rail |
+|---|---|---|---|
+| A / D | carve | spin | tap to balance, hold to turn 90° |
+| Space | hold to charge, release to pop (raley when LOADED) | | pop off |
+| S / W + Space | backroll / frontroll when LOADED | front flip / tantrum (W / S) | |
+| Q | | handle pass in the ring window | handle pass |
+| E (+R / N / T) | | indy (stalefish / nose / tail) | |
+| Shift | | | arms out |
+| X | let go | let go | let go |
+| F3, Enter | debug overlay, restart (web also: P pause, H help) | | |
+
+On a blind landing (handle behind the back), tap A / D the way you came to spin
+out, or pop and spin out. A / D during a raley is an S-bend.
+
+The test map (`ParkLayout.TEST_PARK`: one kicker, flush box, gap box, 8 m
+rail on a straight two-tower line) is picked with `Sim.Session.createRun(nil,
+Sim.ParkLayout.TEST_PARK)` in Luau or `?park=test` in the web game.
+
 Module for module, field for field, the same as `../src/sim`: what the web
 game does, this does, to the last bit. `npm run test:parity` (from the parent
 folder) proves it: it plays three complete scripted runs (carving, pops,
@@ -70,14 +106,17 @@ and compares every value on every tick. Rules for keeping the two in step are
 in `../CLAUDE.md` ("Two versions of the sim").
 
 The park itself (`Sim/ParkLayout.luau`: features, start dock, shoreline,
-island, buildings) is generated from `../src/sim/parkLayout.ts`; regenerate it
-with `npx vite-node scripts/gen-park-luau.ts` after editing the park.
+island, buildings) is generated from `../src/sim/parkLayout.ts`; regenerate it,
+and `Sim/Config.luau`, with `npx vite-node scripts/gen-luau-data.ts` after editing
+`../src/sim/parkLayout.ts` or `../src/sim/config.ts`. Never edit the two generated files
+by hand.
 
 Units are metres in the sim; `WakeClient` converts to studs (1 stud = 0.28 m).
 Vectors are plain `{x, y, z}` tables of doubles, not `Vector3` (float32).
 
-`WakeClient` is a first pass that has not been run in Studio yet; the sim under
-it is the verified part.
+`WakeClient` and `WakeServer` are a first pass that has not been run in Studio
+yet; the sim under them, and `ComboValidator` (run against a real sim run in the
+parity test), are the verified part.
 
 ## Using the builder
 

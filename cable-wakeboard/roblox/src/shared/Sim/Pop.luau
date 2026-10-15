@@ -1,49 +1,52 @@
--- Pop: edge load, hold, tension, timing, posture and knee bend into vertical
--- speed. Mirrors src/sim/pop.ts.
+-- Ollie charge, tension tracking and water-trick timing. Mirrors src/sim/pop.ts.
+local DetMath = require(script.Parent.DetMath)
 local Scalar = require(script.Parent.Scalar)
 
 local Pop = {}
 
-function Pop.computePop(i, cfg)
-	local clamp01 = Scalar.clamp01
-	local legs = cfg.base * (0.4 + 0.6 * clamp01(i.compression))
-	local edge = cfg.edgeGain * clamp01(i.edgeLoadAtBase / cfg.edgeLoadRef) * clamp01(i.holdRatio)
-	local line = cfg.tensionGain * clamp01(i.tensionAtRelease / cfg.tensionRef)
-	local posture = 0.3 + 0.7 * clamp01(i.connection)
-	local speed = math.min(cfg.maxPop, (legs + edge + line) * clamp01(i.timing) * posture)
-	return { speed = speed, quality = speed / cfg.maxPop }
+function Pop.ollieCharge(heldTime, cfg)
+	return Scalar.clamp01(heldTime / cfg.ollie.chargeTime)
 end
 
--- Kicker timing: ideal release `lipLead` seconds before leaving the lip.
-function Pop.popTimingFactor(timeToLip, cfg)
-	local err = (timeToLip - cfg.lipLead) / cfg.lipWindow
-	return Scalar.clamp01(1 - err * err)
+function Pop.ollieSpeed(charge, cfg)
+	return Scalar.lerp(cfg.ollie.minV, cfg.ollie.maxV, Scalar.clamp01(charge))
 end
 
--- Track the recent peak edge load for flat-water pops.
-function Pop.updateLoadTracker(t, edgeLoad, cfg, dt)
-	if edgeLoad >= t.peakEdgeLoad then
-		t.peakEdgeLoad = edgeLoad
-		t.peakAge = 0
+function Pop.updateTensionTracker(r, cfg, dt)
+	local alpha = 1 - DetMath.exp(-dt / cfg.rope.smoothTau)
+	r.tensionPrev2 = r.tensionPrev
+	r.tensionPrev = r.tensionSmooth
+	r.tensionSmooth += (r.ropeTension - r.tensionSmooth) * alpha
+	if r.tensionSmooth >= r.tensionPeak then
+		r.tensionPeak = r.tensionSmooth
+		r.tensionPeakAge = 0
 		return
 	end
-	t.peakAge += dt
-	if t.peakAge > cfg.peakMemory then
-		t.peakEdgeLoad = edgeLoad
-		t.peakAge = 0
+	r.tensionPeakAge += dt
+	if r.tensionPeakAge > cfg.waterTrick.historyTime then
+		r.tensionPeak = r.tensionSmooth
+		r.tensionPeakAge = 0
 	end
 end
 
-function Pop.flatPopInputs(t, edgeLoad, tension, connection, compression, cfg)
-	local loaded = t.peakEdgeLoad >= cfg.flatMinLoad
-	return {
-		edgeLoadAtBase = if loaded then t.peakEdgeLoad else 0,
-		holdRatio = if t.peakEdgeLoad > 0 then edgeLoad / t.peakEdgeLoad else 0,
-		tensionAtRelease = tension,
-		timing = 1,
-		connection = connection,
-		compression = compression,
-	}
+function Pop.waterTrickTiming(r, cfg, dt)
+	local wt = cfg.waterTrick
+	if r.tensionPeakAge > 0 then
+		return 1 - Scalar.clamp01(r.tensionPeakAge / wt.peakWindow)
+	end
+	local d1 = (r.tensionSmooth - r.tensionPrev) / dt
+	local d2 = (r.tensionSmooth - 2 * r.tensionPrev + r.tensionPrev2) / (dt * dt)
+	if d1 <= 0 then
+		return 1
+	end
+	local timeToPeak = if d2 < 0 then -d1 / d2 else wt.peakWindow
+	return 1 - Scalar.clamp01(timeToPeak / wt.peakWindow)
+end
+
+function Pop.waterTrickHeight(tension, timing, cfg)
+	local wt = cfg.waterTrick
+	local h = wt.baseHeight * DetMath.pow(math.max(0, tension) / wt.tensionThreshold, 1.2) * (0.5 + 0.5 * Scalar.clamp01(timing))
+	return math.min(wt.maxHeight, h)
 end
 
 return Pop

@@ -5,35 +5,38 @@
  */
 import { makeConfig } from '../../src/sim/config';
 import { neutralInput, type InputFrame } from '../../src/sim/input';
-import { createRng, nextFloat, nextRange } from '../../src/sim/math/rng';
+import { createRng, nextFloat } from '../../src/sim/math/rng';
+import { DEFAULT_PARK } from '../../src/sim/park';
+import { TEST_PARK } from '../../src/sim/parkLayout';
 import { createRun, stepRun } from '../../src/sim/session';
-import type { GrabId } from '../../src/sim/tricks/data';
 
-const GRAB_CHOICES: (GrabId | null)[] = ['indy', 'melon', 'mute', 'stalefish', 'nose', 'tail', null, null];
-const SPIN_CHOICES = [-1, 0, 0, 1];
-const FLIP_CHOICES = [-1, 0, 0, 0, 1];
+const STEER = [-1, -1, 0, 1, 1];
+const MODS: InputFrame['grabMod'][] = ['stalefish', 'nose', 'tail', null, null, null];
 
 /** One trace row: strings and numbers, compared field by field. */
 export type TraceRow = (string | number)[];
 
-export function traceRun(seed: number, ticks: number): TraceRow[] {
-  const run = createRun(makeConfig({ run: { maxFalls: 99 } }));
+/** `park`: 'default', or 'test' (features on the line, steering mostly straight so they get ridden). */
+export function traceRun(seed: number, ticks: number, park: 'default' | 'test' = 'default'): TraceRow[] {
+  const run = createRun(makeConfig({ run: { maxFalls: 99 } }), park === 'test' ? TEST_PARK : DEFAULT_PARK);
+  const straight = park === 'test' ? 0.6 : 0;
   const rng = createRng(seed);
   let input: InputFrame = neutralInput();
   let hold = 0;
   const rows: TraceRow[] = [];
   for (let i = 0; i < ticks && !run.finished; i++) {
     if (hold <= 0) {
-      hold = 20 + Math.floor(nextFloat(rng) * 70);
+      hold = 10 + Math.floor(nextFloat(rng) * 50);
       input = {
-        edge: nextRange(rng, -1, 1),
-        load: nextFloat(rng) < 0.4,
-        handleIn: nextRange(rng, 0.3, 1),
-        spin: SPIN_CHOICES[Math.floor(nextFloat(rng) * 4)]!,
-        flip: FLIP_CHOICES[Math.floor(nextFloat(rng) * 5)]!,
-        raley: nextFloat(rng) < 0.15,
-        grab: GRAB_CHOICES[Math.floor(nextFloat(rng) * 8)]!,
-        release: false,
+        steer: nextFloat(rng) < straight ? 0 : STEER[Math.floor(nextFloat(rng) * 5)]!,
+        pop: nextFloat(rng) < 0.35,
+        forward: nextFloat(rng) < 0.15,
+        back: nextFloat(rng) < 0.15,
+        pass: nextFloat(rng) < 0.2,
+        grab: nextFloat(rng) < 0.2,
+        grabMod: MODS[Math.floor(nextFloat(rng) * 6)]!,
+        armsOut: nextFloat(rng) < 0.05,
+        letGo: false,
       };
     }
     hold--;
@@ -54,20 +57,25 @@ export function traceRun(seed: number, ticks: number): TraceRow[] {
       r.edgeAngle,
       r.edgeLoad,
       r.ropeTension,
+      r.tensionSmooth,
       r.connection,
-      r.air ? r.air.spinAngle : 0,
-      r.air ? r.air.flipAngle : 0,
+      r.handle,
+      r.air ? r.air.rot.spinAngle : 0,
+      r.air ? r.air.rot.flipAngle : 0,
+      r.air && r.air.trick ? r.air.trick.rollAngle : 0,
+      r.jib ? r.jib.boardAngle : 0,
+      r.jib ? r.jib.balance : 0,
       run.pass,
       run.tricks.length,
-      run.falls.length,
+      run.crashes.length,
       run.points,
       s.events.map((e) => e.type).join(',') || '-',
     ]);
-    for (const rec of run.latest) rows.push(['trick', rec.tick, rec.trick.key, rec.trick.name, rec.trick.difficulty]);
+    for (const rec of run.latest) rows.push(['trick', rec.tick, rec.trick.key, rec.trick.points, rec.trick.difficulty]);
   }
   if (run.score) {
     for (const j of run.score.judges) rows.push(['judge', j.execution, j.intensity, j.composition, j.total]);
-    rows.push(['score', run.score.total, run.endReason ?? '-']);
+    rows.push(['score', run.score.total, run.endReason ?? '-', run.bestCombo]);
   }
   return rows;
 }

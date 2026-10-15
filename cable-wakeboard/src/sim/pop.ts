@@ -1,84 +1,59 @@
-import type { PopConfig } from './config';
-import { clamp01 } from './math/scalar';
-import type { LoadTracker } from './rider';
-
-/** Everything the pop depends on. See docs/MECHANICS.md section 4. */
-export interface PopInputs {
-  /** Edge load at the base of the feature, or peak load of a flat-water cut (N). */
-  edgeLoadAtBase: number;
-  /** Load at release / load at base. 1 = edge held all the way. */
-  holdRatio: number;
-  /** Rope tension when the legs extend (N). */
-  tensionAtRelease: number;
-  /** 0..1 how well the release lines up with the lip or peak load. */
-  timing: number;
-  /** 0..1 posture quality. */
-  connection: number;
-  /** 0..1 how far the knees were bent before extending. */
-  compression: number;
-}
-
-export interface PopResult {
-  /** Vertical speed added (m/s). */
-  speed: number;
-  /** speed / maxPop, for scoring. */
-  quality: number;
-}
+import type { SimConfig } from './config';
+import { exp, pow } from './math/detmath';
+import { clamp01, lerp } from './math/scalar';
+import type { RiderState } from './rider';
 
 /**
- * Energy transfer into vertical speed. Leg extension alone gives a little;
- * the edge load stored on the way in and the rope tension at release give
- * the rest. Bad timing and a disconnected posture scale everything down.
+ * Pops (spec sections 9.2, 9.3 and 10.2): the ollie charge, the kicker lip
+ * pop, and the tension tracking that times water tricks.
  */
-export function computePop(i: PopInputs, cfg: PopConfig): PopResult {
-  const legs = cfg.base * (0.4 + 0.6 * clamp01(i.compression));
-  const edge = cfg.edgeGain * clamp01(i.edgeLoadAtBase / cfg.edgeLoadRef) * clamp01(i.holdRatio);
-  const line = cfg.tensionGain * clamp01(i.tensionAtRelease / cfg.tensionRef);
-  const posture = 0.3 + 0.7 * clamp01(i.connection);
-  const speed = Math.min(cfg.maxPop, (legs + edge + line) * clamp01(i.timing) * posture);
-  return { speed, quality: speed / cfg.maxPop };
-}
+
+/** Charge from how long Space was held (0..1). */
+export const ollieCharge = (heldTime: number, cfg: SimConfig): number => clamp01(heldTime / cfg.ollie.chargeTime);
+
+/** Vertical speed of an ollie with that charge (m/s). */
+export const ollieSpeed = (charge: number, cfg: SimConfig): number => lerp(cfg.ollie.minV, cfg.ollie.maxV, clamp01(charge));
 
 /**
- * Kicker timing. `timeToLip` is how long until the board leaves the lip at
- * the current speed. Ideal is `lipLead`; further out the ramp absorbs the pop.
+ * Smooth the raw tension (exponential filter, `rope.smoothTau`) and track the
+ * recent peak of the smoothed value. Raw tension drives physics; the smoothed
+ * one drives the HUD and the trick logic.
  */
-export function popTimingFactor(timeToLip: number, cfg: PopConfig): number {
-  const err = (timeToLip - cfg.lipLead) / cfg.lipWindow;
-  return clamp01(1 - err * err);
-}
-
-/** Track the recent peak edge load for flat-water pops. */
-export function updateLoadTracker(t: LoadTracker, edgeLoad: number, cfg: PopConfig, dt: number): void {
-  if (edgeLoad >= t.peakEdgeLoad) {
-    t.peakEdgeLoad = edgeLoad;
-    t.peakAge = 0;
+export function updateTensionTracker(r: RiderState, cfg: SimConfig, dt: number): void {
+  const alpha = 1 - exp(-dt / cfg.rope.smoothTau);
+  r.tensionPrev2 = r.tensionPrev;
+  r.tensionPrev = r.tensionSmooth;
+  r.tensionSmooth += (r.ropeTension - r.tensionSmooth) * alpha;
+  if (r.tensionSmooth >= r.tensionPeak) {
+    r.tensionPeak = r.tensionSmooth;
+    r.tensionPeakAge = 0;
     return;
   }
-  t.peakAge += dt;
-  if (t.peakAge > cfg.peakMemory) {
-    // Forget an old peak: the rider has to re-load.
-    t.peakEdgeLoad = edgeLoad;
-    t.peakAge = 0;
+  r.tensionPeakAge += dt;
+  if (r.tensionPeakAge > cfg.waterTrick.historyTime) {
+    r.tensionPeak = r.tensionSmooth;
+    r.tensionPeakAge = 0;
   }
 }
 
-/** Pop inputs for a flat-water release. Holding the edge to the release is what counts. */
-export function flatPopInputs(
-  t: LoadTracker,
-  edgeLoad: number,
-  tension: number,
-  connection: number,
-  compression: number,
-  cfg: PopConfig,
-): PopInputs {
-  const loaded = t.peakEdgeLoad >= cfg.flatMinLoad;
-  return {
-    edgeLoadAtBase: loaded ? t.peakEdgeLoad : 0,
-    holdRatio: t.peakEdgeLoad > 0 ? edgeLoad / t.peakEdgeLoad : 0,
-    tensionAtRelease: tension,
-    timing: 1,
-    connection,
-    compression,
-  };
+/**
+ * Pop timing against the tension peak, 0..1. After the peak: how long ago it
+ * was. Still rising: how long until the peak is predicted from the first and
+ * second differences of the smoothed tension.
+ */
+export function waterTrickTiming(r: RiderState, cfg: SimConfig, dt: number): number {
+  const wt = cfg.waterTrick;
+  if (r.tensionPeakAge > 0) return 1 - clamp01(r.tensionPeakAge / wt.peakWindow);
+  const d1 = (r.tensionSmooth - r.tensionPrev) / dt;
+  const d2 = (r.tensionSmooth - 2 * r.tensionPrev + r.tensionPrev2) / (dt * dt);
+  if (d1 <= 0) return 1;
+  const timeToPeak = d2 < 0 ? -d1 / d2 : wt.peakWindow;
+  return 1 - clamp01(timeToPeak / wt.peakWindow);
+}
+
+/** Planned height of a water trick (m): h = base * (T / threshold)^1.2 * (0.5 + 0.5 timing), capped. */
+export function waterTrickHeight(tension: number, timing: number, cfg: SimConfig): number {
+  const wt = cfg.waterTrick;
+  const h = wt.baseHeight * pow(Math.max(0, tension) / wt.tensionThreshold, 1.2) * (0.5 + 0.5 * clamp01(timing));
+  return Math.min(wt.maxHeight, h);
 }

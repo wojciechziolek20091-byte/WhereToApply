@@ -56,7 +56,7 @@ function ScoringMetrics.computeRunMetrics(tricks, falls, featureCount, deadWater
 	end
 	local early = 0
 	for _, t in airs do
-		if t.spunBeforePeak then
+		if not t.clean then
 			early += 1
 		end
 	end
@@ -69,7 +69,7 @@ function ScoringMetrics.computeRunMetrics(tricks, falls, featureCount, deadWater
 		avgPopQuality = mean(map(airs, function(t)
 			return t.popQuality
 		end)),
-		earlySpinFraction = if #airs > 0 then early / #airs else 0,
+		sketchyFraction = if #airs > 0 then early / #airs else 0,
 		avgHeight = mean(map(airs, function(t)
 			return t.height
 		end)),

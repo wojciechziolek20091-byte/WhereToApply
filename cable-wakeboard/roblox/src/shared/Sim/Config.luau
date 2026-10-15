@@ -1,5 +1,6 @@
--- Every tunable in the sim. SI units. Mirrors src/sim/config.ts value for value;
--- see that file and docs/MECHANICS.md for what each entry models.
+-- GENERATED from src/sim/config.ts by scripts/gen-luau-data.ts. Do not edit:
+-- edit the TypeScript file (it documents every entry) and rerun the script.
+-- Every tunable in the sim, SI units, angles in radians.
 local Config = {}
 
 Config.DT = 1 / 60
@@ -7,42 +8,20 @@ Config.GRAVITY = 9.81
 
 Config.DEFAULT_CONFIG = {
 	cable = {
-		-- The sketch park's five towers (ParkLayout.luau): south-west, south-east,
-		-- the east shoulder, the roof apex, north-west. Counter-clockwise seen from above.
-		towers = {
-			{ x = -56.2, z = 110.4 },
-			{ x = 56.2, z = 102.5 },
-			{ x = 54.7, z = -55.2 },
-			{ x = 15.8, z = -110.4 },
-			{ x = -56.2, z = -72 },
-		},
-		cornerRadius = 12, -- arc around each tower wheel (m)
-		cableHeight = 9, -- cable above the water (m)
-		carrierSpeed = 8.3, -- constant carrier speed (m/s), about 30 km/h
+		towers = { { x = -56.2, z = 110.4 }, { x = 56.2, z = 102.5 }, { x = 54.7, z = -55.2 }, { x = 15.8, z = -110.4 }, { x = -56.2, z = -72 } },
+		cornerRadius = 12,
+		cableHeight = 9,
+		carrierSpeed = 8.3,
+		mode = "loop",
 	},
-	rope = {
-		length = 18, -- carrier to handle (m)
-		stiffness = 8000, -- stand-in for body and arms (N/m)
-		damping = 900, -- while taut (N per m/s)
-		gripLimit = 3200, -- tension that rips the handle away (N)
-		gripTime = 0.3, -- how long over the limit before it goes (s)
-		snapRate = 2.5, -- stretch rate that counts as a rope snap (m/s)
-	},
-	rider = { mass = 80, hipHeight = 1.0, stance = "regular" },
-	hydro = {
-		dragCoef = 4.0,
-		lateralGrip = 70,
-		flatGripFraction = 0.25,
-		gripMinSpeed = 2,
-		linearDrag = 8,
-		liftOffFactor = 1.6,
-		fallenDrag = 300,
-	},
+	rope = { length = 18, stiffness = 4000, damping = 600, snapRate = 2.5, maxTension = 2500, yankCrashImpulse = 1800, smoothTau = 0.08 },
+	rider = { mass = 80, hipHeight = 1, stance = "regular" },
+	hydro = { dragCoef = 4, lateralGrip = 70, flatGripFraction = 0.25, gripMinSpeed = 2, linearDrag = 8, liftOffFactor = 1.6, fallenDrag = 300 },
 	edge = {
 		maxEdgeAngle = 0.7,
-		edgeBuildRate = 1.0,
-		edgeReleaseRate = 3.0,
-		maxCutAngle = 0.9,
+		edgeBuildRate = 1,
+		edgeReleaseRate = 3,
+		maxCutAngle = 0.82,
 		yawResponse = 3.5,
 		carveCurvature = 0.12,
 		maxYawRate = 2.5,
@@ -57,69 +36,78 @@ Config.DEFAULT_CONFIG = {
 		hingeTensionRef = 1200,
 		handleWeight = 0.55,
 		hingeWeight = 0.5,
-		compressRate = 3.0,
-		standRate = 4.0,
+		compressRate = 3,
+		standRate = 4,
 	},
-	pop = {
-		base = 1.0,
-		edgeGain = 2.2,
-		edgeLoadRef = 1500,
-		tensionGain = 1.6,
-		tensionRef = 1500,
-		maxPop = 4.5,
-		extendTime = 0.15,
-		lipLead = 0.06,
-		lipWindow = 0.25,
-		peakMemory = 0.6,
-		flatMinLoad = 400,
+	ollie = { chargeTime = 0.5, minV = 3.5, maxV = 6.5, clearance = 0.1 },
+	kicker = { lipPopWindow = 0.12, lipPopBonus = 0.2 },
+	safety = { popWindowFraction = 0.08, popWindowMinMetres = 1, perfectFraction = 0.4, sketchyMultiplier = 0.8 },
+	spin = { rate = 9.42477796076938, accelTime = 0.1, maxCarry = 1.5707963267948966 },
+	flip = { rate = 6.981317007977318, maxCarry = 1.0471975511965976 },
+	handlePass = { featureWindow = 0.35, kickerWindow = 0.18, obstacleAirWindow = 0.25, waterTrickWindow = 0.25, flatAirWindow = 0.25, passTime = 0.15 },
+	blind = { maxRideTime = 3, steerFactor = 0.4, maxEdge = 0.5, maxTension = 900, spinOutTime = 0.4 },
+	waterTrick = {
+		tensionThreshold = 1000,
+		hysteresis = 100,
+		minEdge = 0.7,
+		sidewaysAngle = 0.6108652381980153,
+		peakWindow = 0.15,
+		historyTime = 0.4,
+		baseHeight = 1.8,
+		maxHeight = 4.5,
+		minRollHeight = 1.4,
+		maxLandingExtension = 0.5235987755982988,
+		popPhaseEnd = 0.15,
+		extensionEnd = 0.55,
+		swingDownEnd = 0.85,
+		heldSwingFactor = 0.5,
 	},
-	air = {
-		dragCoef = 0.4,
-		spinRate = 8.0,
-		invertRate = 7.0,
-		handleOutRotation = 0.6,
-		earlySpinPenalty = 0.35,
-		rollAxisCut = 0.45,
-		minGrabTime = 0.15,
-		raleyRate = 3.0,
-		minAirTime = 0.25,
-	},
+	sBend = { windowStart = 0.25, windowEnd = 0.45 },
+	grab = { chordWindow = 0.08 },
+	air = { dragCoef = 0.4, minAirTime = 0.25 },
 	landing = {
-		maxYawError = 0.5,
-		maxEdgeFraction = 0.75,
-		maxFlipError = 0.7,
-		stiffImpact = 6.5,
-		absorbImpact = 4.0,
-		fallRecovery = 2.0,
+		maxYawError = 0.6108652381980153,
+		maxFlipError = 0.6981317007977318,
+		cleanThreshold = 0.20943951023931953,
+		cleanBonus = 0.1,
+		grabHeldCrashes = true,
+		stiffImpact = 9,
+		absorbImpact = 2,
+		graceTime = 0.15,
 	},
-	feature = { rampFriction = 0.06, mountHeight = 0.25, mountAngle = 1.0, stallSpeed = 0.8 },
-	jib = {
+	feature = {
+		rampFriction = 0.06,
+		mountHeight = 0.25,
+		mountAngle = 1,
+		stallSpeed = 0.8,
 		friction = 0.08,
-		boardRotateRate = 7,
+		rotateTimePer90 = 0.18,
+		tapTime = 0.15,
+		balanceEnabled = true,
+		balanceDriftBox = 0.9,
+		balanceDriftRail = 1.6,
+		balanceNoiseRate = 1.3,
+		tapStrength = 0.35,
+		ropeTip = 1400,
 		lateralDamping = 6,
-		ropeTip = 700,
-		drift = 1.6,
-		correction = 2.5,
-		angleDrift = 1.2,
 	},
-	raley = { minEdgeLoad = 1400, minTension = 1200 },
+	combo = { linkWindow = 2, repeatPenalty = 0.5, perTrick = 0.25, maxMultiplier = 4 },
+	crash = { respawnDelay = 2.5 },
 	run = { passesPerRun = 2, maxFalls = 2, deadWaterTime = 8, respawnSlack = 0.98 },
-	scoring = {
-		judges = 3,
-		weights = { execution = 3.3, intensity = 3.4, composition = 3.3 },
-		judgeBias = 0.4,
-		seed = 20261013,
-	},
+	scoring = { judges = 3, weights = { execution = 3.3, intensity = 3.4, composition = 3.3 }, judgeBias = 0.4, seed = 20261013 },
+	debug = { enabled = true },
 }
 
 local function deepCopy(t)
+	if type(t) ~= "table" then
+		return t
+	end
 	local out = {}
 	for k, v in t do
-		out[k] = if type(v) == "table" then deepCopy(v) else v
+		out[k] = deepCopy(v)
 	end
 	return out
 end
-Config.deepCopy = deepCopy
 
 -- Copy of the defaults with per-section overrides, e.g. { run = { maxFalls = 3 } }.
 function Config.makeConfig(overrides)
@@ -131,5 +119,7 @@ function Config.makeConfig(overrides)
 	end
 	return out
 end
+
+Config.deepCopy = deepCopy
 
 return Config

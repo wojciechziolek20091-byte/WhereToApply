@@ -1,62 +1,76 @@
--- Landing evaluation and fall kinds. Mirrors src/sim/landing.ts.
-local Edge = require(script.Parent.Edge)
+-- Landing judgement. Mirrors src/sim/landing.ts.
 local Scalar = require(script.Parent.Scalar)
 local Vec = require(script.Parent.Vec)
 
+local TAU = Scalar.TAU
 local Landing = {}
 
--- Without a spin the board follows travel, so only the spin counts.
-function Landing.boardYaw(travelHeading, air)
-	return travelHeading + air.spinAngle
+function Landing.airSpin(air)
+	return air.rot.spinAngle - air.spinStart
+end
+
+function Landing.invertAngle(air)
+	if air.trick and air.trick.rollRate > 0 then
+		return air.trick.rollAngle
+	end
+	return air.rot.flipAngle
 end
 
 function Landing.evaluateLanding(r, air, normal, cfg)
 	local lc = cfg.landing
-	local travel = if Vec.horizontalLength(r.vel) > 0.5 then Vec.headingOf(r.vel) else air.takeoffHeading
-	local yawError = Scalar.wrapHalfTurn(Landing.boardYaw(travel, air) - travel)
-	local halfTurns = Scalar.round(air.spinAngle / math.pi)
-	local flips = if air.flipDir == 0 then 0 else math.max(1, Scalar.round(air.flipAngle / Scalar.TAU))
-	local flipError = if air.flipDir == 0 then 0 else air.flipAngle - flips * Scalar.TAU
+	local spin = air.rot.spinAngle
+	local yawError = Scalar.wrapHalfTurn(spin)
+	local halfTurns = Scalar.round(Landing.airSpin(air) / math.pi)
+	local inv = Landing.invertAngle(air)
+	local rolling = air.trick ~= nil and air.trick.rollRate > 0
+	local flips = if rolling then math.max(1, Scalar.round(inv / TAU)) else Scalar.round(math.abs(inv) / TAU)
+	local flipError = if rolling then inv - flips * TAU else math.abs(inv) - flips * TAU
 	local impact = math.max(0, -Vec.dot(r.vel, normal))
 	local capacity = lc.stiffImpact + lc.absorbImpact * r.legCompression * (1 - r.waistHinge)
+	local extension = if air.trick then air.trick.extension else 0
 
-	local fall = nil
-	if not r.hasHandle then
-		fall = "droppedHandle"
+	local crash = nil
+	if r.handle == "dropped" then
+		crash = "handleDropped"
 	elseif math.abs(flipError) > lc.maxFlipError then
-		fall = if flipError < 0 then "underRotation" else "overRotation"
+		crash = if flipError < 0 then "underRotated" else "overRotated"
 	elseif math.abs(yawError) > lc.maxYawError then
-		if not air.spinStarted then
-			fall = "caughtEdge"
+		if air.rot.spinSide == nil and air.spinStart == 0 then
+			crash = "badLandingYaw"
 		else
-			-- Short of the nearest half turn in the spin direction is under-rotation.
-			local short = Scalar.sign(yawError) ~= Scalar.sign(air.spinAngle)
-			fall = if short then "underRotation" else "overRotation"
+			local dir = if air.rot.spinDir ~= 0 then air.rot.spinDir else Scalar.sign(spin)
+			local k = Scalar.round(Landing.airSpin(air) / math.pi)
+			crash = if Scalar.sign(yawError) == -dir or (k == 0 and air.rot.spinSide ~= nil) then "underRotated" else "overRotated"
 		end
-	elseif Edge.edgeNorm(r, cfg.edge) > lc.maxEdgeFraction then
-		fall = "caughtEdge"
-	elseif air.raleyExtension > 0.3 or impact > capacity then
-		fall = "buttCheck"
+	elseif air.grab and lc.grabHeldCrashes then
+		crash = "grabHeldOnLanding"
+	elseif extension > cfg.waterTrick.maxLandingExtension then
+		crash = "raleyExtendedOnLanding"
+	elseif impact > capacity then
+		crash = "hardLanding"
 	end
 
+	local worst = math.max(math.abs(yawError), math.abs(flipError))
+	local clean = crash == nil and worst < lc.cleanThreshold
 	local quality = 0
-	if fall == nil then
-		local q = Scalar.clamp01(impact / capacity)
+	if crash == nil then
 		quality = Scalar.clamp01(
 			1
-				- 0.35 * (math.abs(yawError) / lc.maxYawError)
+				- 0.4 * (math.abs(yawError) / lc.maxYawError)
 				- 0.3 * (math.abs(flipError) / lc.maxFlipError)
-				- 0.35 * q * q
+				- 0.3 * Scalar.clamp01(impact / capacity)
 		)
 	end
 	return {
-		fall = fall,
+		crash = crash,
 		impact = impact,
 		quality = quality,
+		clean = clean,
 		yawError = yawError,
 		flipError = flipError,
 		halfTurns = halfTurns,
 		flips = flips,
+		toBlind = r.handle == "behind",
 	}
 end
 

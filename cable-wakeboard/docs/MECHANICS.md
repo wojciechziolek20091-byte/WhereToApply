@@ -23,7 +23,7 @@ comes from **features** (kickers, sliders, boxes) and from **line tension**.
 | Cable height above the water, roughly 8 to 12 m | `CableConfig.cableHeight` (default 9 m) | Gives the rope an **upward** angle that a boat rope never has. |
 | Carrier speed is set by the operator, roughly 20 to 36 km/h; park riding is often around 30 km/h | `CableConfig.carrierSpeed` (default 8.3 m/s, about 30 km/h) | Constant: the carrier does not slow down for you. |
 | Rope from carrier to handle, a fixed length | `RopeConfig.length` (default 18 m) | Defaults are starting points to tune, not measured values. |
-| 2-tower systems run back and forth on a straight line | Not modelled yet (see PLAN.md backlog) | The path code takes any tower list, so a 2-tower shuttle is a later add. |
+| 2-tower systems run back and forth on a straight line | `CableConfig.mode = 'twoTower'` (`buildShuttlePath()`), for testing | The carrier reverses instantly at each end; one lap is there and back. |
 
 **Carrier kinematics.** The carrier's arc-length position `carrier.s` advances at
 `carrierSpeed` every tick (`stepCarrier()`), and `cablePointAt(path, s)` turns it
@@ -47,10 +47,20 @@ stiff spring-damper** between the carrier and the rider's handle
 
 - Effective length = `rope.length + rider.handleDist` (handle-to-hips distance).
 - If the distance carrier-to-hips is shorter than that, tension is zero (slack).
-- If longer, tension = `stiffness * stretch + damping * stretchRate`, never negative.
+- If longer, tension = `stiffness * stretch + damping * stretchRate`, never negative,
+  capped at `rope.maxTension` (2500 N; 900 N while riding blind).
 
-The stiffness stands in for the rider's body and arms, not for rope stretch.
-`rider.ropeTension` is the result, in newtons.
+Defaults k = 4000 N/m, c = 600 N s/m (the design spec's values). The stiffness
+stands in for the rider's body and arms, not for rope stretch.
+`rider.ropeTension` is the raw value, used by physics; `rider.tensionSmooth`
+is an exponential filter (`rope.smoothTau`, 0.08 s) used by the HUD and the
+trick logic (`updateTensionTracker()` in `pop.ts`). Cruising sits around 380 N;
+a hard heelside cut away from the line passes 1000 N in about 0.9 s and peaks
+around 1.4 kN (`scripts/probe-tension.ts` prints a 10 s log).
+
+**Rope yank.** When the rope snaps back taut after being slack with more than
+`rope.yankCrashImpulse` (1800 N) while the rider is off balance (poor
+connection, landing, or riding blind), the rider crashes (`ropeYank`).
 
 **The elevated tow point.** With a 9 m high cable and an 18 m rope the rope
 climbs at roughly 30 degrees. So tension has an **upward component**
@@ -78,8 +88,10 @@ foot forward). `toeSign(rider)` in `edge.ts` returns +1 when the toes point to
 the right of the board's direction of travel.
 
 **Edge angle.** `rider.edgeAngle` is signed: positive heelside, negative toeside,
-limited to `EdgeConfig.maxEdgeAngle`. The player sets a *target* edge through
-`InputFrame.edge` in [-1, 1]; `updateEdge()` moves the actual angle toward it at
+limited to `EdgeConfig.maxEdgeAngle`. The player steers with A/D
+(`InputFrame.steer`, +1 = right of travel); the sim picks the edge from the
+stance (`carveToEdge()`), so carving away from the line is heelside on one
+side and toeside on the other. `updateEdge()` moves the actual angle toward it at `updateEdge()` moves the actual angle toward it at
 `edgeBuildRate` (slow) when loading and `edgeReleaseRate` (fast) when flattening.
 That rate limit is how the sim enforces a **progressive** edge: you cannot spike
 to full load instantly, you have to build it.
@@ -98,192 +110,224 @@ The magnitude of that sideways force is `rider.edgeLoad`. It is highest when the
 rider leans hard against a tight rope, which is exactly the moment riders call
 "loading the line".
 
-## 4. Pop: where air comes from
+## 4. The rider state machine
 
-Air is **energy transfer**, not just rolling off the top of something. Even off a
-kicker, a rider who hits it flat and stiff gets a fraction of the height of one
-who loads the edge and extends at the lip.
+`rider.mode` is one of ten states (`rider.ts`), and every change goes through
+`transition()` in `fsm.ts`, which knows the legal moves (`TRANSITIONS`). With
+`debug.enabled` an illegal move throws (so tests catch it) and every move is
+logged as a `transition` event with a reason.
 
-The pop is a vertical velocity impulse computed by `computePop(inputs, config)` in
-`pop.ts` from a `PopInputs` record:
-
-| Input | Meaning | Where it comes from |
+| State | Meaning | Step |
 |---|---|---|
-| `edgeLoadAtBase` | Edge load as the rider hits the base of the feature (or the peak load of a flat-water cut) | `rider.load.edgeLoadAtBase` (`LoadTracker` in `pop.ts`) |
-| `holdRatio` | Edge load at release divided by load at base; 1 means the edge was held all the way up | `rider.edgeLoad / edgeLoadAtBase` |
-| `tensionAtRelease` | Rope tension at the moment of leg extension | `rider.ropeTension` |
-| `timing` | 0..1, how well the extension lines up with the lip (or with the peak of the cut) | `popTimingFactor()` |
-| `connection` | 0..1 posture quality, see section 5 | `rider.connection` |
-| `compression` | How far the legs were bent before extending | `rider.legCompression` |
+| `riding` | On the water, handle in front | `stepWater()` |
+| `ridingBlind` | On the water, handle behind the back | `stepWater()` |
+| `waterTrickLoad` | Loaded: a water trick is armed | `stepWater()` |
+| `waterTrickAir` | In the air from a raley, roll or S-bend | `stepAirborne()` |
+| `airborne` | In the air from an ollie, kicker or feature exit | `stepAirborne()` |
+| `onKicker` | On a kicker ramp | `stepRamp()` |
+| `onSafety` | On the sloped entry of a box or rail | `stepRamp()` |
+| `onFeature` | Sliding the main of a box or rail | `stepSlide()` |
+| `landing` | 0.15 s grace after touching down on the water | `stepWater()` |
+| `crashed` | In the water, waiting `crash.respawnDelay` (2.5 s) | `stepCrashed()` |
 
-**How the rider pops.** Holding `InputFrame.load` bends the knees
-(`legCompression` rises). Releasing it extends the legs over `pop.extendTime`.
-The impulse is applied at release. So the *release* is the timing input:
+**Input.** `InputFrame` (`input.ts`) is the raw buttons: `steer` (A/D), `pop`
+(Space), `forward` (W), `back` (S), `pass` (Q), `grab` (E), `grabMod` (R/N/T),
+`armsOut` (Shift), `letGo` (X). `InputMemory` (`sim.inputs`) turns them into
+presses, releases, hold times, A/D taps (shorter than `feature.tapTime`) and
+grab chords, inside the sim, so every platform behaves the same.
 
-- Off a **kicker**: the ideal release is just before the board leaves the lip.
-  Releasing too early, low on the ramp, lets the ramp absorb it; releasing after
-  leaving the lip does nothing (you cannot push off air).
-- On **flat water** (air trick): the ideal release is while the edge load is
-  still at its peak. Flattening the board first (low `holdRatio`) kills the pop.
+## 5. Ollies, air and landings
 
-## 5. Posture and connection
+**Ollie.** Holding Space charges `rider.popCharge` from 0 to 1 over
+`ollie.chargeTime` (0.5 s); releasing pops with `lerp(ollie.minV, ollie.maxV,
+charge)` upward (3.5 to 6.5 m/s: about 0.6 to 2 m of air). See `pop.ts`.
 
-Good riders keep the handle low and close to the hips, the chest up, and the
-arms soft but in. Common faults all **bleed tension**:
+**Flight** (`stepAir()` in `air.ts`): gravity, air drag, and the rope, which
+still pulls when taut and shortens big airs.
 
-- Hinging at the waist (`rider.waistHinge`).
-- Letting the handle drift away from the hips (`rider.handleDist` grows).
-- Extending the arms early, before the lip (also `handleDist`).
-- Letting go (`InputFrame.release`, or grip overload: `RopeConfig.gripLimit`).
+**Rotation tracker** (`rotation.ts`, state in `air.rot`):
+- **Spin** (A/D): `spin.rate` 540 deg/s, reached in `spin.accelTime` 0.1 s. On
+  release the spin carries on to the next half turn if that is within
+  `spin.maxCarry` (90 deg); otherwise it stops there (under-rotated).
+- **Flip** (W front flip, S tantrum) around the board's long axis:
+  `flip.rate` 400 deg/s, carrying to the next whole turn within `flip.maxCarry`.
+- **Frontside or backside** is decided when a spin starts
+  (`rotationSide()`): frontside if the chest turns toward the pull (the rope
+  direction) first, backside if the back does.
 
-Riders call the result being **disconnected**. `updatePosture()` in
-`posture.ts` moves `handleDist` and `waistHinge` from inputs and load, and
-`connectionFactor()` combines them into `rider.connection` in [0, 1]. A larger
-`handleDist` also lengthens the effective rope, so slack and tension loss are
-physical, not just a score penalty.
+**Handle system** (`handle.ts`, `rider.handle`: `inFront`, `behind`,
+`passing`, `dropped`). The handle stays on the rope, so past a point the
+rotation would wrap the rope round the body:
+- Backside: pass zone 90-180 deg (and every 360 after). Frontside: the first
+  180 needs no pass; the zone is 180-270.
+- Q inside the window (centred on the zone; `handlePass.*Window`: 0.18 s off
+  kickers, 0.25 s from obstacle exits, water tricks and flat ollies, 0.35 s on
+  features) passes the handle. Q at any other time during a rotation drops it.
+- No pass, backside, in the air: the rope stops the spin at 180 with the handle
+  behind the back: **to blind**. Spinning back the way you came brings it out.
+  DECISION (the spec leaves it open): frontside without a pass, the rope pulls
+  the rider back to the 180. On a feature a missed pass drops the handle.
 
-## 6. In the air
+**Riding blind** (`ridingBlind`): steering x0.4, edge at most 0.5, tension at
+most 900 N, and `blind.maxRideTime` (3 s) before an edge catches. A/D the way
+the rider came spins out in 0.4 s; the other way catches an edge. DECISION:
+A/D presses in blind are spin-outs, so the reduced steering only applies while
+spinning out. Space pops from blind; spinning out in the air is a
+"Blind 180 Out".
 
-`stepAir()` in `air.ts` integrates gravity, rope force and light air drag.
-Rotation is tracked separately from the board's ballistic motion in
-`rider.air` (`AirState`):
+**Grabs** (E): indy; E+R stalefish, E+N nose, E+T tail. A modifier pressed
+within `grab.chordWindow` (0.08 s) of E still counts (`updateInputMemory()`).
+Grab times accumulate in `air.grabTimes`.
 
-- **Handle position controls rotation and tension.** Handle in (`handleIn` near 1)
-  gives faster rotation (smaller moment of inertia) and keeps the rope working;
-  handle out slows rotation and bleeds tension.
-- **Spins** (`spinAngle`) are driven by `InputFrame.spin`. Spins should start
-  *after* the peak. Starting one while still rising sets `air.spunBeforePeak`,
-  costs height (`air.earlySpinPenalty`) and is penalised in execution scoring.
-- **Inverts** (`flipAngle`) must be committed at takeoff: `InputFrame.flip` held
-  when the pop fires sets `air.flipDir` (-1 back, +1 front). The rotation then
-  runs by itself for one full turn at `air.invertRate` (faster with the handle
-  in); not enough air time means under-rotation, and holding the flip input past
-  a full turn keeps rotating (over-rotation). The axis is decided by how hard the
-  rider was cutting across the line at takeoff (`air.axis`: `"flip"` when nearly
-  straight, `"roll"` when the cut angle exceeds `air.rollAxisCut`).
-- **Board direction in the air.** Without a spin the board follows the direction
-  of travel, since the rope steers the rider in the air too. Only
-  `air.spinAngle` counts toward landing alignment.
-- **Raleys** (`air.raley`): with a very hard edge and high tension at takeoff,
-  holding `InputFrame.raley` swings the body up above the board using the rope.
-  The body must come back down (`air.raleyExtension` back near 0) before landing.
-- **Grabs** (`air.grab`): holding a grab input for at least `air.minGrabTime`
-  registers it.
-- **Air tricks** use the elevated rope for lift instead of a feature: hard cut,
-  edge in, pop on flat water.
+**Landing** (`evaluateLanding()` in `landing.ts`), in order:
+handle dropped; flip or roll off a whole turn by more than
+`landing.maxFlipError` (40 deg; under/over-rotated); board more than
+`landing.maxYawError` (35 deg) off forward or switch; a grab still held
+(DECISION `landing.grabHeldCrashes`: crash, else the combo multiplier halves);
+a raley still extended more than `waterTrick.maxLandingExtension` (30 deg);
+impact beyond what the legs absorb. Both errors under `landing.cleanThreshold`
+(12 deg) is a clean landing (+10% points). A landing after an odd number of
+half turns flips the stance (switch). Landing with the handle behind goes to
+`ridingBlind` after the grace.
+
+## 6. Water tricks (tension based)
+
+`waterTrick.ts`. **Arming** (`canArm()`): on the water, travelling more than
+`waterTrick.sidewaysAngle` (35 deg) off the rope direction, smoothed tension
+over `waterTrick.tensionThreshold` (1000 N), edge over 0.7 and the handle in
+front: the rider is `waterTrickLoad` (LOADED on the HUD). Below the threshold
+minus `hysteresis` (100 N) it disarms. A held heelside cut stays loaded for
+about 1.2 s.
+
+**Pop.** Releasing Space while loaded launches a water trick. Timing
+(`waterTrickTiming()` in `pop.ts`) is how close the release is to the tension
+peak of the last `historyTime` (0.4 s): after the peak, `1 - age / peakWindow`;
+still rising, the time to the peak predicted from the first and second
+differences. Height `h = baseHeight (T/1000)^1.2 (0.5 + 0.5 timing)`, capped at
+`maxHeight` (`waterTrickHeight()`); the pop speed is `sqrt(2 g h)`.
+
+**Which trick** (`planWaterTrick()`): Space alone a **raley**, S + Space a
+**backroll**, W + Space a **frontroll**. Rolls turn one full roll at the rate
+that fits the planned airtime, but never faster than the rate for
+`minRollHeight` (1.4 m): a lower pop cannot finish the roll.
+
+**Raley phases** over progress `u` (0..1 of the planned airtime,
+`raleyExtension()`): pop to `popPhaseEnd`, extended (body horizontal, board
+above the head) to `extensionEnd`, swing down to `swingDownEnd`, landing prep.
+Spinning, grabbing or an S-bend during the swing-down slows it
+(`heldSwingFactor`), so staying busy can land the rider still extended (crash).
+
+**S-bend**: A/D in the raley position, inside `sBend.windowStart`-`windowEnd`
+(0.25-0.45 of the airtime), rolls the raley sideways; outside the window A/D
+just spins. **Mobe**: any invert with at least a 360 spin.
 
 ## 7. Features
 
-Defined as data in `park.ts` (`FeatureDef`) and queried in `features.ts`:
+Defined as data in `park.ts` (`FeatureDef`) and queried in `features.ts`;
+ridden in `onFeature.ts`.
 
-- **Kicker**: a curved ramp described by length, width, height and lip angle.
-  `kickerHeightAt(u)` is a power curve whose slope at the lip equals the lip angle.
-  On the ramp the board follows the surface (`stepFeature()` in `onFeature.ts`);
-  at the lip it launches with the surface's velocity direction plus the pop.
-  Riding onto the ramp snapshots `load.edgeLoadAtBase`. On the ramp the hold
-  ratio is the edge angle still held relative to the edge angle at the base
-  (`ramp.edgeAngleAtBase`): flattening on the way up costs pop. A release on
-  the ramp is stored as `ramp.pendingPop` and applied when the board leaves
-  the lip; a release on the water before the ramp pops on flat water, which
-  usually means landing on the ramp (`featureCrash`).
-- **Slider / box / rail**: a flat top at a fixed height, entered by a short entry
-  ramp. On it the rider slides with low friction and must keep `rider.jib.balance`
-  inside [-1, 1] (`updateJib()`). Being off-centre, holding the board between
-  0 and 90 degrees, and the rope's sideways pull tip the balance; leaning with
-  the edge input corrects. Board angle relative to the rail (`jib.boardAngle`,
-  driven by the spin input) picks the jib trick (`50-50` aligned, `boardslide`
-  across). Releasing the load on a slider ollies off it.
-- Hitting a feature from the wrong side is a `featureCrash` fall.
+- **Kicker**: a curved ramp (length, width, height, lip angle;
+  `kickerHeightAt(u)` is a power curve whose slope at the lip is the lip
+  angle). On the ramp (`onKicker`) no tricks: the board follows the surface and
+  launches with the ramp's exit velocity. A Space release within
+  `kicker.lipPopWindow` (0.12 s) before the lip adds `kicker.lipPopBonus` (20%)
+  of the vertical speed. The air off a kicker is the full air domain.
+- **Box, rail, pipe** (`SliderDef`, `style` is the look): a **safety** (the
+  entry ramp, `entryLength`) and a **main** (the slide surface).
+  `safety: 'flush' | 'gap'`.
+  - **Ollie on** from the water: coming in below the main's top plus
+    `ollie.clearance` (0.1 m) clips the edge (`shortOllie`), checked per part as
+    the board flies onto it (`airOverFeature()`).
+  - **Safety pop**: only the last `safety.popWindowFraction` of the safety
+    counts, at least `safety.popWindowMinMetres` (`safetyWindow()`). In the
+    window: onto the main; its centre `perfectFraction` is a "Pop-on" (+150).
+    Too early: gap crashes, flush makes the entry sketchy (combo x0.8). No
+    pop: gap crashes (`missedSafetyPop`), flush rides on.
+  - **On the main** (`onFeature`, `rider.jib`): A/D held past `feature.tapTime`
+    turns the board in 90-degree steps (`rotateTimePer90`, 0.18 s); taps correct
+    the balance instead. Board angle names the slide (`slideIdAt()`): parallel
+    is a **50-50** (a **Switch 50-50** after a half turn), perpendicular with
+    the chest toward the direction of travel a **Backboard**, with the back
+    toward it a **Frontboard**. Rotations through a backside pass zone need Q in
+    the 0.35 s window, or the handle drops. Balance drifts with smooth noise
+    (`valueNoise()`, faster on rails) and the rope's sideways pull; past +-1 the
+    rider falls off. `feature.balanceEnabled` turns it off.
+  - **Exit**: Space pops off; riding off the end rolls off. The air starts with
+    the board's angle on the feature (`air.spinStart`), so leaving a boardslide
+    needs a "90 Off" or "270 Off" spin to land.
 
 **The default park** (`parkLayout.ts`): the cable layout is the user's sketch
 (`docs/park-sketch.jpg`), a five-tower "house" loop with tall sides and a
 peaked roof to the north, about 586 m a lap, run counter-clockwise so the
 inside of the loop is to the rider's left (`offset` < 0). Every feature faces
-the direction of travel. Ten features where the sketch
-puts them: 5 kickers (one under the south line, a big kicker at the east
-shoulder tower, a small one, and a pair either side of the east line), 3 round
-pipes (two side by side inside the west line, one on the north-west roof
-edge), a box outside the west line and a kick rail on the north-east roof
-edge. Shapes the sketch draws far off the line are pulled in to 4-10 m, which
-is what an 18 m rope can reach. Runs start from the starting dock on the south
-line (`ParkDef.startS`). The scenery follows the user's park map and photos
-(lake, long wooded island in the middle, watch terrace and clubhouse to the
-west, tents and halls to the south, fields to the north): `ParkDef.site`, for
-the renderers only. The sim does not collide with land; instead the shoreline
-keeps at least 12 m from the cable and the island at least 18 m
+the direction of travel. Ten features where the sketch puts them: 5 kickers, 3
+round pipes, a box and a kick rail. The kick rail and long pipe have gap
+safeties, the rest flush. Runs start from the starting dock on the south line
+(`ParkDef.startS`). The scenery follows the user's park map and photos
+(`ParkDef.site`, renderers only). The sim does not collide with land; the
+shoreline keeps at least 12 m from the cable and the island at least 18 m
 (`tests/site.test.ts`).
 
-**Soft landings.** Landing impact is measured along the surface normal
-(`evaluateLanding()`), so landing on a down-ramp or transition is softer than
-dropping to flat water from the same height. Absorbing with bent knees
-(`legCompression` on touchdown) also softens it.
+**The test map** (`TEST_PARK`, `?park=test`, spec section 16): a 1.2 m kicker,
+a flush funbox, a gap box and an 8 m rail, all on the line.
 
-## 8. Falls
+## 8. Crashes
 
-`evaluateLanding()` in `landing.ts` returns `null` (clean) or a `FallKind`:
+Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
+(the rope slackens), the combo is voided, and the rider waits
+`crash.respawnDelay` (2.5 s) before respawning on the cable behind the carrier.
 
-| Fall | Cause in the sim |
+| Reason | Cause |
 |---|---|
-| `buttCheck` | Heavy normal impact without absorbing (legs straight, hinged, raley not returned) |
-| `caughtEdge` | Touching down on a big edge angle (`landing.maxEdgeFraction`) |
-| `overRotation` / `underRotation` | Invert residual beyond `maxFlipError`, or spin more than `maxYawError` from a whole half turn |
-| `droppedHandle` | Player let go, or tension over `gripLimit` for longer than `gripTime` |
-| `featureCrash` | Hit a feature from the side or back, or lost balance on a slider |
+| `shortOllie` | Flew into a main below its top plus the clearance |
+| `missedSafetyPop` | Gap safety without a valid pop |
+| `handleDropped` | Q at the wrong time, or a missed pass on a feature |
+| `underRotated` / `overRotated` | Spin or flip off at touchdown |
+| `grabHeldOnLanding` | Still grabbing at touchdown |
+| `raleyExtendedOnLanding` | Raley not swung down in time |
+| `caughtEdgeBlind` | Wrong spin-out direction, or blind too long |
+| `fellOffFeature` | Balance out of range, stalled, or off the side |
+| `ropeYank` | Hard snap back to taut while off balance |
+| `badLandingYaw` | Board sideways without having spun |
+| `hardLanding` | Impact beyond what the legs absorb |
+| `hitFeature` | Rode or flew into a kicker or safety the wrong way |
+| `letGo` | Let go of the handle (X) |
 
-After a fall the rider is `fallen`; the run session (`session.ts`) counts it and
-respawns or ends the run.
+## 9. Tricks, names and points
 
-## 9. Tricks are data
+`tricks/data.ts` is the registry (spec section 11.4): base points for the
+raley (300), tantrum and front flip (400), rolls (450), S-bend (600), spins
+(150 per 180, backside x1.2), handle passes (100), grabs (60 per 0.25 s held,
+up to 4), landing to blind (+150), blind out (+200), Mobe (+350), pop-on (+150),
+slides per second (50-50 80, boardslides 120), ollie 50.
 
-`tricks/data.ts` holds the catalogue; `tricks/classify.ts` maps what happened in
-the air (`AirRecord`) to a name and a difficulty. Nothing about trick names is
-hard-coded in the physics.
+`tricks/classify.ts` turns one air (`classifyAir()`) or one slide
+(`classifySlide()`) into a `TrickResult` with **tokens** (`Entry`, `Slide`,
+`Spin`, `Flip`, `Invert`, `Grab`, `HandlePass`, `Blind`, `Exit`, `Pop`) and a
+name: "Backside 360 Indy", "Tantrum to Blind", "Mobe Stalefish", "Front Flip
+Nose", "Blind 180 Out", "Pop-on 50-50 to Backboard", "270 Off".
 
-- **Jumps**: off a kicker, a slider or flat water. `Backside` = heelside approach,
-  `Frontside` = toeside approach, `Straight` = no edge, regular or switch
-  ("Backside Kicker Air", "Frontside Air Trick"). Boat wakeboarding's one-wake
-  and two-wake jumps have no cable equivalent; kicker size plays that role.
-  Rolling off a slider or being lifted by the line without popping is not a
-  trick.
-- **Spins**: 180, 360, 540, 720. Direction: **frontside** (chest opens to the
-  direction of travel) or **backside / blind** (back turns first). Frontside sign is
-  `-toeSign` in the sim's yaw convention.
-- **Inverts** (head becomes the lowest point), the six basics:
+## 10. Combos and scoring
 
-  | Trick | Approach | Direction | Axis |
-  |---|---|---|---|
-  | Tantrum | heelside | back | flip |
-  | Heelside backroll | heelside | back | roll |
-  | Heelside frontflip | heelside | front | flip |
-  | Toeside backroll | toeside | back | roll |
-  | Toeside frontflip | toeside | front | flip |
-  | Frontroll | toeside | front | roll |
+**Combos** (`session.ts`, `scoring/combo.ts`): tricks chain while each new one
+starts within `combo.linkWindow` (2 s of riding on the water after the last
+landing; time in the air or on a feature does not count). Combo score =
+`sum(points x quality x repeat) x min(4, 1 + 0.25 (n - 1)) x product(comboFactor)`,
+where repeating a name in the same combo scores it x0.5. A crash voids the
+whole combo. Banked combos add to `run.points` (the HUD and the leaderboard).
 
-- **Raley**: heelside or toeside, requires `raley.minEdgeLoad` and tension.
-- **Grabs**: indy, melon, mute, stalefish, nose, tail.
-- **Combos**: named combinations, for example the **scarecrow** = toeside
-  frontroll + frontside 180.
-- **Jibs**: 50-50, boardslide on sliders.
+**Judges.** At the end of a run (two passes, or `run.maxFalls` crashes) a
+panel of three judges also scores it IWWF-style from the trick log
+(`scoring/metrics.ts`, `scoring/judges.ts`): execution (landing quality, pops,
+sketchy landings, crashes), intensity (difficulty = points / 250, height, air
+time) and composition (variety, use of the park, flow without dead water),
+weighted 3.3 / 3.4 / 3.3. Each judge has a small seeded bias.
 
-## 10. Scoring
-
-Competition judging (IWWF style) uses three judges, each scoring 1 to 10 on:
-
-- **Execution** (weight 3.3): clean landings, completed tricks, no falls.
-- **Intensity** (weight 3.4): size (height, distance, air time) and difficulty.
-- **Composition** (weight 3.3): variety, use of the features, flow, no dead water.
-
-Difficulty modifiers raise a trick's intensity: number of rotations (`SPINS`),
-switch, grabbed, blind spins, combos (`MODIFIERS` in `tricks/data.ts`). A run is
-two passes (in the sim, two laps of the cable) and two falls end a run. Both are
-config (`RunConfig.passesPerRun`, `RunConfig.maxFalls`).
-
-`session.ts` turns sim events into `TrickRecord`s and `FallRecord`s;
-`scoring/metrics.ts` aggregates them (`computeRunMetrics()`), and
-`scoring/judges.ts` maps metrics to the three criteria (`criteriaFromMetrics()`)
-and runs the panel (`scoreRun()`). Each judge has a small deterministic bias from
-a seeded RNG so a panel is reproducible. Dead water is time beyond
-`run.deadWaterTime` without a trick or a feature.
+**Roblox server validation**: the client sends `ComboEnded` with the combo's
+tricks and tokens; `roblox/src/shared/ComboValidator.luau` checks them
+(airtime and rotation physically possible, token points follow the registry,
+points add up, timestamps in order) and recomputes the score with the same
+`ScoringCombo` before it reaches leaderstats.
 
 ## Two implementations
 

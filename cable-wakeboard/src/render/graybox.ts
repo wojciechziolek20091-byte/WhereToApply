@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { cablePointAt } from '../sim/cable';
-import { toeSign } from '../sim/edge';
+import { riderPose } from './pose';
 import { kickerHeightAt } from '../sim/features';
 import { headingOf, lerpVec, sub, type Vec3 } from '../sim/math/vec';
 import type { FeatureDef, ResolvedFeature } from '../sim/park';
@@ -182,26 +182,14 @@ export class GrayboxRenderer {
     this.carrier.position.copy(v3(carrierPos));
     this.carrier.rotation.y = -sim.carrier.heading;
 
-    // Board yaw: travel heading plus spin in the air, or rail angle on a slider.
-    let yaw = r.heading;
-    if (r.air) yaw += r.air.spinAngle;
-    if (r.jib) yaw += r.jib.boardAngle;
+    // Board yaw, invert and lean: see pose.ts.
+    const pose = riderPose(r);
+    const toes = pose.toes;
     this.riderYaw.position.copy(v3(riderPos));
-    this.riderYaw.rotation.y = -yaw;
-
-    const toes = toeSign({ stance: r.stance, switchStance: r.air?.takeoffSwitch ?? r.switchStance });
-    // Inverts: flips turn about the board's long axis, rolls about a tilted one.
-    // Back inverts take the head toward the heel side (local z = -toes).
+    this.riderYaw.rotation.y = -pose.yaw;
     this.riderInvert.quaternion.identity();
-    if (r.air && r.air.flipDir !== 0) {
-      const axis = r.air.axis === 'flip' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(1, 0.5, 0).normalize();
-      const sign = r.air.flipDir < 0 ? -toes : toes;
-      this.riderInvert.quaternion.setFromAxisAngle(axis, sign * r.air.flipAngle);
-    }
-    // Raley: body swings out toward the heel side, laid out flat at full extension.
-    const raley = r.air ? r.air.raleyExtension : 0;
-    // Edge tilt: dip the loaded edge. Positive rotation.x dips local +z (right).
-    this.riderEdge.rotation.x = -toes * r.edgeAngle - toes * raley * 1.3;
+    if (pose.invert) this.riderInvert.quaternion.setFromAxisAngle(new THREE.Vector3(...pose.invert.axis).normalize(), pose.invert.angle);
+    this.riderEdge.rotation.x = pose.lean;
     this.riderInvert.position.y = 0;
 
     const squat = 1 - 0.3 * r.legCompression;
@@ -210,7 +198,7 @@ export class GrayboxRenderer {
     // The head leans toward the toes (the way the rider faces) and forward when hinged.
     this.head.position.set(r.waistHinge * 0.25, 0.06 + 1.35 * squat, toes * 0.12);
 
-    if (r.hasHandle) {
+    if (r.handle !== 'dropped') {
       const hip = hipPosition(sim);
       const hipLerped = { x: hip.x + riderPos.x - r.pos.x, y: hip.y + riderPos.y - r.pos.y, z: hip.z + riderPos.z - r.pos.z };
       this.rope.visible = true;

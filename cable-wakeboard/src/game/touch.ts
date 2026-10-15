@@ -4,8 +4,9 @@ import type { Keyboard } from './keyboard';
 const BUTTONS: { id: string; label: string; code: string; side: 'left' | 'right' }[] = [
   { id: 'touch-left', label: 'Left', code: 'KeyA', side: 'left' },
   { id: 'touch-right', label: 'Right', code: 'KeyD', side: 'left' },
-  { id: 'touch-back', label: 'Backflip', code: 'KeyS', side: 'right' },
-  { id: 'touch-grab', label: 'Grab', code: 'KeyJ', side: 'right' },
+  { id: 'touch-back', label: 'Back', code: 'KeyS', side: 'right' },
+  { id: 'touch-pass', label: 'Pass', code: 'KeyQ', side: 'right' },
+  { id: 'touch-grab', label: 'Grab', code: 'KeyE', side: 'right' },
   { id: 'touch-pop', label: 'Pop', code: 'Space', side: 'right' },
 ];
 
@@ -64,14 +65,15 @@ export function mountStartScreen(
   ).join('');
   overlay.innerHTML = `
     <div class="start-card">
-      <p class="start-eyebrow">Full-size cable, 30 km/h, 4 towers, 4 kickers, 3 boxes, 2 rails</p>
+      <p class="start-eyebrow">Full-size cable, 30 km/h, 5 towers, 5 kickers, a box, a kick rail, 3 pipes</p>
       <h1 class="start-title">Cable Wakeboard</h1>
-      <p class="start-body">Cut out from the line, cut back in, and release the pop while the rope is loaded.
-        Two laps per run, two falls and you are out. Three judges score the run.</p>
+      <p class="start-body">Edge hard away from the line until the rope is LOADED, then release Space for a raley,
+        backroll or frontroll. Spin, flip, grab and pass the handle in the air; slide the box and pipes.
+        Chain tricks inside 2 seconds for a combo. Two laps per run, two crashes and you are out.</p>
       <div class="rider-row" role="group" aria-label="Rider">${riders}</div>
       <button type="button" id="start-ride" class="start-btn">Start riding</button>
-      <p class="start-keys">Keyboard: A/D carve, hold and release Space to pop, W/S at the pop to flip,
-        J K L I U O grabs, Enter restarts. Touch screens get on-screen buttons.</p>
+      <p class="start-keys">Keyboard: A/D carve and spin, Space pop, S/W flips and rolls, Q handle pass,
+        E (+R/N/T) grabs, H for all keys. Touch screens get on-screen buttons.</p>
     </div>`;
   root.appendChild(overlay);
   overlay.querySelectorAll<HTMLButtonElement>('.rider-pick').forEach((btn) => {

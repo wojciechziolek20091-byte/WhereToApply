@@ -36,6 +36,8 @@ export interface SliderDef extends FeatureBase {
   width: number;
   height: number;
   entryLength: number;
+  /** How the safety (entry ramp) meets the main: 'flush' rides on, 'gap' needs the pop. */
+  safety: 'flush' | 'gap';
 }
 
 export type FeatureDef = KickerDef | SliderDef;

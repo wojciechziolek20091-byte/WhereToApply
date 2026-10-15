@@ -1,31 +1,121 @@
-import type { GrabId } from './tricks/data';
 import type { Vec3 } from './math/vec';
+import type { GrabId, SlideId } from './tricks/data';
 
-export type RiderMode = 'riding' | 'feature' | 'air' | 'fallen';
+/**
+ * Top-level rider state (spec section 4.3). Every change goes through
+ * `transition()` in fsm.ts, which knows the legal moves.
+ *
+ * - riding          on the water, handle in front
+ * - ridingBlind     on the water, handle behind the back
+ * - waterTrickLoad  tension over the threshold while edging: a water trick is armed
+ * - waterTrickAir   in the air from a raley, roll or S-bend
+ * - airborne        in the air from an ollie, kicker or feature exit
+ * - onKicker        on a kicker ramp (no tricks except the lip pop)
+ * - onSafety        on the sloped entry of a box or rail
+ * - onFeature       sliding the main part of a box or rail
+ * - landing         short grace after touching down on the water
+ * - crashed         in the water, waiting for the respawn
+ */
+export type RiderMode =
+  | 'riding'
+  | 'ridingBlind'
+  | 'waterTrickLoad'
+  | 'waterTrickAir'
+  | 'airborne'
+  | 'onKicker'
+  | 'onSafety'
+  | 'onFeature'
+  | 'landing'
+  | 'crashed';
 
-export type Approach = 'heelside' | 'toeside' | 'neutral';
+/** Where the handle is relative to the body (spec section 8). */
+export type HandleState = 'inFront' | 'behind' | 'passing' | 'dropped';
 
-export type TakeoffSource = 'flat' | 'kicker' | 'slider' | 'lineLift';
+export type CrashReason =
+  | 'shortOllie'
+  | 'missedSafetyPop'
+  | 'handleDropped'
+  | 'underRotated'
+  | 'overRotated'
+  | 'grabHeldOnLanding'
+  | 'raleyExtendedOnLanding'
+  | 'caughtEdgeBlind'
+  | 'fellOffFeature'
+  | 'ropeYank'
+  | 'badLandingYaw'
+  /** Impact harder than the legs can absorb. */
+  | 'hardLanding'
+  /** Rode or flew into a feature the wrong way. */
+  | 'hitFeature'
+  /** Let go of the handle (X). */
+  | 'letGo';
 
-export type FallKind =
-  | 'buttCheck'
-  | 'caughtEdge'
-  | 'overRotation'
-  | 'underRotation'
-  | 'droppedHandle'
-  | 'featureCrash';
+export type TakeoffSource = 'flat' | 'kicker' | 'feature' | 'waterTrick' | 'lineLift' | 'blindPop';
 
-/** Remembers edge load for the pop. See pop.ts. */
-export interface LoadTracker {
-  /** Edge load when the rider hit the base of the current feature (N), or 0. */
-  edgeLoadAtBase: number;
-  /** Peak edge load in the last `pop.peakMemory` seconds (N). */
-  peakEdgeLoad: number;
-  /** Seconds since that peak. */
-  peakAge: number;
+export type RotationSide = 'frontside' | 'backside';
+
+/**
+ * Spin (around world up) and flip (around the board's long axis), plus the
+ * handle-pass bookkeeping for the spin. Used in the air and on features.
+ */
+export interface RotationState {
+  /** Yaw since the rotation context started (rad), + clockwise from above. */
+  spinAngle: number;
+  /** Current spin rate (rad/s), signed like spinAngle. */
+  spinRate: number;
+  /** After A/D is released: where the spin carries to, or null when stopped. */
+  spinTarget: number | null;
+  /** Direction of the current spin: -1, 0 or 1 (sign of spinAngle growth). */
+  spinDir: number;
+  /** Direction the first spin of this context went (-1 or 1), 0 before any spin. */
+  startDir: number;
+  /** Handle progress at spinAngle 0 (rad): PI when the context starts blind. */
+  progressOffset: number;
+  /** Decided when the spin starts: does the chest or the back turn to the pull first. */
+  spinSide: RotationSide | null;
+  /** Largest |spinAngle| reached in this context (rad). */
+  maxSpin: number;
+  /** Flip angle (rad): + front flip, - tantrum. */
+  flipAngle: number;
+  flipRate: number;
+  flipTarget: number | null;
+  /** Handle-pass window length for this context (s). */
+  passWindow: number;
+  /** Handle-pass zones already resolved (passed, or stopped at). */
+  zonesResolved: number;
+  /** Successful handle passes. */
+  passes: number;
+  /** Seconds left in a pass animation. */
+  passTimer: number;
+  /** Spin was stopped by the rope (no pass): the rider is at the wrapped limit. */
+  stoppedByRope: boolean;
+  /** Spin direction that took the rider blind, or 0. */
+  blindDir: number;
 }
 
-/** Everything about the current jump. Null while on the water. */
+/** Raley, backroll, frontroll and S-bend: the parts physics needs while they run. */
+export interface WaterTrickState {
+  kind: 'raley' | 'backroll' | 'frontroll';
+  /** -1 / +1 once a raley has turned into an S-bend (left / right), else 0. */
+  sBend: number;
+  /** Predicted airtime at the pop (s). */
+  airtime: number;
+  /** Progress through the trick, 0..1 of the predicted airtime (slowed by held inputs). */
+  u: number;
+  /** Raley body extension (rad): 0 over the board, PI/2 horizontal. */
+  extension: number;
+  /** Roll angle around the roll axis (rad), for rolls and S-bends. */
+  rollAngle: number;
+  rollRate: number;
+  /** 0..1 pop timing against the tension peak. */
+  timing: number;
+  /** Planned height (m). */
+  height: number;
+  /** The A/D key that started the S-bend is still held, so it does not also spin. */
+  sBendKeyHeld: boolean;
+}
+
+/** Everything about the current jump. Null while not airborne. */
 export interface AirState {
   source: TakeoffSource;
   featureId: string | null;
@@ -33,64 +123,71 @@ export interface AirState {
   takeoffPos: Vec3;
   /** Direction of travel at takeoff. */
   takeoffHeading: number;
-  approach: Approach;
   takeoffSwitch: boolean;
-  /** Cut angle relative to the rope at takeoff (rad). */
-  cutAtTakeoff: number;
-  edgeLoadAtTakeoff: number;
   tensionAtTakeoff: number;
-  /** Vertical speed added by the pop (m/s). */
+  /** Vertical speed added at takeoff (m/s). */
   popSpeed: number;
-  /** 0..1 pop quality used by scoring. */
+  /** 0..1 pop timing quality. */
   popQuality: number;
   /** Highest board height above the water (m). */
   peakHeight: number;
   passedPeak: boolean;
-  /** Board yaw relative to takeoff heading (rad), signed. */
-  spinAngle: number;
-  spinStarted: boolean;
-  spunBeforePeak: boolean;
-  /** -1 back, +1 front, 0 no invert. */
-  flipDir: -1 | 0 | 1;
-  /** Invert rotation so far (rad), always >= 0. */
-  flipAngle: number;
-  axis: 'flip' | 'roll';
+  /** Board yaw off the travel direction at takeoff (rad): leaving a feature sideways starts at 90. */
+  spinStart: number;
+  rot: RotationState;
+  /** Grab being held right now (null before the chord resolves). */
   grab: GrabId | null;
-  grabTime: number;
-  /** Grab held long enough to count, if any. */
-  grabbed: GrabId | null;
-  raleyEligible: boolean;
-  /** 0 board under the rider .. 1 body fully stretched out above. */
-  raleyExtension: number;
-  raleyPeak: number;
+  /** Seconds held of each grab this air. */
+  grabTimes: Record<GrabId, number>;
+  /** Water trick in progress, if this air is one. */
+  trick: WaterTrickState | null;
+  /** Popped from riding blind: spinning out counts as "Blind N Out". */
+  fromBlind: boolean;
+  /** Kicker: popped at the lip. */
+  lipPop: boolean;
+  /** Feature part ('id:main' / 'id:ramp') the board is above, for the clearance check. */
+  overFeature: string | null;
 }
 
-/** State while sliding a box or rail. */
-export interface JibState {
-  featureId: string;
-  /** Must stay in [-1, 1]. */
-  balance: number;
-  /** Board yaw relative to the rail axis (rad). */
-  boardAngle: number;
-  time: number;
-  /** Seconds spent near 0 and 90 degrees. */
-  alignedTime: number;
-  crossedTime: number;
-}
-
-/** Contact with a feature surface (kicker ramp or slider). */
+/** Contact with a feature surface (kicker ramp or the safety of a box or rail). */
 export interface RampState {
   featureId: string;
   /** Distance along the feature axis from its start (m). */
   u: number;
   /** Distance to the right of the axis (m). */
   v: number;
-  /** Edge angle when the rider hit the base (rad). */
-  edgeAngleAtBase: number;
-  /** Tick the pop was released while on this feature, or -1. */
+  /** Space released while on this ramp: the tick, or -1. */
   releaseTick: number;
-  /** Pop computed at release, applied when leaving the lip. */
-  pendingPop: { speed: number; quality: number } | null;
+  /** Kicker: time to the lip when the pop was released (s), or -1. */
+  releaseTimeToLip: number;
+  /** Safety: an early pop onto a flush main makes the entry sketchy. */
+  sketchy: boolean;
+}
+
+/** Sliding the main part of a box or rail. */
+export interface JibState {
+  featureId: string;
+  /** Balance meter, must stay in [-1, 1]. */
+  balance: number;
+  /** Board yaw relative to the feature axis (rad). Rests on multiples of 90 degrees. */
+  boardAngle: number;
+  /** Where the current 90-degree step ends (rad). */
+  targetAngle: number;
+  /** Board angle on getting on (rad): landing in a boardslide starts at 90. */
+  entryAngle: number;
+  /** Seed of this slide's balance noise. */
+  noiseSeed: number;
+  time: number;
+  /** Seconds spent in each slide. */
+  slideTimes: Record<SlideId, number>;
+  /** Slides in the order they were first held. */
+  slideOrder: SlideId[];
+  /** How the rider got on: a perfect pop off the safety, a pop in its window, an ollie or air onto it, or rode on. */
+  entry: 'popOn' | 'pop' | 'ollieOn' | 'rideOn';
+  /** Early pop onto a flush main: combo multiplier x0.8. */
+  sketchy: boolean;
+  /** Rotation on the feature (spin only), with handle-pass windows. */
+  rot: RotationState;
 }
 
 export interface RiderState {
@@ -106,27 +203,39 @@ export interface RiderState {
   edgeAngle: number;
   /** Sideways force the edge is holding (N). */
   edgeLoad: number;
+  /** Raw rope tension (N) and its smoothed value for the HUD and trick logic. */
   ropeTension: number;
+  tensionSmooth: number;
+  /** Peak smoothed tension over the last `waterTrick.historyTime`, and its age (s). */
+  tensionPeak: number;
+  tensionPeakAge: number;
+  /** Smoothed tension one and two ticks ago, for its rate of change. */
+  tensionPrev: number;
+  tensionPrev2: number;
   ropeForce: Vec3;
   /** Heading from rider toward the carrier (rad). */
   ropeHeading: number;
   slackTime: number;
-  overGripTime: number;
-  hasHandle: boolean;
+  handle: HandleState;
   handleDist: number;
   waistHinge: number;
   connection: number;
+  /** Knee bend (visual and landing absorption), follows the pop charge. */
   legCompression: number;
-  /** Load input last tick, to detect release. */
-  loadHeld: boolean;
-  /** Seconds left in the leg extension after a pop release. */
-  extendTimer: number;
-  load: LoadTracker;
+  /** 0..1 ollie charge while Space is held. */
+  popCharge: number;
+  /** Seconds riding blind. */
+  blindTime: number;
+  /** Spinning back out of blind on the water: seconds left and direction, or null. */
+  spinOut: { time: number; dir: number } | null;
+  /** Rotation that took the rider blind (kept while riding blind). */
+  blindDir: number;
   air: AirState | null;
   ramp: RampState | null;
   jib: JibState | null;
-  fallTimer: number;
-  lastFall: FallKind | null;
+  /** Seconds left before the respawn while crashed. */
+  crashTimer: number;
+  lastCrash: CrashReason | null;
   /** Seconds in the current mode. */
   modeTime: number;
 }
