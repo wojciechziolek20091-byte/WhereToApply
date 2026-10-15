@@ -70,7 +70,10 @@ All colours and proportions are in the `CONFIG` table at the top of
 - Head: a plain skin block and one wedge for the face plane. Helmet: banded
   block, a 45-degree band for an octagonal shell, sloped dome wedges, a brim
   wedge, vents.
-- Oversized gloves and boots, thick baggy legs with a knee bend, a bevelled
+- Slim, shaped body: torso sections taper from chest to waist (`TorsoSections`),
+  limbs have an octagonal cross-section (each chunk plus a copy turned 45
+  degrees), and shoulders, elbows, hips and knees are faceted balls.
+- Slightly oversized gloves and chunky boots, legs with a knee bend, a bevelled
   board with rocker and a tow handle in both hands.
 
 Boards (`CONFIG.Board` for the shape, `CONFIG.BoardStyles` for colourways):

@@ -97,9 +97,18 @@ local CONFIG = {
 	-- Lightness change between neighbouring facet chunks (0.06 = 6 percent).
 	ShadeStep = 0.06,
 	-- Largest rotation of one chunk off its neighbour, in degrees.
-	ChunkTilt = 7,
-	-- How much a chunk's size varies around its nominal size (0.12 = +/-12 percent).
-	ChunkJitter = 0.12,
+	ChunkTilt = 3,
+	-- How much a chunk's size varies around its nominal size (0.05 = +/-5 percent).
+	ChunkJitter = 0.05,
+	-- Torso cross-sections from the hips up: height fraction, width fraction, depth fraction.
+	-- Narrow at the waist, widest across the chest, so the jacket reads as a shaped body.
+	TorsoSections = {
+		{ h = 0.16, w = 0.66, d = 0.92 }, -- hips
+		{ h = 0.2, w = 0.6, d = 0.86 }, -- waist
+		{ h = 0.22, w = 0.78, d = 0.94 }, -- lower ribs
+		{ h = 0.26, w = 0.94, d = 1.0 }, -- chest
+		{ h = 0.16, w = 0.86, d = 0.86 }, -- upper chest, under the shoulders
+	},
 	-- Default facet layout seed.
 	Seed = 7,
 
@@ -162,15 +171,15 @@ local CONFIG = {
 
 	Proportions = {
 		Scale = 1, -- overall size multiplier (Model:ScaleTo after building)
-		HeadSize = 0.82, -- small simple head
-		TorsoWidth = 1.75, -- puffy jacket width
-		TorsoDepth = 1.15, -- jacket depth
-		TorsoHeight = 1.45, -- hips to shoulders
-		LegThickness = 0.74, -- thick baggy thighs
-		ArmThickness = 0.56, -- puffy sleeves
-		HandSize = 0.58, -- oversized gloves
-		BootSize = 1.0, -- chunky boots
-		KneeBend = 0.5, -- visible knee bend toward the toes
+		HeadSize = 0.74, -- small simple head
+		TorsoWidth = 1.22, -- shoulder width; the waist tapers in from here
+		TorsoDepth = 0.72, -- chest front-to-back depth
+		TorsoHeight = 1.6, -- hips to shoulders
+		LegThickness = 0.44, -- pant leg thickness at the thigh
+		ArmThickness = 0.3, -- sleeve thickness at the shoulder
+		HandSize = 0.36, -- glove size, still a little oversized
+		BootSize = 0.82, -- boot size multiplier
+		KneeBend = 0.55, -- visible knee bend toward the toes
 		Crouch = 0.15, -- slight athletic crouch
 		TorsoLean = 12, -- lean toward the toes, degrees
 		TorsoTwist = 22, -- chest turned toward the rope, degrees
@@ -328,9 +337,10 @@ end
 
 --[[
 	A limb from `a` to `b` built from `n` overlapping chunks. Thickness
-	tapers from `thickA` to `thickB`. Every other chunk gets an extra wedge
-	facet on its outer face, so the sleeve or pant leg reads as puffy and
-	angular instead of a tube.
+	tapers from `thickA` to `thickB`. Each chunk is a block plus a copy turned
+	45 degrees about the limb axis, so the cross-section is an octagon: it
+	reads as a shaped, faceted limb rather than a square post. Neighbouring
+	chunks are tilted a few degrees and shaded a step apart.
 ]]
 local function limb(ctx: Ctx, group: Instance, name: string, a: Vector3, b: Vector3, thickA: number, thickB: number, color: Color3, n: number)
 	local base = along(a, b)
@@ -338,17 +348,17 @@ local function limb(ctx: Ctx, group: Instance, name: string, a: Vector3, b: Vect
 	for i = 0, n - 1 do
 		local t = (i + 0.5) / n
 		local th = thickA + (thickB - thickA) * t
-		local cf = base * CFrame.new(jitter(ctx, th * 0.06), jitter(ctx, th * 0.06), -len * t) * tilt(ctx)
-		local size = sizeJitter(ctx, Vector3.new(th, th, len / n * 1.45))
-		local steps = ((i % 3) - 1) + jitter(ctx, 0.4)
-		prim(ctx, group, "Block", `{name}{i}`, size, cf, shade(color, steps))
-		if i % 2 == 0 then
-			-- Outer facet: a thin wedge laid on one side, rotated to a random side.
-			local side = ctx.rng:NextInteger(0, 3) * 90
-			local facet = cf * CFrame.Angles(0, 0, rad(side)) * CFrame.new(0, th * 0.4, 0) * tilt(ctx, 0.35)
-			prim(ctx, group, "Wedge", `{name}{i}Facet`, Vector3.new(th * 0.82, th * 0.16, len / n * 1.0), facet, shade(color, steps + 1))
-		end
+		local cf = base * CFrame.new(0, 0, -len * t) * tilt(ctx)
+		local chunkLen = len / n * 1.25
+		local steps = ((i % 3) - 1) * 0.8 + jitter(ctx, 0.3)
+		prim(ctx, group, "Block", `{name}{i}`, sizeJitter(ctx, Vector3.new(th, th, chunkLen)), cf, shade(color, steps))
+		prim(ctx, group, "Block", `{name}{i}Bevel`, Vector3.new(th * 0.94, th * 0.94, chunkLen * 0.98), cf * CFrame.Angles(0, 0, rad(45)), shade(color, steps + 0.8))
 	end
+end
+
+--- A rounded joint (shoulder, elbow, knee): a faceted ball.
+local function joint(ctx: Ctx, group: Instance, name: string, at: Vector3, size: number, color: Color3)
+	prim(ctx, group, "Ball", name, Vector3.new(size, size, size), CFrame.new(at) * tilt(ctx, 3), color)
 end
 
 --- Oversized glove: a palm block, a thumb wedge and a knuckle ball.
@@ -446,7 +456,7 @@ end
 local function buildBoot(ctx: Ctx, g: Instance, name: string, x: number, deckTop: number): Vector3
 	local pal = ctx.palette
 	local s = ctx.p.BootSize
-	local len, wid, hgt = 1.35 * s, 0.82 * s, 0.72 * s
+	local len, wid, hgt = 1.3 * s, 0.7 * s, 0.64 * s
 	local st = ctx.board
 	local plate = if st.binding then 0.08 * s else 0
 	if st.binding then
@@ -492,25 +502,33 @@ local function buildLegs(ctx: Ctx, deckTop: number): (Vector3, Vector3)
 	for _, dir in { 1, -1 } do
 		local name = if dir > 0 then "Front" else "Back"
 		local ankle = buildBoot(ctx, g, `{name}Boot`, dir * stance, deckTop)
-		local hip = Vector3.new(dir * 0.52, hipY, -0.08)
+		local hip = Vector3.new(dir * 0.3, hipY, -0.06)
 		local mid = (ankle + hip) / 2
 		local knee = Vector3.new(mid.X * 1.08, mid.Y - 0.05, mid.Z + p.KneeBend)
 		local th = p.LegThickness
 		limb(ctx, g, `{name}Shin`, ankle + Vector3.new(0, -0.1, 0), knee, th * 0.98, th * 0.9, pal.pants, 3)
 		limb(ctx, g, `{name}Thigh`, knee, hip, th * 0.92, th, pal.pants, 3)
-		-- Knee chunk so the bend reads clearly.
-		prim(ctx, g, "Block", `{name}Knee`, Vector3.new(th * 1.02, th * 0.9, th * 0.95), CFrame.new(knee) * tilt(ctx, 1.5), shade(pal.pants, 1))
-		-- Baggy cuff over the boot.
-		prim(ctx, g, "Block", `{name}Cuff`, Vector3.new(th * 1.12, th * 0.5, th * 1.15), CFrame.new(ankle + Vector3.new(0, 0.05, 0.05)) * tilt(ctx), shade(pal.pants, -1))
+		-- Knee and hip joints so the bend reads as a rounded shape.
+		joint(ctx, g, `{name}Knee`, knee, th * 1.02, shade(pal.pants, 1))
+		joint(ctx, g, `{name}Hip`, hip, th * 1.08, shade(pal.pants, 0))
+		-- Cuff over the boot, slightly flared.
+		prim(ctx, g, "Block", `{name}Cuff`, Vector3.new(th * 1.12, th * 0.42, th * 1.12), CFrame.new(ankle + Vector3.new(0, 0.05, 0.03)) * tilt(ctx), shade(pal.pants, -1))
+		prim(ctx, g, "Block", `{name}CuffBevel`, Vector3.new(th * 1.04, th * 0.4, th * 1.04), CFrame.new(ankle + Vector3.new(0, 0.05, 0.03)) * CFrame.Angles(0, rad(45), 0), shade(pal.pants, -0.5))
 		-- Cargo pocket on the outside of the thigh.
 		local thighMid = (knee + hip) / 2
-		prim(ctx, g, "Block", `{name}Pocket`, Vector3.new(0.12, th * 0.55, th * 0.5), CFrame.new(thighMid + Vector3.new(dir * th * 0.52, -0.05, 0.05)) * tilt(ctx, 0.5), shade(pal.pants, 1.5))
+		prim(ctx, g, "Block", `{name}Pocket`, Vector3.new(0.08, th * 0.5, th * 0.45), CFrame.new(thighMid + Vector3.new(dir * th * 0.5, -0.05, 0.03)) * tilt(ctx, 0.5), shade(pal.pants, 1.5))
 		table.insert(hips, hip)
 	end
 	return hips[1], hips[2]
 end
 
---- Puffy torso. Returns the torso CFrame (origin at hip centre, +Y up the spine).
+--[[
+	Shaped torso. Stacked cross-sections (CONFIG.TorsoSections) taper from a
+	narrow waist to a wider chest. Each section is a core block plus a
+	narrower, deeper block, which bevels the four vertical edges so the body
+	reads as rounded and faceted instead of a box. Returns the torso CFrame
+	(origin at hip centre, +Y up the spine).
+]]
 local function buildTorso(ctx: Ctx, hipCentre: Vector3): CFrame
 	local p = ctx.p
 	local pal = ctx.palette
@@ -519,39 +537,37 @@ local function buildTorso(ctx: Ctx, hipCentre: Vector3): CFrame
 	local torso = CFrame.new(hipCentre) * CFrame.Angles(0, rad(p.TorsoTwist), 0) * CFrame.Angles(rad(p.TorsoLean), 0, 0)
 	local lower = pal.jacketLower or pal.jacket
 
-	-- Pant waist under the jacket hem.
-	prim(ctx, g, "Block", "Waist", Vector3.new(w * 0.78, 0.35, d * 0.85), torso * CFrame.new(0, 0.05, 0), shade(pal.pants, 0))
+	-- Pant waistband under the jacket.
+	prim(ctx, g, "Block", "Waist", Vector3.new(w * 0.62, 0.24, d * 0.8), torso * CFrame.new(0, 0.04, 0), shade(pal.pants, 0))
 
-	-- 2 rows x 3 columns of overlapping jacket chunks.
-	for row = 0, 1 do
-		for col = -1, 1 do
-			local color = if row == 0 then lower else pal.jacket
-			local cx = col * w * 0.3
-			local cy = 0.32 + row * h * 0.42 + h * 0.18
-			local size = sizeJitter(ctx, Vector3.new(w * 0.44, h * 0.5, d * (if col == 0 then 1.0 else 0.9)))
-			local cf = torso * CFrame.new(cx, cy, jitter(ctx, 0.05)) * tilt(ctx)
-			prim(ctx, g, "Block", `Jacket{row}{col}`, size, cf, shade(color, col + row * 0.5 + jitter(ctx, 0.4)))
-		end
+	local y = 0.12
+	for i, sec in CONFIG.TorsoSections do
+		local sh = h * sec.h
+		local color = if i <= 2 then lower else pal.jacket
+		local cf = torso * CFrame.new(0, y + sh / 2, (i - 3) * 0.02) * tilt(ctx, 0.6)
+		local sw, sd = w * sec.w, d * sec.d
+		local steps = (i % 2) * 0.8 - 0.4 + jitter(ctx, 0.3)
+		prim(ctx, g, "Block", `Torso{i}`, Vector3.new(sw * 0.84, sh * 1.08, sd), cf, shade(color, steps))
+		prim(ctx, g, "Block", `Torso{i}Side`, Vector3.new(sw, sh * 1.04, sd * 0.7), cf, shade(color, steps - 1))
+		y += sh
 	end
-	-- Chest facets: wedges on the front so the chest catches light as planes.
+	-- Chest planes: two wedges facing up and forward so the chest catches the light.
 	for _, side in { -1, 1 } do
-		local cf = torso * CFrame.new(side * w * 0.2, 0.32 + h * 0.62, d * 0.5) * CFrame.Angles(0, math.pi, 0) * tilt(ctx, 0.7)
-		prim(ctx, g, "Wedge", `Chest{side}`, Vector3.new(w * 0.42, h * 0.3, d * 0.22), cf, shade(pal.jacket, 1.5))
+		local cf = torso * CFrame.new(side * w * 0.22, 0.12 + h * 0.66, d * 0.47) * CFrame.Angles(0, math.pi, 0) * tilt(ctx, 0.5)
+		prim(ctx, g, "Wedge", `Chest{side}`, Vector3.new(w * 0.4, h * 0.22, d * 0.14), cf, shade(pal.jacket, 1.5))
 	end
-	-- Hem band.
-	prim(ctx, g, "Block", "Hem", Vector3.new(w * 1.02, 0.2, d * 1.05), torso * CFrame.new(0, 0.3, 0) * tilt(ctx, 0.4), shade(lower, -1.5))
-	-- Shoulder pads: wedges sloping down and outward, rounding the top corners.
-	-- A wedge slopes toward its -Z face; turning it 90 degrees about Y points that outward.
+	-- Hem band at the waist, two-tone line where the hoodie changes colour.
+	prim(ctx, g, "Block", "Hem", Vector3.new(w * 0.66, 0.12, d * 0.94), torso * CFrame.new(0, 0.16, 0), shade(lower, -1.5))
+	-- Rounded shoulders.
 	for _, side in { -1, 1 } do
-		local cf = torso * CFrame.new(side * w * 0.36, 0.32 + h * 0.97, 0) * CFrame.Angles(0, if side > 0 then -math.pi / 2 else math.pi / 2, 0) * tilt(ctx, 0.5)
-		prim(ctx, g, "Wedge", `Shoulder{side}`, Vector3.new(d * 0.92, h * 0.2, w * 0.34), cf, shade(pal.jacket, 0.5))
+		joint(ctx, g, `Shoulder{side}`, (torso * CFrame.new(side * w * 0.44, 0.12 + h * 0.92, 0)).Position, p.ArmThickness * 1.45, shade(pal.jacket, 0.5))
 	end
-	-- Hood / collar behind the neck.
-	prim(ctx, g, "Block", "Collar", Vector3.new(w * 0.5, 0.28, d * 0.6), torso * CFrame.new(0, 0.32 + h * 1.0, -d * 0.12) * tilt(ctx, 0.5), shade(pal.jacket, -1))
-	prim(ctx, g, "Wedge", "Hood", Vector3.new(w * 0.55, h * 0.32, d * 0.4), torso * CFrame.new(0, 0.32 + h * 0.9, -d * 0.55) * tilt(ctx, 0.5), shade(pal.jacket, -1.5))
-	-- Zip pull / drawstring details in the accent colour.
-	prim(ctx, g, "Block", "ZipPull", Vector3.new(0.08, 0.28, 0.06), torso * CFrame.new(w * 0.08, 0.32 + h * 0.78, d * 0.56), pal.accent)
-	prim(ctx, g, "Block", "Logo", Vector3.new(0.3, 0.08, 0.04), torso * CFrame.new(-w * 0.22, 0.32 + h * 0.74, d * 0.55), pal.accent)
+	-- Hood behind the neck.
+	prim(ctx, g, "Block", "Collar", Vector3.new(w * 0.42, 0.2, d * 0.55), torso * CFrame.new(0, 0.12 + h * 1.0, -d * 0.1) * tilt(ctx, 0.5), shade(pal.jacket, -1))
+	prim(ctx, g, "Wedge", "Hood", Vector3.new(w * 0.46, h * 0.26, d * 0.32), torso * CFrame.new(0, 0.12 + h * 0.9, -d * 0.52) * tilt(ctx, 0.5), shade(pal.jacket, -1.5))
+	-- Zip pull and chest tab in the accent colour.
+	prim(ctx, g, "Block", "ZipPull", Vector3.new(0.06, 0.22, 0.05), torso * CFrame.new(w * 0.06, 0.12 + h * 0.8, d * 0.52), pal.accent)
+	prim(ctx, g, "Block", "Logo", Vector3.new(0.22, 0.06, 0.04), torso * CFrame.new(-w * 0.2, 0.12 + h * 0.76, d * 0.52), pal.accent)
 	return torso
 end
 
@@ -560,10 +576,14 @@ local function buildHead(ctx: Ctx, torso: CFrame)
 	local pal = ctx.palette
 	local g = newGroup(ctx, "Head")
 	local hs = p.HeadSize
-	local neckTop = torso * CFrame.new(0, 0.32 + p.TorsoHeight + 0.12, 0.04)
-	prim(ctx, g, "Block", "Neck", Vector3.new(hs * 0.42, 0.3, hs * 0.42), neckTop, shade(pal.skin, -1.5))
+	local neckTop = torso * CFrame.new(0, 0.12 + p.TorsoHeight + 0.1, 0.04)
+	prim(ctx, g, "Block", "Neck", Vector3.new(hs * 0.36, 0.3, hs * 0.36), neckTop, shade(pal.skin, -1.5))
+	prim(ctx, g, "Block", "NeckBevel", Vector3.new(hs * 0.34, 0.28, hs * 0.34), neckTop * CFrame.Angles(0, rad(45), 0), shade(pal.skin, -2))
 	local head = neckTop * CFrame.new(0, 0.1 + hs * 0.5, 0) * CFrame.Angles(0, rad(p.HeadTurn), 0) * CFrame.Angles(rad(-p.TorsoLean * 0.6), 0, 0)
-	prim(ctx, g, "Block", "Skull", Vector3.new(hs, hs, hs), head, pal.skin)
+	-- Octagonal skull (a block plus one turned 45 degrees) over a narrower jaw.
+	prim(ctx, g, "Block", "Skull", Vector3.new(hs * 0.9, hs * 0.78, hs * 0.94), head * CFrame.new(0, hs * 0.08, 0), pal.skin)
+	prim(ctx, g, "Block", "SkullBevel", Vector3.new(hs * 0.78, hs * 0.76, hs * 0.78), head * CFrame.new(0, hs * 0.08, 0) * CFrame.Angles(0, rad(45), 0), shade(pal.skin, -0.8))
+	prim(ctx, g, "Block", "Jaw", Vector3.new(hs * 0.7, hs * 0.34, hs * 0.76), head * CFrame.new(0, -hs * 0.3, hs * 0.04), shade(pal.skin, -0.4))
 	-- Face plane: one wedge on the front, its slope facing up and forward so it
 	-- catches the light like a cheek plane. No eyes, nose or mouth.
 	prim(ctx, g, "Wedge", "Face", Vector3.new(hs * 0.84, hs * 0.5, hs * 0.18), head * CFrame.new(0, -hs * 0.2, hs * 0.55) * CFrame.Angles(0, math.pi, 0), shade(pal.skin, 1.5))
@@ -626,12 +646,13 @@ local function buildArmsAndHandle(ctx: Ctx, torso: CFrame, hipCentre: Vector3)
 	local sleeves = pal.sleeves or pal.jacket
 	for _, side in { 1, -1 } do
 		local name = if side > 0 then "Front" else "Back"
-		local shoulder = (torso * CFrame.new(side * w * 0.48, 0.32 + h * 0.86, 0)).Position
+		local shoulder = (torso * CFrame.new(side * w * 0.44, 0.12 + h * 0.9, 0)).Position
 		local grip = if side > 0 then gripFront else gripBack
 		local mid = (shoulder + grip) / 2
 		local elbow = mid + Vector3.new(side * 0.15, -0.18, 0.12)
 		limb(ctx, g, `{name}UpperArm`, shoulder, elbow, p.ArmThickness, p.ArmThickness * 0.92, pal.jacket, 2)
-		limb(ctx, g, `{name}Forearm`, elbow, grip, p.ArmThickness * 0.88, p.ArmThickness * 0.8, sleeves, 2)
+		joint(ctx, g, `{name}Elbow`, elbow, p.ArmThickness * 0.98, shade(sleeves, 0.5))
+		limb(ctx, g, `{name}Forearm`, elbow, grip, p.ArmThickness * 0.88, p.ArmThickness * 0.74, sleeves, 2)
 		glove(ctx, g, `{name}Glove`, grip, (grip - elbow).Unit, pal.gloves)
 	end
 	if ctx.acc.Handle then
