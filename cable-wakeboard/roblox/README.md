@@ -20,7 +20,10 @@ default.project.json            Rojo project: shared -> ReplicatedStorage.WakeSh
 src/shared/Sim/                 The game simulation, one ModuleScript per file (init.luau
                                 is the folder's module). Same code as ../src/sim.
 src/shared/WakeInput.luau       Held keys -> InputFrame, same keys as the web game
-src/client/WakeClient.client.luau  Plays the sim: park, rider, rope, chase camera, HUD
+src/shared/SiteGeometry.luau    Polygon helpers (ear clipping) for drawing the park site
+src/client/WakeClient.client.luau  Plays the sim: the lakeside park from the map (water,
+                                banks, island, dock, terrace, buildings, roads), rider,
+                                rope, chase camera, HUD
 src/shared/RiderBuilder.luau    RiderBuilder.build(options) -> Model
 src/shared/DuskLighting.luau    DuskLighting.apply(): sky, haze, sun, post effects
 src/shared/WaterSpray.luau      WaterSpray.attach(rider), setIntensity(emitter, 0..1)
@@ -65,6 +68,10 @@ folder) proves it: it plays three complete scripted runs (carving, pops,
 spins, grabs, jibs, falls, respawns, two passes, judges' scores) through both
 and compares every value on every tick. Rules for keeping the two in step are
 in `../CLAUDE.md` ("Two versions of the sim").
+
+The park itself (`Sim/ParkLayout.luau`: features, start dock, shoreline,
+island, buildings) is generated from `../src/sim/parkLayout.ts`; regenerate it
+with `npx vite-node scripts/gen-park-luau.ts` after editing the park.
 
 Units are metres in the sim; `WakeClient` converts to studs (1 stud = 0.28 m).
 Vectors are plain `{x, y, z}` tables of doubles, not `Vector3` (float32).

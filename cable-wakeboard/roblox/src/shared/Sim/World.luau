@@ -55,7 +55,7 @@ end
 function World.createSim(cfg, park, carrierStartS)
 	cfg = cfg or Config.DEFAULT_CONFIG
 	park = park or Park.DEFAULT_PARK
-	carrierStartS = carrierStartS or 30
+	carrierStartS = carrierStartS or park.startS or 30
 	local path = Cable.buildCablePath(cfg.cable)
 	local carrier = Cable.createCarrier(path, carrierStartS, cfg.cable.carrierSpeed)
 	return {

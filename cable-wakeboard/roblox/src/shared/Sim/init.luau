@@ -20,6 +20,7 @@ local Sim = {
 	Landing = require(script.Landing),
 	OnFeature = require(script.OnFeature),
 	Park = require(script.Park),
+	ParkLayout = require(script.ParkLayout),
 	Pop = require(script.Pop),
 	Posture = require(script.Posture),
 	Rng = require(script.Rng),

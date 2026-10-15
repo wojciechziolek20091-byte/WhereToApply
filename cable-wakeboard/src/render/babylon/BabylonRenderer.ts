@@ -14,7 +14,6 @@ import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
-import { CreateGround } from '@babylonjs/core/Meshes/Builders/groundBuilder';
 import { CreateLines } from '@babylonjs/core/Meshes/Builders/linesBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
@@ -25,15 +24,23 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
 import '@babylonjs/core/Particles/particleSystemComponent';
 import { Scene } from '@babylonjs/core/scene';
-import { boxHull, buildHullMesh, extrudeProfile, placeHulls, rockHull, type HullPart, type MeshData } from '../../art/mesh';
+import { boxHull, buildHullMesh, extrudeProfile, placeHulls, rockHull, type HullPart, type MeshData, type V3 } from '../../art/mesh';
+import {
+  centroid,
+  distanceToOutline,
+  distanceToPolyline,
+  growRadially,
+  pointInPolygon,
+  TriangleBuilder,
+} from '../../art/site';
 import type { RiderPalette } from '../../art/riders';
 import { cablePointAt } from '../../sim/cable';
 import { toeSign } from '../../sim/edge';
 import { kickerHeightAt } from '../../sim/features';
-import { createRng, nextFloat, nextRange, type RngState } from '../../sim/math/rng';
+import { createRng, nextFloat, nextRange } from '../../sim/math/rng';
 import { clamp01 } from '../../sim/math/scalar';
 import { horizontalLength, lerpVec, type Vec3 } from '../../sim/math/vec';
-import type { ResolvedFeature } from '../../sim/park';
+import { type BuildingDef, DEFAULT_PARK, type DockDef, type GroundPoint, type ResolvedFeature, type SiteDef } from '../../sim/park';
 import type { SimState } from '../../sim/world';
 import type { RenderSnapshot } from '../graybox';
 import { DAY, type Look } from './looks';
@@ -100,6 +107,123 @@ function rippleTexture(scene: Scene, base: readonly [number, number, number], si
   return tex;
 }
 
+/** Height of the land around the lake (m above the water). */
+const LAND_Y = 0.6;
+
+/** Upload a TriangleBuilder (vertex colours, world-metre UVs). */
+function siteMesh(name: string, tb: TriangleBuilder, scene: Scene, material: StandardMaterial | null): Mesh {
+  const data = tb.build();
+  const mesh = new Mesh(name, scene);
+  const vd = new VertexData();
+  vd.positions = data.positions;
+  vd.normals = data.normals;
+  vd.colors = data.colors;
+  vd.uvs = data.uvs;
+  vd.indices = data.indices;
+  vd.applyToMesh(mesh);
+  mesh.material = material;
+  return mesh;
+}
+
+/** A thin square beam from a to b (convex hull of two squares). */
+function beamHull(a: V3, b: V3, r: number, color: readonly [number, number, number]): HullPart {
+  const d: V3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len = Math.hypot(d[0], d[1], d[2]) || 1;
+  const u: V3 = [d[0] / len, d[1] / len, d[2] / len];
+  const ref: V3 = Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const n1 = norm3([u[1] * ref[2] - u[2] * ref[1], u[2] * ref[0] - u[0] * ref[2], u[0] * ref[1] - u[1] * ref[0]]);
+  const n2: V3 = [u[1] * n1[2] - u[2] * n1[1], u[2] * n1[0] - u[0] * n1[2], u[0] * n1[1] - u[1] * n1[0]];
+  const corners = [[1, 1], [1, -1], [-1, -1], [-1, 1]] as const;
+  const verts: V3[] = [];
+  for (const end of [a, b]) {
+    for (const [i, j] of corners) {
+      verts.push([end[0] + (n1[0] * i + n2[0] * j) * r, end[1] + (n1[1] * i + n2[1] * j) * r, end[2] + (n1[2] * i + n2[2] * j) * r]);
+    }
+  }
+  const faces = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+  return { verts, faces, color };
+}
+
+function norm3(v: V3): V3 {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+
+/** Walls plus a gable, flat or tent roof, turned to the building's heading. */
+function buildingHulls(b: BuildingDef, look: Look): HullPart[] {
+  const hw = b.width / 2;
+  const hd = b.depth / 2;
+  const wall = b.roof === 'tent' ? look.tent : look.walls[b.color];
+  const parts: HullPart[] = [boxHull([0, b.height / 2, 0], [hw, b.height / 2, hd], wall)];
+  if (b.roof === 'gable') {
+    const rise = Math.min(hd, 3.2);
+    const o = 0.4;
+    parts.push({
+      verts: [
+        [-hw - o, b.height, -hd - o], [hw + o, b.height, -hd - o], [hw + o, b.height, hd + o], [-hw - o, b.height, hd + o],
+        [-hw - o, b.height + rise, 0], [hw + o, b.height + rise, 0],
+      ],
+      faces: [[0, 1, 5, 4], [3, 2, 5, 4], [0, 4, 3], [1, 5, 2], [0, 1, 2, 3]],
+      color: look.roof,
+    });
+  } else if (b.roof === 'tent') {
+    const rise = Math.min(hw, hd) * 0.9;
+    parts.push({
+      verts: [[-hw - 0.2, b.height, -hd - 0.2], [hw + 0.2, b.height, -hd - 0.2], [hw + 0.2, b.height, hd + 0.2], [-hw - 0.2, b.height, hd + 0.2], [0, b.height + rise, 0]],
+      faces: [[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4], [0, 1, 2, 3]],
+      color: look.tent,
+    });
+  } else {
+    parts.push(boxHull([0, b.height + 0.15, 0], [hw + 0.2, 0.15, hd + 0.2], look.walls.grey));
+  }
+  // Dark band of windows on the long sides of real buildings.
+  if (b.roof !== 'tent') {
+    parts.push(boxHull([0, b.height * 0.55, hd + 0.02], [hw * 0.8, b.height * 0.15, 0.03], look.roof));
+    parts.push(boxHull([0, b.height * 0.55, -hd - 0.02], [hw * 0.8, b.height * 0.15, 0.03], look.roof));
+  }
+  return placeHulls(parts, [b.x, LAND_Y, b.z], b.heading);
+}
+
+/** The starting dock on the cable line, with a walkway out to the shore. */
+function dockHulls(dock: DockDef, sim: SimState, site: SiteDef, look: Look): HullPart[] {
+  const mid = cablePointAt(sim.path, dock.s + dock.length / 2);
+  const right = { x: -Math.sin(mid.heading), z: Math.cos(mid.heading) };
+  const cx = mid.pos.x + right.x * dock.offset;
+  const cz = mid.pos.z + right.z * dock.offset;
+  const parts: HullPart[] = [boxHull([0, 0.3, 0], [dock.length / 2, 0.1, dock.width / 2], look.deck)];
+  // Pontoon floats under the deck.
+  for (let x = -dock.length / 2 + 1; x < dock.length / 2; x += 2.5) {
+    parts.push(boxHull([x, 0.02, 0], [0.4, 0.17, dock.width / 2 - 0.2], look.walls.grey));
+  }
+  // Walkway: from the dock's outer edge away from the line until it reaches land.
+  const side = dock.offset < 0 ? -1 : 1;
+  let len = 0;
+  while (len < 60 && pointInPolygon({ x: cx + right.x * side * (dock.width / 2 + len), z: cz + right.z * side * (dock.width / 2 + len) }, site.lake)) len += 1;
+  len += 4;
+  parts.push(boxHull([0, 0.3, side * (dock.width / 2 + len / 2)], [0.8, 0.08, len / 2], look.deck));
+  // A rider's bench and a flag at the start.
+  parts.push(boxHull([dock.length / 2 - 2, 0.6, side * (dock.width / 2 - 0.6)], [1.4, 0.25, 0.3], look.walls.white));
+  parts.push(boxHull([-dock.length / 2 + 0.5, 1.8, side * (dock.width / 2 - 0.3)], [0.05, 1.6, 0.05], look.walls.grey));
+  parts.push(boxHull([-dock.length / 2 + 1.1, 3.0, side * (dock.width / 2 - 0.3)], [0.55, 0.35, 0.02], look.towerTop));
+  return placeHulls(parts, [cx, 0, cz], mid.heading);
+}
+
+/** Fallback site when a park has none: a rectangle of water around the towers. */
+function rectangleSite(sim: SimState): SiteDef {
+  const xs = sim.cfg.cable.towers.map((t) => t.x);
+  const zs = sim.cfg.cable.towers.map((t) => t.z);
+  const m = 45;
+  const x0 = Math.min(...xs) - m, x1 = Math.max(...xs) + m, z0 = Math.min(...zs) - m, z1 = Math.max(...zs) + m;
+  return {
+    lake: [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }],
+    islands: [],
+    docks: [],
+    buildings: [],
+    areas: [],
+    roads: [],
+  };
+}
+
 /** Another rider on the cable, animated for scenery only (not simulated). */
 interface GhostRider {
   mesh: Mesh;
@@ -109,7 +233,6 @@ interface GhostRider {
   phase: number;
 }
 
-type LakeBounds = { x0: number; x1: number; z0: number; z1: number };
 
 /**
  * The game in Babylon.js: faceted low-poly art (shared with the Roblox
@@ -123,6 +246,9 @@ export class BabylonRenderer {
   private readonly look: Look;
   private readonly camera: FreeCamera;
   private readonly flat: StandardMaterial;
+  /** Same as `flat` but double-sided, for the site's hand-built triangles. */
+  private readonly siteMat: StandardMaterial;
+  private readonly site: SiteDef;
   private readonly sun: DirectionalLight;
   private readonly shadows: ShadowGenerator;
   private rider: Mesh;
@@ -141,9 +267,15 @@ export class BabylonRenderer {
   private clock = 0;
 
   /** Fixed close-up camera for checking the character (`?cam=front|back|side`). */
-  debugCam: 'front' | 'back' | 'side' | null = null;
+  debugCam: 'front' | 'back' | 'side' | 'aerial' | 'map' | null = null;
 
-  constructor(canvas: HTMLCanvasElement, sim: SimState, palette: RiderPalette, look: Look = DAY) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    sim: SimState,
+    palette: RiderPalette,
+    look: Look = DAY,
+    site: SiteDef | undefined = DEFAULT_PARK.site,
+  ) {
     this.palette = palette;
     this.look = look;
     this.engine = new Engine(canvas, true, { stencil: true, antialias: true });
@@ -178,9 +310,12 @@ export class BabylonRenderer {
     this.shadows.bias = 0.002;
 
     this.buildSky(sunDir);
-    const lake = this.lakeBounds(sim);
-    this.buildWater(lake);
-    this.buildShore(lake);
+    this.siteMat = this.flat.clone('siteMat');
+    this.siteMat.backFaceCulling = false;
+    const s = site ?? rectangleSite(sim);
+    this.site = s;
+    this.buildWater(s);
+    this.buildShore(s, sim);
     this.buildPark(sim);
 
     this.charMat = characterMaterial(scene);
@@ -197,7 +332,7 @@ export class BabylonRenderer {
     this.buildGhosts(carrierMat);
 
     this.spray = this.buildSpray();
-    this.buildWake();
+    this.buildWake(sim);
 
     this.camera = new FreeCamera('chase', new Vector3(0, 5, -10), scene);
     this.camera.fov = 0.95;
@@ -225,14 +360,6 @@ export class BabylonRenderer {
     built.mesh.rotationQuaternion = Quaternion.Identity();
     this.shadows.addShadowCaster(built.mesh);
     return built;
-  }
-
-  /** Lake rectangle: the cable loop plus a margin of open water. */
-  private lakeBounds(sim: SimState): LakeBounds {
-    const xs = sim.cfg.cable.towers.map((t) => t.x);
-    const zs = sim.cfg.cable.towers.map((t) => t.z);
-    const m = 45;
-    return { x0: Math.min(...xs) - m, x1: Math.max(...xs) + m, z0: Math.min(...zs) - m, z1: Math.max(...zs) + m };
   }
 
   /** Gradient sky dome, plus a glowing sun disc when the look wants one. */
@@ -268,23 +395,26 @@ export class BabylonRenderer {
     glow.addIncludedOnlyMesh(sunDisc);
   }
 
-  /** The lake: rippled and animated (day) or static faceted (dusk). */
-  private buildWater(lake: LakeBounds): void {
-    const w = lake.x1 - lake.x0;
-    const h = lake.z1 - lake.z0;
+  /** The lake (and ponds): rippled and animated (day) or static faceted (dusk). */
+  private buildWater(site: SiteDef): void {
     const look = this.look;
+    const ponds = site.areas.filter((a) => a.kind === 'pond');
     if (look.rippleWater) {
-      const water = CreateGround('lake', { width: w, height: h, subdivisions: 1 }, this.scene);
-      water.position = new Vector3((lake.x0 + lake.x1) / 2, 0, (lake.z0 + lake.z1) / 2);
+      const tb = new TriangleBuilder();
+      tb.polygon(site.lake, 0, look.water);
+      for (const p of ponds) tb.polygon(p.outline, LAND_Y - 0.12, look.water);
+      const water = siteMesh('lake', tb, this.scene, null);
       const mat = new StandardMaterial('waterMat', this.scene);
       // Sun plus sky light is close to 2x; halve the diffuse so the lit water lands on the look's colour.
       mat.diffuseColor = new Color3(0.55, 0.55, 0.55);
       mat.emissiveColor = c3(look.water).scale(0.08);
       mat.specularColor = c3(look.waterSpecular).scale(0.5);
       mat.specularPower = look.waterSpecularPower;
+      mat.backFaceCulling = false;
       const ripples = rippleTexture(this.scene, look.water);
-      ripples.uScale = w / 7;
-      ripples.vScale = h / 7;
+      // UVs are world metres: one ripple tile every 7 m.
+      ripples.uScale = 1 / 7;
+      ripples.vScale = 1 / 7;
       ripples.anisotropicFilteringLevel = 8;
       mat.diffuseTexture = ripples;
       water.material = mat;
@@ -292,80 +422,137 @@ export class BabylonRenderer {
       this.waterMat = mat;
       return;
     }
-    const ground = CreateGround('lake', { width: w, height: h, subdivisions: 50, updatable: true }, this.scene);
-    const pos = ground.getVerticesData('position')!;
+    // Dusk: a flat base, then small jittered facets wherever they fit inside the shore.
+    const tb = new TriangleBuilder();
+    tb.polygon(site.lake, -0.08, look.water);
+    for (const p of ponds) tb.polygon(p.outline, LAND_Y - 0.12, look.water);
     const rng = createRng(77);
-    for (let i = 0; i < pos.length; i += 3) pos[i + 1] = nextRange(rng, -0.12, 0.12);
-    ground.setVerticesData('position', pos);
-    ground.convertToFlatShadedMesh();
-    const flatPos = ground.getVerticesData('position')!;
-    const colors: number[] = [];
-    for (let i = 0; i < flatPos.length; i += 9) {
-      const k = nextRange(rng, -0.035, 0.035);
-      for (let v = 0; v < 3; v++) colors.push(look.water[0] + k, look.water[1] + k, look.water[2] + k * 1.4, 1);
+    const xs = site.lake.map((p) => p.x);
+    const zs = site.lake.map((p) => p.z);
+    const cell = 6;
+    const h = (x: number, z: number) => 0.12 * Math.sin(x * 1.7 + z * 0.9) * Math.cos(z * 1.3 - x * 0.4);
+    for (let x = Math.min(...xs); x < Math.max(...xs); x += cell) {
+      for (let z = Math.min(...zs); z < Math.max(...zs); z += cell) {
+        const q = [{ x, z }, { x: x + cell, z }, { x: x + cell, z: z + cell }, { x, z: z + cell }];
+        if (!q.every((p) => pointInPolygon(p, site.lake))) continue;
+        const v = q.map((p): [number, number, number] => [p.x, h(p.x, p.z), p.z]);
+        const k1 = nextRange(rng, -0.035, 0.035);
+        const k2 = nextRange(rng, -0.035, 0.035);
+        const w = look.water;
+        tb.tri(v[0]!, v[1]!, v[2]!, [w[0] + k1, w[1] + k1, w[2] + k1 * 1.4], true);
+        tb.tri(v[0]!, v[2]!, v[3]!, [w[0] + k2, w[1] + k2, w[2] + k2 * 1.4], true);
+      }
     }
-    ground.setVerticesData('color', colors);
+    const water = siteMesh('lake', tb, this.scene, null);
     const mat = new StandardMaterial('waterMat', this.scene);
     mat.diffuseColor = Color3.White();
     mat.specularColor = c3(look.waterSpecular);
     mat.specularPower = look.waterSpecularPower;
-    ground.material = mat;
-    ground.position = new Vector3((lake.x0 + lake.x1) / 2, -0.05, (lake.z0 + lake.z1) / 2);
-    ground.receiveShadows = true;
+    mat.backFaceCulling = false;
+    water.material = mat;
+    water.receiveShadows = true;
   }
 
-  /** Land around the lake, a beach strip and a dense low-poly forest. */
-  private buildShore(lake: LakeBounds): void {
+  /**
+   * Everything on land, from the park map: banks and lawn, the island, the
+   * watch terrace, parking, fields, roads, buildings and tents, the starting
+   * dock, and a forest that keeps clear of all of them.
+   */
+  private buildShore(site: SiteDef, sim: SimState): void {
     const look = this.look;
-    const hulls: HullPart[] = [];
-    const far = 900;
-    const top = 0.5;
-    const cx = (lake.x0 + lake.x1) / 2;
-    const cz = (lake.z0 + lake.z1) / 2;
-    const halfW = (lake.x1 - lake.x0) / 2;
-    const halfH = (lake.z1 - lake.z0) / 2;
-    // Four land slabs framing the lake.
-    hulls.push(boxHull([cx, top / 2 - 0.5, lake.z0 - far / 2], [far, top / 2 + 0.5, far / 2], look.land));
-    hulls.push(boxHull([cx, top / 2 - 0.5, lake.z1 + far / 2], [far, top / 2 + 0.5, far / 2], look.land));
-    hulls.push(boxHull([lake.x0 - far / 2, top / 2 - 0.5, cz], [far / 2, top / 2 + 0.5, halfH], look.land));
-    hulls.push(boxHull([lake.x1 + far / 2, top / 2 - 0.5, cz], [far / 2, top / 2 + 0.5, halfH], look.land));
-    // Beach strip along the water's edge.
-    const b = 5;
-    hulls.push(boxHull([cx, 0.12, lake.z0 - b / 2], [halfW + b, 0.32, b / 2], look.beach));
-    hulls.push(boxHull([cx, 0.12, lake.z1 + b / 2], [halfW + b, 0.32, b / 2], look.beach));
-    hulls.push(boxHull([lake.x0 - b / 2, 0.12, cz], [b / 2, 0.32, halfH], look.beach));
-    hulls.push(boxHull([lake.x1 + b / 2, 0.12, cz], [b / 2, 0.32, halfH], look.beach));
+    const tb = new TriangleBuilder();
+    // Bank: a sandy slope from the waterline up to the lawn, then land out to the horizon.
+    const beachOuter = growRadially(site.lake, 4);
+    tb.skirt(site.lake, -0.8, 0.08, look.beach);
+    tb.band(site.lake, beachOuter, 0.08, LAND_Y, look.beach);
+    tb.band(beachOuter, growRadially(site.lake, 26), LAND_Y, LAND_Y, look.lawn);
+    tb.band(growRadially(site.lake, 26), growRadially(site.lake, 1200), LAND_Y, LAND_Y, look.land);
 
-    // Forest: trees in a band around the lake, bigger further back.
+    for (const island of site.islands) {
+      tb.skirt(island.outline, -0.8, island.height, look.beach);
+      tb.polygon(island.outline, island.height, look.lawn);
+    }
+    for (const area of site.areas) {
+      if (area.kind === 'field') tb.polygon(area.outline, LAND_Y + 0.02, (i) => look.field((i * 0.37) % 1));
+      else if (area.kind === 'parking') tb.polygon(area.outline, LAND_Y + 0.03, look.asphalt);
+      else if (area.kind === 'watch') {
+        tb.polygon(area.outline, LAND_Y + 0.25, look.deck);
+        tb.skirt(area.outline, -0.6, LAND_Y + 0.25, look.deck);
+      } else if (area.kind === 'pond') tb.skirt(area.outline, LAND_Y - 0.4, LAND_Y + 0.01, look.beach);
+    }
+    for (const road of site.roads) tb.strip(road.points, road.width, LAND_Y + 0.04, look.road);
+    const ground = siteMesh('ground', tb, this.scene, this.siteMat);
+    ground.receiveShadows = true;
+
+    const hulls: HullPart[] = [];
+    for (const b of site.buildings) hulls.push(...buildingHulls(b, look));
+    for (const dock of site.docks) hulls.push(...dockHulls(dock, sim, site, look));
+    // Benches and posts along the watch terrace's water side.
+    for (const area of site.areas.filter((a) => a.kind === 'watch')) {
+      const half = Math.floor(area.outline.length / 2);
+      for (let i = 0; i + 1 < half; i++) {
+        const a = area.outline[i]!, b = area.outline[i + 1]!;
+        for (let t = 0.25; t < 1; t += 0.5) {
+          const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t;
+          const heading = Math.atan2(b.z - a.z, b.x - a.x);
+          hulls.push(...placeHulls([boxHull([0, 0.45, 2.5], [1.2, 0.08, 0.3], look.deck)], [x, LAND_Y + 0.25, z], heading));
+          hulls.push(boxHull([x, LAND_Y + 0.75, z], [0.06, 0.5, 0.06], look.deck));
+        }
+      }
+    }
+
+    // Forest: everywhere off the water that is not built on, bigger further back.
     const rng = createRng(31);
-    const tree = (x: number, z: number, scale: number) => {
+    const tree = (x: number, z: number, scale: number, base = LAND_Y) => {
       const trunkH = 2.2 * scale;
-      hulls.push(boxHull([x, top + trunkH / 2, z], [0.25 * scale, trunkH / 2, 0.25 * scale], look.treeTrunk));
+      hulls.push(boxHull([x, base + trunkH / 2, z], [0.25 * scale, trunkH / 2, 0.25 * scale], look.treeTrunk));
       const blobs = 2 + Math.floor(nextFloat(rng) * 2);
       for (let k = 0; k < blobs; k++) {
         const r = scale * nextRange(rng, 2.2, 3.4);
         const ox = nextRange(rng, -1, 1) * scale;
         const oz = nextRange(rng, -1, 1) * scale;
-        const y = top + trunkH + r * (0.55 + k * 0.5);
+        const y = base + trunkH + r * (0.55 + k * 0.5);
         hulls.push(rockHull([x + ox, y, z + oz], [r * 1.1, r * nextRange(rng, 0.9, 1.3), r * 1.1], look.treeLeaves(nextFloat(rng))));
       }
     };
-    const ring = (inner: number, outer: number, count: number, minS: number, maxS: number, r: RngState) => {
+    const clear = (p: GroundPoint, margin: number): boolean =>
+      !pointInPolygon(p, site.lake) &&
+      distanceToOutline(p, site.lake) > 7 &&
+      site.areas.every((a) => !pointInPolygon(p, a.outline) && distanceToOutline(p, a.outline) > margin) &&
+      site.roads.every((r) => distanceToPolyline(p, r.points) > r.width / 2 + margin) &&
+      site.buildings.every((b) => Math.hypot(p.x - b.x, p.z - b.z) > Math.max(b.width, b.depth) / 2 + 9 + margin);
+    const c = centroid(site.lake);
+    const lakeR = (dir: number) => {
+      // Shore distance from the lake's centre along a direction (star-shaped outline).
+      let r = 0;
+      for (let t = 0; t < 400; t += 2) {
+        if (pointInPolygon({ x: c.x + Math.cos(dir) * t, z: c.z + Math.sin(dir) * t }, site.lake)) r = t;
+      }
+      return r;
+    };
+    const shoreR = Array.from({ length: 72 }, (_, i) => lakeR((i / 72) * Math.PI * 2));
+    const ring = (inner: number, outer: number, count: number, minS: number, maxS: number, margin: number) => {
       for (let i = 0; i < count; i++) {
-        const side = Math.floor(nextFloat(r) * 4);
-        const d = nextRange(r, inner, outer);
-        let x: number, z: number;
-        if (side === 0) { x = nextRange(r, lake.x0 - outer, lake.x1 + outer); z = lake.z0 - d; }
-        else if (side === 1) { x = nextRange(r, lake.x0 - outer, lake.x1 + outer); z = lake.z1 + d; }
-        else if (side === 2) { x = lake.x0 - d; z = nextRange(r, lake.z0, lake.z1); }
-        else { x = lake.x1 + d; z = nextRange(r, lake.z0, lake.z1); }
-        tree(x, z, nextRange(r, minS, maxS));
+        const dir = nextFloat(rng) * Math.PI * 2;
+        const r = shoreR[Math.floor((dir / (Math.PI * 2)) * 72) % 72]! + nextRange(rng, inner, outer);
+        const p = { x: c.x + Math.cos(dir) * r, z: c.z + Math.sin(dir) * r };
+        const scale = nextRange(rng, minS, maxS);
+        if (clear(p, margin)) tree(p.x, p.z, scale);
       }
     };
-    ring(9, 45, 520, 0.8, 1.4, rng);
-    ring(45, 140, 420, 1.2, 2.0, rng);
-    const shore = meshFromData('shore', buildHullMesh(hulls), this.scene, this.flat);
-    shore.receiveShadows = true;
+    ring(8, 50, 700, 0.8, 1.4, 3);
+    ring(50, 170, 650, 1.2, 2.0, 2);
+    for (const island of site.islands) {
+      const ic = centroid(island.outline);
+      for (let i = 0; i < 90; i++) {
+        const p = { x: ic.x + nextRange(rng, -16, 16), z: ic.z + nextRange(rng, -40, 40) };
+        if (pointInPolygon(p, island.outline) && distanceToOutline(p, island.outline) > 1.8) {
+          tree(p.x, p.z, nextRange(rng, 0.7, 1.15), island.height);
+        }
+      }
+    }
+    const built = meshFromData('shore', buildHullMesh(hulls), this.scene, this.flat);
+    built.receiveShadows = true;
   }
 
   /** Towers, cable line, features and buoys. */
@@ -373,21 +560,37 @@ export class BabylonRenderer {
     const { cfg, path } = sim;
     const look = this.look;
     const hulls: HullPart[] = [];
+    // Lattice towers like the map's: four tapering legs, cross braces, a wheel arm on top.
     for (const t of cfg.cable.towers) {
-      const h = cfg.cable.cableHeight;
-      hulls.push(boxHull([t.x, h / 2, t.z], [0.3, h / 2 + 0.8, 0.3], look.tower));
-      hulls.push(boxHull([t.x, h + 0.5, t.z], [1.1, 0.16, 0.26], look.towerTop));
-      hulls.push(rockHull([t.x, 0, t.z], [2.0, 0.7, 2.0], look.rock(0.4)));
+      const h = cfg.cable.cableHeight + 1;
+      const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
+      const at = (k: number, y: number): V3 => {
+        const w = 1.3 - (1.0 * y) / h;
+        return [t.x + legs[k % 4]![0] * w, y, t.z + legs[k % 4]![1] * w];
+      };
+      for (let k = 0; k < 4; k++) {
+        hulls.push(beamHull(at(k, 0), at(k, h), 0.09, look.tower));
+        for (let y = 0; y + 2 < h; y += 2.5) hulls.push(beamHull(at(k, y), at(k + 1, y + 2.5), 0.05, look.tower));
+      }
+      hulls.push(boxHull([t.x, h + 0.2, t.z], [1.4, 0.16, 0.3], look.towerTop));
+      hulls.push(rockHull([t.x, 0, t.z], [2.4, 0.6, 2.4], look.rock(0.4)));
     }
     for (const f of sim.features) hulls.push(...this.featureHulls(f));
 
-    // Buoys: white domes with a short mast around the course, red and blue markers on the line.
+    // Buoys: white domes with a short mast around the course, wherever there is open water.
+    const site = this.site;
+    const open = (x: number, z: number) =>
+      pointInPolygon({ x, z }, site.lake) &&
+      distanceToOutline({ x, z }, site.lake) > 4 &&
+      site.islands.every((i) => !pointInPolygon({ x, z }, i.outline) && distanceToOutline({ x, z }, i.outline) > 4) &&
+      sim.features.every((f) => Math.hypot(f.origin.x - x, f.origin.z - z) > 14);
     const rng = createRng(5);
-    for (let i = 0; i < 16; i++) {
-      const p = cablePointAt(path, (i / 16) * path.length + 20);
-      const off = nextRange(rng, 16, 28) * (i % 2 === 0 ? 1 : -1);
+    for (let i = 0; i < 20; i++) {
+      const p = cablePointAt(path, (i / 20) * path.length + 20);
+      const off = (i % 2 === 0 ? nextRange(rng, 14, 18) : -nextRange(rng, 8, 10));
       const x = p.pos.x - Math.sin(p.heading) * off;
       const z = p.pos.z + Math.cos(p.heading) * off;
+      if (!open(x, z)) continue;
       hulls.push(rockHull([x, 0, z], [1.5, 0.75, 1.5], look.buoy));
       hulls.push(boxHull([x, 0.6, z], [0.05, 0.4, 0.05], look.buoy));
     }
@@ -414,15 +617,26 @@ export class BabylonRenderer {
         const u = (d.length * i) / 10;
         profile.push([u, Math.max(0.02, kickerHeightAt(d, u).height)]);
       }
-      return placeHulls(extrudeProfile(profile, d.width, (i) => look.ramp(i / 10)), origin, f.heading);
+      // White riding surface, blue side panels (as in the park photo), a float under the lip.
+      const ramp = extrudeProfile(profile, d.width, (i) => look.ramp(i / 10));
+      const sides = [-1, 1].flatMap((side) =>
+        extrudeProfile(profile, 0.08, () => look.kickerSide).map((h) => ({
+          ...h,
+          verts: h.verts.map(([x, y, z]): V3 => [x, y + 0.01, z + side * (d.width / 2 + 0.04)]),
+        })),
+      );
+      const float = boxHull([d.length / 2, -0.1, 0], [d.length / 2 + 0.2, 0.18, d.width / 2 + 0.25], look.kickerSide);
+      return placeHulls([...ramp, ...sides, float], origin, f.heading);
     }
-    const entry = extrudeProfile([[0, 0.02], [d.entryLength, d.height]], d.width, () => look.ramp(0.3));
+    const entry = extrudeProfile([[0, 0.02], [d.entryLength, d.height]], Math.max(d.width, 0.6), () => look.ramp(0.3));
     const top = d.style === 'box'
       ? [boxHull([d.entryLength + d.length / 2, d.height / 2, 0], [d.length / 2, d.height / 2, d.width / 2], look.box)]
       : [
-          boxHull([d.entryLength + d.length / 2, d.height - 0.04, 0], [d.length / 2, 0.04, d.width / 2], look.rail),
-          boxHull([d.entryLength + 0.3, d.height / 2, 0], [0.04, d.height / 2, 0.04], look.rail),
-          boxHull([d.entryLength + d.length - 0.3, d.height / 2, 0], [0.04, d.height / 2, 0.04], look.rail),
+          boxHull([d.entryLength + d.length / 2, d.height - 0.06, 0], [d.length / 2, 0.06, d.width / 2 + 0.04], look.rail),
+          boxHull([d.entryLength + 0.3, d.height / 2, 0], [0.05, d.height / 2, 0.05], look.rail),
+          boxHull([d.entryLength + d.length - 0.3, d.height / 2, 0], [0.05, d.height / 2, 0.05], look.rail),
+          // Floating pontoon under the rail.
+          boxHull([d.entryLength + d.length / 2, 0, 0], [d.length / 2 + 0.3, 0.12, 0.7], look.kickerSide),
         ];
     return placeHulls([...entry, ...top], origin, f.heading);
   }
@@ -504,13 +718,15 @@ export class BabylonRenderer {
   }
 
   /** Two wake lines trailing from the board's rails. */
-  private buildWake(): void {
+  private buildWake(sim: SimState): void {
     const mat = new StandardMaterial('wakeMat', this.scene);
     mat.disableLighting = true;
     mat.emissiveColor = c3(this.look.wake);
     mat.alpha = 0.5;
     for (let i = 0; i < 2; i++) {
       const node = new TransformNode(`wakeNode${i}`, this.scene);
+      // Start the trail under the rider, not at the origin (which would draw a line across the lake).
+      node.position.set(sim.rider.pos.x, 0.02, sim.rider.pos.z);
       this.wakeNodes.push(node);
       const trail = new TrailMesh(`wake${i}`, node, this.scene, 0.09, 110, true);
       trail.material = mat;
@@ -589,9 +805,27 @@ export class BabylonRenderer {
     // Keep the shadow camera on the rider.
     this.sun.position = v3(riderPos).add(new Vector3(...this.look.sunDirection).normalize().scale(40));
 
-    if (this.debugCam) this.closeUpCamera(riderPos, r.heading, toes);
+    if (this.debugCam === 'aerial' || this.debugCam === 'map') this.aerialCamera(this.debugCam === 'map');
+    else if (this.debugCam) this.closeUpCamera(riderPos, r.heading, toes);
     else this.updateCamera(riderPos, carrierPos, frameSeconds);
     this.scene.render();
+  }
+
+  /**
+   * Drone view of the whole park from the south, like the park photo
+   * (`?cam=aerial`), or straight down with north up, like the map (`?cam=map`).
+   */
+  private aerialCamera(topDown: boolean): void {
+    const c = centroid(this.site.lake);
+    // Fog is tuned for the chase camera; from the air it would hide the park.
+    this.scene.fogDensity = this.look.fogDensity * 0.3;
+    if (topDown) {
+      this.camera.position.set(c.x, 330, c.z + 0.01);
+      this.camera.setTarget(new Vector3(c.x, 0, c.z));
+      return;
+    }
+    this.camera.position.set(c.x - 10, 190, c.z + 230);
+    this.camera.setTarget(new Vector3(c.x, 0, c.z - 10));
   }
 
   /** Close-up of the rider: front faces the rider's chest (toe side). */

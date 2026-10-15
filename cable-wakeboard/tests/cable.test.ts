@@ -3,7 +3,29 @@ import { DEFAULT_CONFIG, DT, makeConfig } from '../src/sim/config';
 import { distance, horizontal } from '../src/sim/math/vec';
 import { wrapAngle } from '../src/sim/math/scalar';
 
-const cfg = DEFAULT_CONFIG.cable;
+// Geometry tests use a plain rectangle so the expected numbers are easy to derive.
+const cfg = {
+  ...DEFAULT_CONFIG.cable,
+  towers: [
+    { x: 0, z: 0 },
+    { x: 240, z: 0 },
+    { x: 240, z: -110 },
+    { x: 0, z: -110 },
+  ],
+};
+
+describe('lakeside park cable', () => {
+  const path = buildCablePath(DEFAULT_CONFIG.cable);
+
+  it('is about 600 m a lap, five towers, clockwise seen from above', () => {
+    expect(DEFAULT_CONFIG.cable.towers).toHaveLength(5);
+    expect(path.length).toBeGreaterThan(580);
+    expect(path.length).toBeLessThan(610);
+    // Starts heading west along the south straight, then turns right (north).
+    expect(Math.cos(cablePointAt(path, 0).heading)).toBeLessThan(-0.9);
+    expect(path.segments.filter((g) => g.kind === 'arc').every((g) => g.kind === 'arc' && g.turn === 1)).toBe(true);
+  });
+});
 
 describe('cable path', () => {
   const path = buildCablePath(cfg);

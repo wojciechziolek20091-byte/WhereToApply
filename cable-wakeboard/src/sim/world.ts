@@ -68,7 +68,11 @@ export function spawnRiderBehindCarrier(state: Pick<SimState, 'cfg' | 'path' | '
   return createRider(cfg, pos, vel, heading);
 }
 
-export function createSim(cfg: SimConfig = DEFAULT_CONFIG, park: ParkDef = DEFAULT_PARK, carrierStartS = 30): SimState {
+export function createSim(
+  cfg: SimConfig = DEFAULT_CONFIG,
+  park: ParkDef = DEFAULT_PARK,
+  carrierStartS = park.startS ?? 30,
+): SimState {
   const path = buildCablePath(cfg.cable);
   const carrier = createCarrier(path, carrierStartS, cfg.cable.carrierSpeed);
   const base = { cfg, path, carrier };

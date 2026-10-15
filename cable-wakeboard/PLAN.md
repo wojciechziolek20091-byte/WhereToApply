@@ -55,6 +55,11 @@ purpose-built park. Assumptions made to fill the gaps:
   (`roblox/src/shared/Sim`), deterministic math (`detmath`) in both so they
   stay bit-identical, a parity test that plays three full scripted runs through
   both and compares every tick, and a thin Roblox client (`WakeClient`) for Studio.
+- [x] **M11 Real park.** The default park is the user's lakeside cable park
+  (map plus photos): 5 towers, ~595 m lap, island, starting dock between two
+  kickers, 8 floating kickers and 4 rails in map order, watch terrace,
+  clubhouse, tents, halls, parking, roads and fields. Same data in Luau
+  (generated), drawn by both the web renderer and the Roblox client.
 
 ## Known limitations
 
@@ -66,6 +71,8 @@ purpose-built park. Assumptions made to fill the gaps:
 - Judges are formula-based with a seeded bias, not a learned model.
 - Rider is one rigid mesh: no limb animation for crouch, grabs or raleys yet.
 - Water is static faceted geometry; no waves or wake trail.
+- The sim does not know about land: the shoreline and island are placed out of
+  reach instead (tests/site.test.ts). Riding into the bank is not a fall yet.
 - The Roblox client (`roblox/src/client`) has not been run in Studio yet: the
   sim under it is verified, the camera, scale and HUD are a first pass. It does
   not mirror the rider for goofy/switch.

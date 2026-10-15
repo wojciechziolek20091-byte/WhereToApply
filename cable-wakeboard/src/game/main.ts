@@ -44,7 +44,7 @@ function createRenderer(): GameRenderer {
   const look = params.get('look') === 'dusk' ? LOOKS.dusk : LOOKS.day;
   const r = new BabylonRenderer(canvas, run.sim, initialPalette, look);
   const cam = params.get('cam');
-  if (cam === 'front' || cam === 'back' || cam === 'side') r.debugCam = cam;
+  if (cam === 'front' || cam === 'back' || cam === 'side' || cam === 'aerial' || cam === 'map') r.debugCam = cam;
   return r;
 }
 

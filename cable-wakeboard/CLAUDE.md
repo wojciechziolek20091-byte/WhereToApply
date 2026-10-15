@@ -31,7 +31,10 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
               detmath.ts (sin, cos, tan, atan2, log, exp, pow from + - * / only)
   config.ts   SimConfig and DEFAULT_CONFIG. All tunables live here.
   cable.ts    Cable path (towers + filleted corners), carrier kinematics.
-  park.ts     Park layout and feature data (kickers, sliders).
+  park.ts     Park types (features, site) and resolvePark().
+  parkLayout.ts The default park from the user's map: features, start dock, site
+              (shore, island, buildings...). Luau copy is GENERATED:
+              `npx vite-node scripts/gen-park-luau.ts` -> Sim/ParkLayout.luau.
   features.ts Feature geometry queries.
   rope.ts     Rope tension (one-sided spring-damper).
   edge.ts     Edge angle build/release, heading, toeSign.
@@ -53,7 +56,8 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   scoring/    judges.ts (panel), metrics.ts.
   session.ts  createRun/stepRun: passes, falls, respawn, trick log, scoring.
   index.ts    Public exports.
-src/art/      Engine-free art: mesh.ts (primitives and hulls -> flat-shaded triangle
+src/art/      Engine-free art: site.ts (polygon helpers, ear clipping, triangle builder
+              for the park site), mesh.ts (primitives and hulls -> flat-shaded triangle
               arrays), riders.ts + riderParts.json (rider art exported from the Luau
               RiderBuilder by scripts/export-rider-art.sh). No engine imports.
 src/render/   babylon/: the game's engine (Babylon.js). character.ts: the smooth rider
@@ -91,7 +95,8 @@ Physics never names tricks: it emits `landed` with the `AirState`, and the
 session classifies it with `tricks/classify.ts`.
 
 In the browser console, `cable()` returns the live `RunState`. `?cam=front|back|side`
-frames the rider close up for checking the character.
+frames the rider close up for checking the character; `?cam=aerial` (drone view
+from the south) and `?cam=map` (top-down, north up) show the whole park.
 
 ## Conventions
 
@@ -136,17 +141,27 @@ one to edit first (it has the unit tests); then mirror it line by line.
   round differently.
 - The Luau Sim must not touch Roblox APIs (`game`, `Instance`, `Vector3`,
   `task`, `os`, `math.random`), so it also runs in the plain `luau` CLI.
+- Park data: edit `src/sim/parkLayout.ts`, then regenerate the Luau copy
+  (`npx vite-node scripts/gen-park-luau.ts`); the parity test compares
+  DEFAULT_CONFIG and DEFAULT_PARK across the two. Towers live in both
+  `config.ts` and `Config.luau` (by hand).
 - Parity tooling: `tests/parity/trace.ts` and `roblox/tests/sim_trace.luau` are
   twins (same scripted input, same trace fields); `tests/parity/luauBundle.ts`
   bundles the Luau modules for the CLI. A failure prints the first differing
   tick and field.
+
+## Map coordinates
+
+The park map was converted at 0.215 m per pixel with the map centre at the
+origin: x east, z south (so north is up in `?cam=map`). Travel is clockwise
+from above; `offset` > 0 is inside the loop.
 
 ## Tuning reference (defaults, flat water)
 
 - Trailing flat behind the carrier: about 380 N at 8.3 m/s.
 - Hard cut: 1.5 to 2.8 kN, up to about 45 km/h, about 11 m out from the line.
 - Well-timed flat-water pop: about 4.7 m/s, 1.3 s air, 1.3 m peak.
-- Kicker 1 (1.1 m, lip 0.5 rad) straight with no pop: about 1.1 s air, 1.8 m peak.
+- A dock kicker (1.1 m, lip 0.5 rad) straight with no pop: about 1.1 s air, 1.8 m peak.
 
 `tests/riding.test.ts`, `pop.test.ts` and `features.test.ts` pin these loosely;
 retune the numbers there if a deliberate tuning change moves them.

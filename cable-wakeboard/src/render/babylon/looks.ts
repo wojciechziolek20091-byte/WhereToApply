@@ -42,7 +42,19 @@ export interface Look {
   /** Rippled, animated water (true) or static faceted water (false). */
   rippleWater: boolean;
   land: RGB;
+  /** Mown grass around the buildings and tents. */
+  lawn: RGB;
   beach: RGB;
+  /** Wooden decks: starting dock, watch terrace. */
+  deck: RGB;
+  asphalt: RGB;
+  road: RGB;
+  field: (t: number) => RGB;
+  walls: Record<'white' | 'cream' | 'grey' | 'wood', RGB>;
+  roof: RGB;
+  tent: RGB;
+  /** Side panels of the floating kickers (white ramps with blue sides). */
+  kickerSide: RGB;
   treeLeaves: (t: number) => RGB;
   treeTrunk: RGB;
   tower: RGB;
@@ -86,7 +98,16 @@ export const DAY: Look = {
   waterSpecularPower: 90,
   rippleWater: true,
   land: rgb(62, 98, 54),
+  lawn: rgb(98, 142, 66),
   beach: rgb(196, 186, 150),
+  deck: rgb(196, 156, 108),
+  asphalt: rgb(92, 96, 100),
+  road: rgb(170, 160, 140),
+  field: (t) => mix(rgb(128, 102, 74), rgb(160, 136, 96), t),
+  walls: { white: rgb(238, 238, 234), cream: rgb(232, 224, 204), grey: rgb(176, 180, 184), wood: rgb(168, 124, 88) },
+  roof: rgb(74, 78, 86),
+  tent: rgb(248, 248, 246),
+  kickerSide: rgb(36, 84, 176),
   treeLeaves: gradient([
     [0, rgb(32, 82, 40)],
     [0.5, rgb(52, 118, 50)],
@@ -99,7 +120,7 @@ export const DAY: Look = {
   rope: rgb(236, 210, 40), // yellow ropes
   carrier: rgb(236, 196, 50),
   box: rgb(234, 240, 242), // white features
-  rail: rgb(200, 208, 214),
+  rail: rgb(40, 118, 214), // blue rails, as on the park map
   ramp: (t) => mix(rgb(240, 244, 246), rgb(214, 222, 228), t),
   rock: (t) => mix(rgb(110, 112, 104), rgb(150, 150, 140), t),
   buoy: rgb(244, 246, 248),
@@ -135,7 +156,16 @@ export const DUSK: Look = {
   waterSpecularPower: 48,
   rippleWater: false,
   land: rgb(78, 62, 96),
+  lawn: rgb(96, 78, 112),
   beach: rgb(150, 120, 140),
+  deck: rgb(130, 96, 96),
+  asphalt: rgb(70, 62, 86),
+  road: rgb(140, 116, 132),
+  field: (t) => mix(rgb(112, 84, 96), rgb(140, 108, 112), t),
+  walls: { white: rgb(220, 200, 214), cream: rgb(214, 190, 186), grey: rgb(150, 136, 160), wood: rgb(150, 104, 100) },
+  roof: rgb(64, 52, 84),
+  tent: rgb(232, 214, 226),
+  kickerSide: rgb(64, 70, 150),
   treeLeaves: gradient([
     [0, rgb(60, 56, 96)],
     [1, rgb(110, 90, 130)],

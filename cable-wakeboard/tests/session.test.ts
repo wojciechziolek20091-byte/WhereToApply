@@ -46,11 +46,11 @@ describe('run session', () => {
 
   it('logs a landed trick', () => {
     const run = createRun(makeConfig({}));
-    // Default park: ride straight over the first kicker.
+    // Default park: from the starting dock, straight over the dock kicker west.
     runFor(run, 12);
     expect(run.tricks.length).toBeGreaterThan(0);
     expect(run.tricks[0]!.trick.name).toBe('Straight Kicker Air');
-    expect(run.tricks[0]!.featureId).toBe('k1');
+    expect(run.tricks[0]!.featureId).toBe('k3');
   });
 });
 

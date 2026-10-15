@@ -18,7 +18,7 @@ comes from **features** (kickers, sliders, boxes) and from **line tension**.
 
 | Real world | Sim | Notes |
 |---|---|---|
-| Full-size cable: 4 to 6 towers in a closed loop, usually run counter-clockwise | `CableConfig.towers`, `buildCablePath()` in `cable.ts` | Default layout is a 4-tower rectangle run counter-clockwise viewed from above. |
+| Full-size cable: 4 to 6 towers in a closed loop, usually run counter-clockwise | `CableConfig.towers`, `buildCablePath()` in `cable.ts` | Default layout is the lakeside park from the user's map: 5 towers, about 595 m a lap, run clockwise viewed from above (see section 7). |
 | The cable turns around a wheel at each tower | `CableConfig.cornerRadius`; the path is straight segments joined by arcs | |
 | Cable height above the water, roughly 8 to 12 m | `CableConfig.cableHeight` (default 9 m) | Gives the rope an **upward** angle that a boat rope never has. |
 | Carrier speed is set by the operator, roughly 20 to 36 km/h; park riding is often around 30 km/h | `CableConfig.carrierSpeed` (default 8.3 m/s, about 30 km/h) | Constant: the carrier does not slow down for you. |
@@ -194,6 +194,19 @@ Defined as data in `park.ts` (`FeatureDef`) and queried in `features.ts`:
   driven by the spin input) picks the jib trick (`50-50` aligned, `boardslide`
   across). Releasing the load on a slider ollies off it.
 - Hitting a feature from the wrong side is a `featureCrash` fall.
+
+**The default park** (`parkLayout.ts`, from the user's park map and photos): a
+lake with a long island in the middle, five lattice towers, about 595 m a lap
+run clockwise, so the inside of the loop is to the rider's right
+(`offset` > 0). Runs start from the **starting dock** on the south straight
+(`ParkDef.startS`), between the two dock kickers. Twelve features in map
+order: 8 floating kickers (white ramps with blue sides) and 4 rails. Features
+the map draws far inside the loop are pulled in to 6-10 m off the line, which
+is what an 18 m rope can reach. The site (shoreline, island, watch terrace,
+clubhouse, tents, halls, parking, roads, fields) is `ParkDef.site`: scenery for
+the renderers only. The sim does not collide with land; instead the shoreline
+keeps at least 12 m from the cable and the island at least 18 m
+(`tests/site.test.ts`).
 
 **Soft landings.** Landing impact is measured along the surface normal
 (`evaluateLanding()`), so landing on a down-ramp or transition is softer than

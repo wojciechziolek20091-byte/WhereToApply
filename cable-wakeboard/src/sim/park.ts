@@ -1,6 +1,7 @@
 import type { CablePath } from './cable';
 import { cablePointAt } from './cable';
 import { type Vec3, addScaled, horizontal, rightOf } from './math/vec';
+import { LAKESIDE_PARK } from './parkLayout';
 
 /**
  * Features are placed relative to the cable: `s` is the arc length along the
@@ -38,9 +39,71 @@ export interface SliderDef extends FeatureBase {
 
 export type FeatureDef = KickerDef | SliderDef;
 
+/** A point on the ground plane (m): x east, z south. */
+export interface GroundPoint {
+  x: number;
+  z: number;
+}
+
+/** A building or tent. `heading` turns its length (`width`) like a rider heading. */
+export interface BuildingDef {
+  name: string;
+  x: number;
+  z: number;
+  /** Size along the heading (m). */
+  width: number;
+  /** Size across the heading (m). */
+  depth: number;
+  /** Wall height (m); roofs sit on top. */
+  height: number;
+  heading: number;
+  roof: 'gable' | 'flat' | 'tent';
+  color: 'white' | 'cream' | 'grey' | 'wood';
+}
+
+/** Start dock, placed along the cable like a feature. */
+export interface DockDef {
+  name: string;
+  s: number;
+  offset: number;
+  length: number;
+  width: number;
+}
+
+export interface AreaDef {
+  kind: 'watch' | 'parking' | 'field' | 'pond';
+  name: string;
+  outline: GroundPoint[];
+}
+
+export interface RoadDef {
+  name: string;
+  width: number;
+  points: GroundPoint[];
+}
+
+/**
+ * Everything around the water. The sim does not collide with any of it: the
+ * shoreline is drawn so the cable stays at least 12 m from land and the island
+ * at least 18 m from the cable (tests/site.test.ts).
+ */
+export interface SiteDef {
+  /** Lake shoreline, clockwise seen from above. Star-shaped about its centroid. */
+  lake: GroundPoint[];
+  islands: { name: string; outline: GroundPoint[]; height: number }[];
+  docks: DockDef[];
+  buildings: BuildingDef[];
+  areas: AreaDef[];
+  roads: RoadDef[];
+}
+
 export interface ParkDef {
   name: string;
   features: FeatureDef[];
+  /** Carrier arc length at the start of a run; the rider starts about a rope length behind. */
+  startS?: number;
+  /** Scenery for renderers. Optional; the sim ignores it. */
+  site?: SiteDef;
 }
 
 /** A feature placed in the world. */
@@ -51,76 +114,8 @@ export interface ResolvedFeature {
   heading: number;
 }
 
-export const DEFAULT_PARK: ParkDef = {
-  name: 'Gray-box park',
-  features: [
-    { kind: 'kicker', id: 'k1', name: 'Kicker 1', s: 75, offset: 0, length: 4.5, width: 3.5, height: 1.1, lipAngle: 0.5 },
-    {
-      kind: 'slider',
-      id: 'b1',
-      name: 'Fun box',
-      style: 'box',
-      s: 150,
-      offset: 0,
-      length: 10,
-      width: 0.6,
-      height: 0.5,
-      entryLength: 3,
-    },
-    // Off-line features: carve out to reach them.
-    { kind: 'kicker', id: 'k3', name: 'Side kicker', s: 112, offset: -9, length: 3.8, width: 3, height: 0.9, lipAngle: 0.45 },
-    {
-      kind: 'slider',
-      id: 'b2',
-      name: 'Wide box',
-      style: 'box',
-      s: 190,
-      offset: 8,
-      length: 8,
-      width: 1.0,
-      height: 0.4,
-      entryLength: 2.5,
-    },
-    {
-      kind: 'slider',
-      id: 'b3',
-      name: 'Low box',
-      style: 'box',
-      s: 372,
-      offset: -8,
-      length: 7,
-      width: 0.8,
-      height: 0.35,
-      entryLength: 2.5,
-    },
-    { kind: 'kicker', id: 'k2', name: 'Kicker 2', s: 410, offset: 0, length: 5.5, width: 4, height: 1.6, lipAngle: 0.6 },
-    {
-      kind: 'slider',
-      id: 'r1',
-      name: 'Rail',
-      style: 'rail',
-      s: 490,
-      offset: 0,
-      length: 8,
-      width: 0.12,
-      height: 0.6,
-      entryLength: 3,
-    },
-    { kind: 'kicker', id: 'k4', name: 'Hip kicker', s: 455, offset: 9, length: 4.2, width: 3.2, height: 1.2, lipAngle: 0.55 },
-    {
-      kind: 'slider',
-      id: 'r2',
-      name: 'Long rail',
-      style: 'rail',
-      s: 532,
-      offset: -7,
-      length: 10,
-      width: 0.12,
-      height: 0.5,
-      entryLength: 3,
-    },
-  ],
-};
+/** Lakeside cable park, from the user's park map (see parkLayout.ts). */
+export const DEFAULT_PARK: ParkDef = LAKESIDE_PARK;
 
 export function resolvePark(park: ParkDef, path: CablePath): ResolvedFeature[] {
   return park.features.map((def) => {
