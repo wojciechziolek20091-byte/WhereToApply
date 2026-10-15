@@ -6,18 +6,18 @@ local ParkLayout = {}
 
 ParkLayout.LAKESIDE_PARK = {
 	name = "Sketch cable park",
-	startS = 52,
+	startS = 83,
 	features = {
-		{ kind = "kicker", id = "k1", name = "South kicker", s = 67, offset = -7, length = 3.8, width = 3, height = 0.9, lipAngle = 0.45 },
-		{ kind = "slider", id = "t1", name = "Inside pipe", style = "tube", s = 119, offset = 5, length = 10, width = 0.4, height = 0.5, entryLength = 2.5 },
-		{ kind = "slider", id = "t2", name = "Long pipe", style = "tube", s = 152, offset = 10, length = 12, width = 0.4, height = 0.55, entryLength = 2.5 },
-		{ kind = "slider", id = "b1", name = "West box", style = "box", s = 220, offset = -7, length = 12, width = 1, height = 0.5, entryLength = 3 },
-		{ kind = "slider", id = "t3", name = "Roof pipe", style = "tube", s = 293, offset = -8, length = 11, width = 0.4, height = 0.5, entryLength = 2.5 },
-		{ kind = "slider", id = "r1", name = "Kick rail", style = "rail", s = 370, offset = -7, length = 8, width = 0.12, height = 0.7, entryLength = 3 },
-		{ kind = "kicker", id = "k2", name = "Big kicker", s = 429, offset = -4, length = 6, width = 4.5, height = 1.8, lipAngle = 0.65 },
-		{ kind = "kicker", id = "k3", name = "Small kicker", s = 504, offset = -8, length = 3.5, width = 2.8, height = 0.8, lipAngle = 0.45 },
-		{ kind = "kicker", id = "k4", name = "East kicker", s = 547, offset = -10, length = 4.5, width = 3.5, height = 1.2, lipAngle = 0.55 },
-		{ kind = "kicker", id = "k5", name = "Inside kicker", s = 547, offset = 9, length = 4.5, width = 3.5, height = 1.2, lipAngle = 0.55 },
+		{ kind = "kicker", id = "k1", name = "South kicker", s = 17.5, offset = 7, length = 3.8, width = 3, height = 0.9, lipAngle = 0.45 },
+		{ kind = "kicker", id = "k4", name = "East kicker", s = 123, offset = 10, length = 4.5, width = 3.5, height = 1.2, lipAngle = 0.55 },
+		{ kind = "kicker", id = "k5", name = "Inside kicker", s = 123, offset = -9, length = 4.5, width = 3.5, height = 1.2, lipAngle = 0.55 },
+		{ kind = "kicker", id = "k3", name = "Small kicker", s = 167, offset = 8, length = 3.5, width = 2.8, height = 0.8, lipAngle = 0.45 },
+		{ kind = "kicker", id = "k2", name = "Big kicker", s = 215, offset = 4, length = 6, width = 4.5, height = 1.8, lipAngle = 0.65 },
+		{ kind = "slider", id = "r1", name = "Kick rail", style = "rail", s = 280, offset = 7, length = 8, width = 0.12, height = 0.7, entryLength = 3 },
+		{ kind = "slider", id = "t3", name = "Roof pipe", style = "tube", s = 362, offset = 8, length = 11, width = 0.4, height = 0.5, entryLength = 2.5 },
+		{ kind = "slider", id = "b1", name = "West box", style = "box", s = 439.5, offset = 7, length = 12, width = 1, height = 0.5, entryLength = 3 },
+		{ kind = "slider", id = "t2", name = "Long pipe", style = "tube", s = 508, offset = -10, length = 12, width = 0.4, height = 0.55, entryLength = 2.5 },
+		{ kind = "slider", id = "t1", name = "Inside pipe", style = "tube", s = 543, offset = -5, length = 10, width = 0.4, height = 0.5, entryLength = 2.5 },
 	},
 	site = {
 		lake = {
@@ -108,7 +108,7 @@ ParkLayout.LAKESIDE_PARK = {
 				},
 			},
 		},
-		docks = { { name = "Starting dock", s = 20, offset = -5, length = 17, width = 5.4 } },
+		docks = { { name = "Starting dock", s = 51, offset = 5, length = 17, width = 5.4 } },
 		buildings = {
 			{ name = "Clubhouse", x = -118, z = -58, width = 26, depth = 11, height = 4.5, heading = 1.25, roof = "gable", color = "cream" },
 			{ name = "Service hut", x = -104, z = -96, width = 9, depth = 7, height = 3, heading = 0.6, roof = "gable", color = "cream" },

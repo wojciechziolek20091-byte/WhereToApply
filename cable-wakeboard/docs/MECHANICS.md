@@ -18,7 +18,7 @@ comes from **features** (kickers, sliders, boxes) and from **line tension**.
 
 | Real world | Sim | Notes |
 |---|---|---|
-| Full-size cable: 4 to 6 towers in a closed loop, usually run counter-clockwise | `CableConfig.towers`, `buildCablePath()` in `cable.ts` | Default layout is the user's sketch: 5 towers in a "house" shape, about 586 m a lap, run clockwise viewed from above (see section 7). |
+| Full-size cable: 4 to 6 towers in a closed loop, usually run counter-clockwise | `CableConfig.towers`, `buildCablePath()` in `cable.ts` | Default layout is the user's sketch: 5 towers in a "house" shape, about 586 m a lap, run counter-clockwise viewed from above (see section 7). |
 | The cable turns around a wheel at each tower | `CableConfig.cornerRadius`; the path is straight segments joined by arcs | |
 | Cable height above the water, roughly 8 to 12 m | `CableConfig.cableHeight` (default 9 m) | Gives the rope an **upward** angle that a boat rope never has. |
 | Carrier speed is set by the operator, roughly 20 to 36 km/h; park riding is often around 30 km/h | `CableConfig.carrierSpeed` (default 8.3 m/s, about 30 km/h) | Constant: the carrier does not slow down for you. |
@@ -197,8 +197,9 @@ Defined as data in `park.ts` (`FeatureDef`) and queried in `features.ts`:
 
 **The default park** (`parkLayout.ts`): the cable layout is the user's sketch
 (`docs/park-sketch.jpg`), a five-tower "house" loop with tall sides and a
-peaked roof to the north, about 586 m a lap, run clockwise so the inside of
-the loop is to the rider's right (`offset` > 0). Ten features where the sketch
+peaked roof to the north, about 586 m a lap, run counter-clockwise so the
+inside of the loop is to the rider's left (`offset` < 0). Every feature faces
+the direction of travel. Ten features where the sketch
 puts them: 5 kickers (one under the south line, a big kicker at the east
 shoulder tower, a small one, and a pair either side of the east line), 3 round
 pipes (two side by side inside the west line, one on the north-west roof

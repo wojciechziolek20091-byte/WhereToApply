@@ -17,13 +17,13 @@ const cfg = {
 describe('default park cable', () => {
   const path = buildCablePath(DEFAULT_CONFIG.cable);
 
-  it('is about 600 m a lap, five towers, clockwise seen from above', () => {
+  it('is about 600 m a lap, five towers, counter-clockwise seen from above', () => {
     expect(DEFAULT_CONFIG.cable.towers).toHaveLength(5);
     expect(path.length).toBeGreaterThan(580);
     expect(path.length).toBeLessThan(610);
-    // Starts heading west along the south straight, then turns right (north).
-    expect(Math.cos(cablePointAt(path, 0).heading)).toBeLessThan(-0.9);
-    expect(path.segments.filter((g) => g.kind === 'arc').every((g) => g.kind === 'arc' && g.turn === 1)).toBe(true);
+    // Starts heading east along the south straight, then turns left (north).
+    expect(Math.cos(cablePointAt(path, 0).heading)).toBeGreaterThan(0.9);
+    expect(path.segments.filter((g) => g.kind === 'arc').every((g) => g.kind === 'arc' && g.turn === -1)).toBe(true);
   });
 });
 

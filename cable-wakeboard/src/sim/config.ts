@@ -227,14 +227,14 @@ export interface SimConfig {
 
 export const DEFAULT_CONFIG: SimConfig = {
   cable: {
-    // The sketch park's five towers (parkLayout.ts): south-east, south-west,
-    // north-west, the roof apex, the east shoulder. Clockwise seen from above.
+    // The sketch park's five towers (parkLayout.ts): south-west, south-east,
+    // the east shoulder, the roof apex, north-west. Counter-clockwise seen from above.
     towers: [
-      { x: 56.2, z: 102.5 },
       { x: -56.2, z: 110.4 },
-      { x: -56.2, z: -72 },
-      { x: 15.8, z: -110.4 },
+      { x: 56.2, z: 102.5 },
       { x: 54.7, z: -55.2 },
+      { x: 15.8, z: -110.4 },
+      { x: -56.2, z: -72 },
     ],
     cornerRadius: 12,
     cableHeight: 9,

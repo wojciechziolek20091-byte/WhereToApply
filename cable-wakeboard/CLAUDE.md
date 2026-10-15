@@ -155,7 +155,10 @@ one to edit first (it has the unit tests); then mirror it line by line.
 
 The park sketch (`docs/park-sketch.jpg`) was converted at 0.24 m per pixel,
 north up: x east, z south (so `?cam=map` looks like the sketch). Travel is
-clockwise from above; `offset` > 0 is inside the loop.
+counter-clockwise from above; `offset` < 0 is inside the loop, > 0 outside.
+To reverse the direction: reverse the tower order (keep s = 0 on the south
+straight), and re-project each feature's centre onto the new path (its side of
+the line flips sign; its `s` becomes the new centre minus half its length).
 
 ## Tuning reference (defaults, flat water)
 

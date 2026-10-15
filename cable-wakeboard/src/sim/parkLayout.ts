@@ -7,19 +7,22 @@
  * and halls on the south shore, fields to the north.
  *
  * Sketch pixels were converted at 0.24 m/px (north up): x east, z south.
- * Travel is clockwise seen from above, so + offset (right of travel) is the
- * inside of the loop. Tower order starts at the south-east tower so s = 0 is
- * on the south straight; the rider starts at the dock (s 20-37).
+ * Travel is counter-clockwise seen from above (east along the south line,
+ * north up the east side), so - offset (left of travel) is the inside of the
+ * loop and + offset the outside. Tower order starts at the south-west tower so
+ * s = 0 is on the south straight; the rider starts at the dock's east end.
  *
  * From the sketch, in order of travel:
- *   south line   South kicker (outside)
- *   west side    two pipes inside the loop, side by side; West box outside
+ *   south line   South kicker (outside), met at the end of the lap
+ *   east side    Inside kicker and East kicker as a pair, Small kicker, a buoy,
+ *                Big kicker below the shoulder tower (outside)
+ *   NE roof      Kick rail (outside), its kick ramp at the end riders meet first
  *   NW roof      Roof pipe (outside)
- *   NE roof      Kick rail: a rail with a kick ramp (outside)
- *   east side    Big kicker at the shoulder tower, a buoy, Small kicker, then
- *                East kicker (outside) and Inside kicker as a pair
+ *   west side    West box (outside), then two pipes inside the loop, side by side
  * Shapes the sketch draws far from the line are pulled in to 4-10 m off it,
- * which is what an 18 m rope can reach.
+ * which is what an 18 m rope can reach. Every obstacle faces the direction of
+ * travel; the big kicker, kick rail and roof pipe sit a little before their
+ * corner so riders land before the turn.
  *
  * roblox/src/shared/Sim/ParkLayout.luau is generated from this file:
  * `npx vite-node scripts/gen-park-luau.ts`. The towers are in config.ts
@@ -29,18 +32,18 @@ import type { ParkDef } from './park';
 
 export const LAKESIDE_PARK: ParkDef = {
   name: 'Sketch cable park',
-  startS: 52,
+  startS: 83,
   features: [
-    { kind: 'kicker', id: 'k1', name: 'South kicker', s: 67, offset: -7, length: 3.8, width: 3, height: 0.9, lipAngle: 0.45 },
-    { kind: 'slider', id: 't1', name: 'Inside pipe', style: 'tube', s: 119, offset: 5, length: 10, width: 0.4, height: 0.5, entryLength: 2.5 },
-    { kind: 'slider', id: 't2', name: 'Long pipe', style: 'tube', s: 152, offset: 10, length: 12, width: 0.4, height: 0.55, entryLength: 2.5 },
-    { kind: 'slider', id: 'b1', name: 'West box', style: 'box', s: 220, offset: -7, length: 12, width: 1, height: 0.5, entryLength: 3 },
-    { kind: 'slider', id: 't3', name: 'Roof pipe', style: 'tube', s: 293, offset: -8, length: 11, width: 0.4, height: 0.5, entryLength: 2.5 },
-    { kind: 'slider', id: 'r1', name: 'Kick rail', style: 'rail', s: 370, offset: -7, length: 8, width: 0.12, height: 0.7, entryLength: 3 },
-    { kind: 'kicker', id: 'k2', name: 'Big kicker', s: 429, offset: -4, length: 6, width: 4.5, height: 1.8, lipAngle: 0.65 },
-    { kind: 'kicker', id: 'k3', name: 'Small kicker', s: 504, offset: -8, length: 3.5, width: 2.8, height: 0.8, lipAngle: 0.45 },
-    { kind: 'kicker', id: 'k4', name: 'East kicker', s: 547, offset: -10, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.55 },
-    { kind: 'kicker', id: 'k5', name: 'Inside kicker', s: 547, offset: 9, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.55 },
+    { kind: 'kicker', id: 'k1', name: 'South kicker', s: 17.5, offset: 7, length: 3.8, width: 3, height: 0.9, lipAngle: 0.45 },
+    { kind: 'kicker', id: 'k4', name: 'East kicker', s: 123, offset: 10, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.55 },
+    { kind: 'kicker', id: 'k5', name: 'Inside kicker', s: 123, offset: -9, length: 4.5, width: 3.5, height: 1.2, lipAngle: 0.55 },
+    { kind: 'kicker', id: 'k3', name: 'Small kicker', s: 167, offset: 8, length: 3.5, width: 2.8, height: 0.8, lipAngle: 0.45 },
+    { kind: 'kicker', id: 'k2', name: 'Big kicker', s: 215, offset: 4, length: 6, width: 4.5, height: 1.8, lipAngle: 0.65 },
+    { kind: 'slider', id: 'r1', name: 'Kick rail', style: 'rail', s: 280, offset: 7, length: 8, width: 0.12, height: 0.7, entryLength: 3 },
+    { kind: 'slider', id: 't3', name: 'Roof pipe', style: 'tube', s: 362, offset: 8, length: 11, width: 0.4, height: 0.5, entryLength: 2.5 },
+    { kind: 'slider', id: 'b1', name: 'West box', style: 'box', s: 439.5, offset: 7, length: 12, width: 1, height: 0.5, entryLength: 3 },
+    { kind: 'slider', id: 't2', name: 'Long pipe', style: 'tube', s: 508, offset: -10, length: 12, width: 0.4, height: 0.55, entryLength: 2.5 },
+    { kind: 'slider', id: 't1', name: 'Inside pipe', style: 'tube', s: 543, offset: -5, length: 10, width: 0.4, height: 0.5, entryLength: 2.5 },
   ],
   site: {
     lake: [
@@ -127,7 +130,7 @@ export const LAKESIDE_PARK: ParkDef = {
           { x: -0.2, z: -42 },
         ] },
     ],
-    docks: [{ name: 'Starting dock', s: 20, offset: -5, length: 17, width: 5.4 }],
+    docks: [{ name: 'Starting dock', s: 51, offset: 5, length: 17, width: 5.4 }],
     buildings: [
       { name: 'Clubhouse', x: -118, z: -58, width: 26, depth: 11, height: 4.5, heading: 1.25, roof: 'gable', color: 'cream' },
       { name: 'Service hut', x: -104, z: -96, width: 9, depth: 7, height: 3, heading: 0.6, roof: 'gable', color: 'cream' },

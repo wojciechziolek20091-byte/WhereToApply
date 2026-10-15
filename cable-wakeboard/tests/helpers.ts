@@ -56,5 +56,8 @@ import { DEFAULT_CONFIG } from '../src/sim/config';
 import { FLAT_PARK } from '../src/sim/park';
 import { createSim } from '../src/sim/world';
 
-/** A sim on flat water with no features. */
-export const flatSim = () => createSim(DEFAULT_CONFIG, FLAT_PARK);
+/**
+ * A sim on flat water with no features, starting on the longest straight (the
+ * east side, s = 107..249) so cut-and-pop tests stay clear of the corners.
+ */
+export const flatSim = () => createSim(DEFAULT_CONFIG, FLAT_PARK, 125);

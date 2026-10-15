@@ -55,6 +55,8 @@ purpose-built park. Assumptions made to fill the gaps:
   (`roblox/src/shared/Sim`), deterministic math (`detmath`) in both so they
   stay bit-identical, a parity test that plays three full scripted runs through
   both and compares every tick, and a thin Roblox client (`WakeClient`) for Studio.
+- [x] **M13 Reversed cable.** Counter-clockwise travel; every feature keeps its
+  spot on the water, turned to face the new direction.
 - [x] **M12 Sketch layout.** The cable layout follows the user's sketch
   (house-shaped 5-tower loop, ~586 m, 10 features where the sketch puts them,
   round pipes as a new slider style); scenery rebuilt around it from the map.
