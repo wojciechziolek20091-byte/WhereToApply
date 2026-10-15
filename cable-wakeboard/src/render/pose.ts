@@ -9,13 +9,16 @@ import type { RiderState } from '../sim/rider';
  * - invert: rotation in the board's frame (x along the board, z toward the
  *   toes): tantrum and front flip turn about the board's long axis, rolls
  *   about a tilted axis, S-bends about an axis between the board and the toes.
- * - lean: tilt about the board's long axis for the edge and the raley swing.
+ * - lean: tilt about the board's long axis for the edge.
+ * - raley: the raley's body extension; the animator turns it into the swing.
  */
 export interface RiderPose {
   yaw: number;
   toes: 1 | -1;
   invert: { axis: [number, number, number]; angle: number } | null;
   lean: number;
+  /** Raley body extension (rad, from the sim). The animator swings the rider with it; it is not in `lean`. */
+  raley: number;
   /** The handle is behind the back (blind): the rope attaches on the heel side. */
   handleBehind: boolean;
 }
@@ -45,7 +48,7 @@ export function riderPose(r: RiderState): RiderPose {
     }
   }
   // Rotating +a about x lifts the -z side. The heel is on -toes, so a heelside
-  // edge (positive) dips the heel with -toes * edge; the raley swings the same way.
-  const lean = -toes * (r.edgeAngle + raley * 1.6);
-  return { yaw, toes, invert, lean, handleBehind: r.handle === 'behind' };
+  // edge (positive) dips the heel with -toes * edge.
+  const lean = -toes * r.edgeAngle;
+  return { yaw, toes, invert, lean, raley, handleBehind: r.handle === 'behind' };
 }

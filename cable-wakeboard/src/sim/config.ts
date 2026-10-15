@@ -293,6 +293,40 @@ export interface CrashConfig {
   respawnDelay: number;
 }
 
+/**
+ * Gameplay side of the animation spec's section 11, each switchable so the
+ * old and new feel can be compared (`?physics=old` in the web game).
+ */
+export interface PhysicsConfig {
+  /**
+   * Flips and spins turn at L / I(tuck): fast tucked, slow opened up. L is
+   * set so a full turn takes as long as before at the input rate, so the
+   * controls keep their timing; only the speed profile within the turn changes.
+   */
+  tuckRotation: boolean;
+  /** Moments of inertia (kg m^2), open and tucked. */
+  flipInertiaOpen: number;
+  flipInertiaTucked: number;
+  spinInertiaOpen: number;
+  spinInertiaTucked: number;
+  /** Tuck by flip progress through the turn: [progress 0..1, tuck 0..1] keys (the animation's flip clips follow the same curve). */
+  flipTuck: number[][];
+  /** Spins: tucked after this long into the spin (s), opened up over the last `spinOpen` of it (rad). */
+  spinTuckIn: number;
+  spinOpen: number;
+  /** A/D held in the `preWindWindow` before the pop: the spin that way is `preWindBonus` faster. */
+  preWind: boolean;
+  preWindWindow: number;
+  preWindBonus: number;
+  /** The rope pulls at the shoulders (height above the board, m), not the hips. */
+  ropeAtShoulders: boolean;
+  shoulderHeight: number;
+  /** Landings cost speed: this fraction per m/s of impact, times `sketchyCost` when not clean. */
+  landingSpeedCost: boolean;
+  landingCostPerMS: number;
+  sketchyCost: number;
+}
+
 export interface DebugConfig {
   /** Log state transitions as events and assert illegal ones. */
   enabled: boolean;
@@ -339,6 +373,7 @@ export interface SimConfig {
   crash: CrashConfig;
   run: RunConfig;
   scoring: ScoringConfig;
+  physics: PhysicsConfig;
   debug: DebugConfig;
 }
 
@@ -466,6 +501,31 @@ export const DEFAULT_CONFIG: SimConfig = {
     weights: { execution: 3.3, intensity: 3.4, composition: 3.3 },
     judgeBias: 0.4,
     seed: 20261013,
+  },
+  physics: {
+    tuckRotation: true,
+    flipInertiaOpen: 12,
+    flipInertiaTucked: 4,
+    spinInertiaOpen: 2.5,
+    spinInertiaTucked: 1.2,
+    flipTuck: [
+      [0, 0],
+      [0.12, 0.6],
+      [0.2, 1],
+      [0.72, 1],
+      [0.92, 0],
+      [1, 0],
+    ],
+    spinTuckIn: 0.12,
+    spinOpen: deg(90),
+    preWind: true,
+    preWindWindow: 0.2,
+    preWindBonus: 0.12,
+    ropeAtShoulders: true,
+    shoulderHeight: 1.45,
+    landingSpeedCost: true,
+    landingCostPerMS: 0.012,
+    sketchyCost: 2,
   },
   debug: { enabled: true },
 };

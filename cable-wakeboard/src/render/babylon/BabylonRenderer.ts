@@ -11,10 +11,10 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
-import { Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
-import { CreateLines } from '@babylonjs/core/Meshes/Builders/linesBuilder';
+import { CreateLines, CreateLineSystem } from '@babylonjs/core/Meshes/Builders/linesBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -43,9 +43,14 @@ import { type BuildingDef, DEFAULT_PARK, type DockDef, type GroundPoint, type Re
 import type { SimState } from '../../sim/world';
 import type { RenderSnapshot } from '../graybox';
 import { DAY, type Look } from './looks';
-import { buildCharacter, characterMaterial, type CharacterRig } from './character';
-import { riderPose } from '../pose';
-import { applyBasis, axisAngle, basisToQuaternion, col, mulBasis, yawBasis } from './rot';
+import { applyFrame, buildCharacter, characterMaterial, type CharacterModel } from './character';
+import { type AnimFrame, type Animator, createAnimator, stepAnimator } from '../../anim/animator';
+import { DEFAULT_ANIM_CONFIG } from '../../anim/config';
+import { animStateFromSim, composeBoardRotation, type RiderAnimState } from '../../anim/state';
+import { baseAnimState, playTo, SCENARIOS } from '../../anim/testDriver';
+import type { SimEvent } from '../../sim/events';
+import { JOINTS, PARENT } from '../../anim/skeleton';
+import { basisToQuaternion, yawBasis } from './rot';
 
 const v3 = (p: Vec3): Vector3 => new Vector3(p.x, p.y, p.z);
 const c3 = (c: readonly [number, number, number]): Color3 => new Color3(c[0], c[1], c[2]);
@@ -227,9 +232,10 @@ function rectangleSite(sim: SimState): SiteDef {
   };
 }
 
-/** Another rider on the cable, animated for scenery only (not simulated). */
+/** Another rider on the cable, animated for scenery only (not simulated), with the same animation system. */
 interface GhostRider {
-  mesh: Mesh;
+  model: CharacterModel;
+  animator: Animator;
   carrier: Mesh;
   rope: LinesMesh;
   offset: number;
@@ -254,8 +260,23 @@ export class BabylonRenderer {
   private readonly site: SiteDef;
   private readonly sun: DirectionalLight;
   private readonly shadows: ShadowGenerator;
-  private rider: Mesh;
-  private rig: CharacterRig;
+  private model: CharacterModel;
+  private animator: Animator;
+  private animState: RiderAnimState | null = null;
+  /** The last animation frame of the player's rider (debugging, captures). */
+  lastFrame: AnimFrame | null = null;
+  /** Pose scrubber: a test-driver scenario frozen at phase u, instead of the sim. */
+  scrub: { name: string; u: number } | null = null;
+  private scrubKey = '';
+  private scrubOrigin: Vec3 | null = null;
+  private scrubFrame: AnimFrame | null = null;
+  /** Skeleton overlay: joints, centre of mass, rotation axis, IK targets. */
+  showSkeleton = false;
+  private overlay: { lines: LinesMesh | null; com: Mesh; targets: Mesh[] } | null = null;
+  private readonly splash: ParticleSystem;
+  private readonly splashEmitter = new Vector3();
+  private shake = 0;
+  private fovKick = 0;
   private readonly charMat: StandardMaterial;
   private readonly carrier: Mesh;
   private rope: LinesMesh;
@@ -265,6 +286,8 @@ export class BabylonRenderer {
   private readonly ghosts: GhostRider[] = [];
   private waterMat: StandardMaterial | null = null;
   private camHeading = 0;
+  private camRoll = 0;
+  private pullOut = 0;
   private camPos: Vector3 | null = null;
   private palette: RiderPalette;
   private clock = 0;
@@ -322,9 +345,8 @@ export class BabylonRenderer {
     this.buildPark(sim);
 
     this.charMat = characterMaterial(scene);
-    const built = this.buildRider(palette);
-    this.rider = built.mesh;
-    this.rig = built.rig;
+    this.model = this.buildRider(palette);
+    this.animator = createAnimator(this.model.rig);
     const carrierMat = new StandardMaterial('carrierMat', scene);
     carrierMat.diffuseColor = c3(look.carrier);
     carrierMat.specularColor = Color3.Black();
@@ -335,6 +357,7 @@ export class BabylonRenderer {
     this.buildGhosts(carrierMat);
 
     this.spray = this.buildSpray();
+    this.splash = this.buildSplash();
     this.buildWake(sim);
 
     this.camera = new FreeCamera('chase', new Vector3(0, 5, -10), scene);
@@ -346,22 +369,20 @@ export class BabylonRenderer {
     window.addEventListener('resize', () => this.engine.resize());
   }
 
-  /** Swap the rider's palette (rebuilds one mesh). */
+  /** Swap the rider's palette (rebuilds the rider's meshes; the animator carries on). */
   setPalette(palette: RiderPalette): void {
     if (palette === this.palette) return;
     this.palette = palette;
-    this.shadows.removeShadowCaster(this.rider);
-    this.rider.dispose();
-    const built = this.buildRider(palette);
-    this.rider = built.mesh;
-    this.rig = built.rig;
+    for (const m of this.model.meshes) this.shadows.removeShadowCaster(m);
+    this.model.handle.dispose();
+    this.model.root.dispose();
+    this.model = this.buildRider(palette);
   }
 
-  /** The smooth character from the user's sheet (see character.ts), in metres. */
-  private buildRider(palette: RiderPalette): { mesh: Mesh; rig: CharacterRig } {
-    const built = buildCharacter(this.scene, palette, this.charMat);
-    built.mesh.rotationQuaternion = Quaternion.Identity();
-    this.shadows.addShadowCaster(built.mesh);
+  /** The smooth, jointed character from the user's sheet (see character.ts), in metres. */
+  private buildRider(palette: RiderPalette, name?: string): CharacterModel {
+    const built = buildCharacter(this.scene, palette, this.charMat, name);
+    for (const m of built.meshes) this.shadows.addShadowCaster(m);
     return built;
   }
 
@@ -660,18 +681,16 @@ export class BabylonRenderer {
   private buildGhosts(carrierMat: StandardMaterial): void {
     const palettes: RiderPalette[] = ['A', 'B', 'A'];
     palettes.forEach((pal, k) => {
-      const mesh = buildCharacter(this.scene, pal, this.charMat).mesh;
-      mesh.name = `ghost${k}`;
-      mesh.rotationQuaternion = Quaternion.Identity();
+      const model = this.buildRider(pal, `ghost${k}`);
       const carrier = CreateBox(`ghostCarrier${k}`, { width: 0.7, height: 0.35, depth: 0.4 }, this.scene);
       carrier.material = carrierMat;
       const rope = CreateLines(`ghostRope${k}`, { points: [Vector3.Zero(), Vector3.Zero()], updatable: true }, this.scene);
       rope.color = c3(this.look.rope);
-      this.ghosts.push({ mesh, carrier, rope, offset: (k + 1) / (palettes.length + 1), phase: k * 2.1 });
+      this.ghosts.push({ model, animator: createAnimator(model.rig), carrier, rope, offset: (k + 1) / (palettes.length + 1), phase: k * 2.1 });
     });
   }
 
-  private updateGhosts(sim: SimState): void {
+  private updateGhosts(sim: SimState, dt: number): void {
     const { path } = sim;
     const back = 15.5;
     for (const g of this.ghosts) {
@@ -687,10 +706,18 @@ export class BabylonRenderer {
       const heading = rp.heading + Math.atan2(swayRate, sim.cfg.cable.carrierSpeed);
       const x = rp.pos.x - Math.sin(rp.heading) * sway;
       const z = rp.pos.z + Math.cos(rp.heading) * sway;
-      g.mesh.position = new Vector3(x, 0, z);
       const edge = -Math.sign(swayRate) * 0.45 * Math.min(1, Math.abs(swayRate) / 1.5);
-      g.mesh.rotationQuaternion = basisToQuaternion(mulBasis(yawBasis(heading), axisAngle(col(1, 0, 0), -edge)));
-      g.rope = CreateLines(g.rope.name, { points: [v3(cp.pos), new Vector3(x, 0.8, z)], instance: g.rope });
+      const st = baseAnimState({ x, y: 0, z });
+      st.edge = edge / 0.7;
+      st.ext.edgeDegrees = (edge * 180) / Math.PI;
+      st.tension = 380 + 700 * Math.abs(edge);
+      const speed = sim.cfg.cable.carrierSpeed;
+      st.velocity = { x: Math.cos(heading) * speed, y: 0, z: Math.sin(heading) * speed };
+      st.boardCFrame.rot = composeBoardRotation(heading, null, 0, -edge);
+      st.ext.carrier = cp.pos;
+      const f = stepAnimator(g.animator, st, dt);
+      applyFrame(g.model, f);
+      g.rope = CreateLines(g.rope.name, { points: [v3(cp.pos), v3(f.handle.pos)], instance: g.rope });
     }
   }
 
@@ -749,7 +776,7 @@ export class BabylonRenderer {
   }
 
   /** Draw the sim, interpolated `alpha` of the way from `prev` to the current state. */
-  render(sim: SimState, prev: RenderSnapshot, alpha: number, frameSeconds: number): void {
+  render(sim: SimState, prev: RenderSnapshot, alpha: number, frameSeconds: number, events: SimEvent[] = sim.events): void {
     this.clock += frameSeconds;
     const r = sim.rider;
     const riderPos = lerpVec(prev.riderPos, r.pos, alpha);
@@ -757,43 +784,77 @@ export class BabylonRenderer {
     this.carrier.position = v3(carrierPos);
     this.carrier.rotationQuaternion = basisToQuaternion(yawBasis(sim.carrier.heading));
 
-    // Rider orientation: yaw (travel + spin or rail angle), then invert, then edge tilt (see pose.ts).
-    const pose = riderPose(r);
-    const toes = pose.toes;
-    let basis = yawBasis(pose.yaw);
-    if (pose.invert) basis = mulBasis(basis, axisAngle(col(...pose.invert.axis), pose.invert.angle));
-    basis = mulBasis(basis, axisAngle(col(1, 0, 0), pose.lean));
-    this.rider.position = v3(riderPos);
-    this.rider.rotationQuaternion = basisToQuaternion(basis);
-    // Mirror across the travel axis when the toes point left (goofy or switch).
-    const squat = 1 - 0.12 * r.legCompression;
-    this.rider.scaling = new Vector3(1, squat, toes);
-
-    // Rope from the carrier to the handle in the rider's hands.
-    if (r.handle !== 'dropped') {
-      const h = this.rig.handle;
-      // Blind: the handle is behind the back, on the heel side.
-      const hz = pose.handleBehind ? -h.z : h.z;
-      const local = applyBasis(basis, { x: h.x, y: h.y * squat, z: hz * toes });
-      const handle = new Vector3(riderPos.x + local.x, riderPos.y + local.y, riderPos.z + local.z);
-      this.rope = CreateLines('rope', { points: [v3(carrierPos), handle], instance: this.rope });
-      this.rope.isVisible = true;
+    // Rider: the animation system poses the jointed character (src/anim).
+    let frame: AnimFrame;
+    let toes = 1;
+    if (this.scrub && SCENARIOS[this.scrub.name]) {
+      const key = `${this.scrub.name}|${this.scrub.u.toFixed(3)}`;
+      if (!this.scrubOrigin) this.scrubOrigin = { x: riderPos.x, y: 0, z: riderPos.z };
+      if (key !== this.scrubKey || !this.scrubFrame) {
+        this.scrubKey = key;
+        this.scrubFrame = playTo(createAnimator(this.model.rig), SCENARIOS[this.scrub.name]!, this.scrub.u, this.scrubOrigin);
+      }
+      frame = this.scrubFrame;
     } else {
-      this.rope.isVisible = false;
+      this.scrubOrigin = null;
+      const st = animStateFromSim(sim, events, this.animState);
+      st.boardCFrame.pos = { ...riderPos };
+      this.animState = st;
+      toes = st.ext.toes;
+      frame = stepAnimator(this.animator, st, frameSeconds);
     }
+    this.lastFrame = frame;
+    applyFrame(this.model, frame);
+
+    // Rope from the carrier to the handle: sags when slack, straight when taut.
+    {
+      const hp = frame.handle.pos;
+      const len = Math.hypot(hp.x - carrierPos.x, hp.y - carrierPos.y, hp.z - carrierPos.z);
+      const taut = clamp01(r.ropeTension / 400);
+      const sag = DEFAULT_ANIM_CONFIG.Vfx.RopeSag * len * (1 - taut);
+      const pts: Vector3[] = [];
+      for (let i = 0; i <= 12; i++) {
+        const t = i / 12;
+        pts.push(new Vector3(carrierPos.x + (hp.x - carrierPos.x) * t, carrierPos.y + (hp.y - carrierPos.y) * t - sag * 4 * t * (1 - t), carrierPos.z + (hp.z - carrierPos.z) * t));
+      }
+      if (this.rope.getTotalVertices() !== pts.length) {
+        this.rope.dispose();
+        this.rope = CreateLines('rope', { points: pts, updatable: true }, this.scene);
+        this.rope.color = c3(this.look.rope);
+      } else this.rope = CreateLines('rope', { points: pts, instance: this.rope });
+      this.rope.isVisible = true;
+    }
+
+    // Splash on landings and crashes, camera kick on pops and landings.
+    const V = DEFAULT_ANIM_CONFIG.Vfx;
+    const C = DEFAULT_ANIM_CONFIG.Camera;
+    for (const e of frame.events) {
+      if (e === 'land' || e === 'splash' || e === 'crash') {
+        const impact = e === 'land' ? frame.impact : 6;
+        this.splashEmitter.set(frame.root.pos.x, 0.05, frame.root.pos.z);
+        this.splash.manualEmitCount = Math.round(V.SplashPerMS * Math.max(1, impact));
+        this.shake = Math.max(this.shake, C.ShakePerMS * impact);
+      } else if (e === 'pop') this.fovKick = C.PopFovKick;
+    }
+    this.shake *= Math.exp(-C.ShakeDecay * frameSeconds);
+    this.fovKick *= Math.exp(-4 * frameSeconds);
+    if (this.showSkeleton) this.drawOverlay(frame);
+    else if (this.overlay) this.hideOverlay();
 
     // Spray: strongest when carving hard at speed on the water.
     const onWater = r.mode === 'riding' || r.mode === 'ridingBlind' || r.mode === 'waterTrickLoad' || r.mode === 'landing' || r.mode === 'crashed';
     const speed = horizontalLength(r.vel);
-    const intensity = onWater ? clamp01((speed - 3) / 10) * (0.35 + 0.65 * clamp01(r.edgeLoad / 1400)) : 0;
+    const intensity = this.scrub ? 0 : onWater ? clamp01((speed - 3) / 10) * (0.35 + 0.65 * clamp01(r.edgeLoad / 1400)) : 0;
+    // Rooster tail on a hard heelside edge.
+    const rooster = r.edgeAngle / sim.cfg.edge.maxEdgeAngle > V.RoosterEdge ? 1.6 : 1;
     const fwd = { x: Math.cos(r.heading), z: Math.sin(r.heading) };
     const right = { x: -Math.sin(r.heading), z: Math.cos(r.heading) };
     const heel = { x: -right.x * toes, z: -right.z * toes };
     const side = r.edgeAngle >= 0 ? heel : { x: -heel.x, z: -heel.z };
     this.sprayEmitter.set(riderPos.x - fwd.x * 0.6 + side.x * 0.25, 0.05, riderPos.z - fwd.z * 0.6 + side.z * 0.25);
-    this.spray.emitRate = 1400 * intensity;
-    this.spray.direction1 = new Vector3(-fwd.x * 0.6 + side.x * 0.5, 1.2, -fwd.z * 0.6 + side.z * 0.5);
-    this.spray.direction2 = new Vector3(-fwd.x * 1.2 + side.x * 1.4, 2.2, -fwd.z * 1.2 + side.z * 1.4);
+    this.spray.emitRate = V.SprayRate * intensity * rooster;
+    this.spray.direction1 = new Vector3(-fwd.x * 0.6 + side.x * 0.5, 1.2 * rooster, -fwd.z * 0.6 + side.z * 0.5);
+    this.spray.direction2 = new Vector3(-fwd.x * 1.2 + side.x * 1.4, 2.2 * rooster, -fwd.z * 1.2 + side.z * 1.4);
 
     // Wake lines follow the board's rails at the waterline.
     this.wakeNodes.forEach((node, i) => {
@@ -808,14 +869,14 @@ export class BabylonRenderer {
       ripples.vOffset = (this.clock * 0.007) % 1;
     }
 
-    this.updateGhosts(sim);
+    this.updateGhosts(sim, frameSeconds);
 
     // Keep the shadow camera on the rider.
     this.sun.position = v3(riderPos).add(new Vector3(...this.look.sunDirection).normalize().scale(40));
 
     if (this.debugCam === 'aerial' || this.debugCam === 'map') this.aerialCamera(this.debugCam === 'map');
-    else if (this.debugCam) this.closeUpCamera(riderPos, r.heading, toes);
-    else this.updateCamera(riderPos, carrierPos, frameSeconds);
+    else if (this.debugCam) this.closeUpCamera(this.scrub ? { x: frame.com.x, y: frame.com.y - 0.9, z: frame.com.z } : riderPos, this.scrub ? 0 : r.heading, toes);
+    else this.updateCamera(this.scrub ? frame.root.pos : riderPos, carrierPos, frameSeconds, frame);
     this.scene.render();
   }
 
@@ -846,18 +907,109 @@ export class BabylonRenderer {
     this.camera.setTarget(new Vector3(riderPos.x, riderPos.y + 0.85, riderPos.z));
   }
 
-  /** Chase camera low behind the rider, looking toward the carrier. */
-  private updateCamera(riderPos: Vec3, carrierPos: Vec3, dt: number): void {
+  /** Chase camera low behind the rider, looking toward the carrier; pulls out for inverts, kicks on pops and landings. */
+  private updateCamera(riderPos: Vec3, carrierPos: Vec3, dt: number, frame: AnimFrame): void {
+    const C = DEFAULT_ANIM_CONFIG.Camera;
     const target = Math.atan2(carrierPos.z - riderPos.z, carrierPos.x - riderPos.x);
     let d = target - this.camHeading;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     this.camHeading += d * Math.min(1, dt * 2.5);
     const fwd = new Vector3(Math.cos(this.camHeading), 0, Math.sin(this.camHeading));
-    const want = v3(riderPos).subtract(fwd.scale(9)).add(new Vector3(0, 3.4, 0));
+    const rootUpY = 1 - 2 * (frame.root.rot.x * frame.root.rot.x + frame.root.rot.z * frame.root.rot.z);
+    const invert = clamp01(Math.max(frame.tuck, (0.5 - rootUpY) / 1.2));
+    this.pullOut += (invert - this.pullOut) * Math.min(1, dt * 3);
+    const back = 9 + C.InvertPullOut * this.pullOut;
+    const want = v3(riderPos).subtract(fwd.scale(back)).add(new Vector3(0, 3.4 + 0.8 * this.pullOut, 0));
     want.y = Math.max(want.y, 1.6);
     if (!this.camPos) this.camPos = want.clone();
     this.camPos = Vector3.Lerp(this.camPos, want, Math.min(1, dt * 6));
-    this.camera.position = this.camPos;
+    const sh = this.shake;
+    const jitter = new Vector3(Math.sin(this.clock * 61) * sh, Math.sin(this.clock * 47 + 1) * sh, Math.sin(this.clock * 53 + 2) * sh);
+    this.camera.position = this.camPos.add(jitter);
     this.camera.setTarget(v3(riderPos).add(fwd.scale(8)).add(new Vector3(0, 1.2, 0)));
+    // Slight roll with the carve, FOV kick at the pop.
+    const edge = this.animState ? this.animState.edge : 0;
+    const roll = (C.CarveRoll * edge * Math.PI) / 180;
+    this.camRoll += (roll - this.camRoll) * Math.min(1, dt * 3);
+    const right = new Vector3(-fwd.z, 0, fwd.x);
+    this.camera.upVector = new Vector3(0, Math.cos(this.camRoll), 0).add(right.scale(Math.sin(this.camRoll)));
+    this.camera.fov = 0.95 + (this.fovKick * Math.PI) / 180;
+  }
+
+  /** Water thrown up by landings and crashes (burst). */
+  private buildSplash(): ParticleSystem {
+    const ps = new ParticleSystem('splash', 800, this.scene);
+    ps.particleTexture = this.spray.particleTexture;
+    ps.emitter = this.splashEmitter;
+    ps.minEmitBox = new Vector3(-0.5, 0, -0.5);
+    ps.maxEmitBox = new Vector3(0.5, 0.05, 0.5);
+    ps.color1 = this.spray.color1.clone();
+    ps.color2 = this.spray.color2.clone();
+    ps.colorDead = this.spray.colorDead.clone();
+    ps.minSize = 0.15;
+    ps.maxSize = 0.45;
+    ps.updateSpeed = 1 / 60;
+    ps.minLifeTime = 0.5;
+    ps.maxLifeTime = 1.1;
+    ps.gravity = new Vector3(0, -9.8, 0);
+    ps.direction1 = new Vector3(-1.5, 3, -1.5);
+    ps.direction2 = new Vector3(1.5, 5, 1.5);
+    ps.minEmitPower = 1;
+    ps.maxEmitPower = 2.5;
+    ps.emitRate = 0;
+    ps.manualEmitCount = 0;
+    ps.start();
+    return ps;
+  }
+
+  /** F6: bones, joints, centre of mass (yellow), rotation axis (red), IK targets (magenta). */
+  private drawOverlay(f: AnimFrame): void {
+    if (!this.overlay) {
+      const mk = (name: string, d: number, color: Color3): Mesh => {
+        const m = CreateSphere(name, { diameter: d, segments: 6 }, this.scene);
+        const mat = new StandardMaterial(`${name}Mat`, this.scene);
+        mat.emissiveColor = color;
+        mat.disableLighting = true;
+        m.material = mat;
+        m.renderingGroupId = 1;
+        return m;
+      };
+      this.overlay = { lines: null, com: mk('ovCom', 0.12, new Color3(1, 0.85, 0.1)), targets: [0, 1, 2, 3].map((i) => mk(`ovT${i}`, 0.07, new Color3(1, 0.2, 0.9))) };
+    }
+    const segs: Vector3[][] = [];
+    for (const j of JOINTS) {
+      const p = PARENT[j];
+      if (p !== 'Root') segs.push([v3(f.world[p]), v3(f.world[j])]);
+    }
+    segs.push([v3(f.world.Neck), v3(f.head)]);
+    segs.push([v3(f.world.LWrist), v3(f.hands.L)]);
+    segs.push([v3(f.world.RWrist), v3(f.hands.R)]);
+    if (f.rotationAxis) {
+      const a = f.rotationAxis;
+      segs.push([v3(f.com).subtract(new Vector3(a.x, a.y, a.z).scale(0.8)), v3(f.com).add(new Vector3(a.x, a.y, a.z).scale(0.8))]);
+    } else segs.push([v3(f.com), v3(f.com)]);
+    const colors = segs.map((_, i) => (i === segs.length - 1 ? [new Color4(1, 0.2, 0.2, 1), new Color4(1, 0.2, 0.2, 1)] : [new Color4(0.2, 1, 0.4, 1), new Color4(0.2, 1, 0.4, 1)]));
+    if (this.overlay.lines && this.overlay.lines.getTotalVertices() === segs.length * 2) {
+      this.overlay.lines = CreateLineSystem('ovLines', { lines: segs, colors, instance: this.overlay.lines }, this.scene);
+    } else {
+      this.overlay.lines?.dispose();
+      this.overlay.lines = CreateLineSystem('ovLines', { lines: segs, colors, updatable: true }, this.scene);
+      this.overlay.lines.renderingGroupId = 1;
+    }
+    this.overlay.lines.isVisible = true;
+    this.overlay.com.isVisible = true;
+    this.overlay.com.position = v3(f.com);
+    this.overlay.targets.forEach((m, i) => {
+      const t = f.ikTargets[i];
+      m.isVisible = !!t;
+      if (t) m.position = v3(t);
+    });
+  }
+
+  private hideOverlay(): void {
+    if (!this.overlay) return;
+    if (this.overlay.lines) this.overlay.lines.isVisible = false;
+    this.overlay.com.isVisible = false;
+    for (const m of this.overlay.targets) m.isVisible = false;
   }
 }

@@ -189,7 +189,7 @@ export class GrayboxRenderer {
     this.riderYaw.rotation.y = -pose.yaw;
     this.riderInvert.quaternion.identity();
     if (pose.invert) this.riderInvert.quaternion.setFromAxisAngle(new THREE.Vector3(...pose.invert.axis).normalize(), pose.invert.angle);
-    this.riderEdge.rotation.x = pose.lean;
+    this.riderEdge.rotation.x = pose.lean - pose.toes * pose.raley * 1.6;
     this.riderInvert.position.y = 0;
 
     const squat = 1 - 0.3 * r.legCompression;

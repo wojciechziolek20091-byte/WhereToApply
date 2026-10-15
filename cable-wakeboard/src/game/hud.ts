@@ -86,8 +86,10 @@ export class Hud {
   private helpOpen = false;
   private debugOpen = false;
   private lastRun: RunState | null = null;
+  private readonly el: HTMLElement;
 
   constructor(root: HTMLElement) {
+    this.el = root;
     root.className = 'hud';
     root.innerHTML = '';
     const bar = el('div', 'hud-bar', root);
@@ -200,8 +202,9 @@ export class Hud {
     this.ringLabel.textContent = rot.passTimer > 0 ? 'Pass!' : `Q ${rot.spinSide === 'backside' ? 'BS' : 'FS'}`;
   }
 
-  render(run: RunState, paused: boolean): void {
+  render(run: RunState, paused: boolean, timeScale = 1): void {
     const now = performance.now();
+    this.el.dataset.slowmo = timeScale < 1 ? `x${timeScale}` : '';
     if (run !== this.lastRun) {
       this.lastRun = run;
       this.seenTricks = run.tricks.length;
