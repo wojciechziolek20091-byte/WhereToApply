@@ -8,7 +8,10 @@ function walk(dir: string): string[] {
   });
 }
 
-const simFiles = walk(join(import.meta.dirname, '..', 'src', 'sim')).filter((f) => f.endsWith('.ts'));
+const simFiles = [
+  ...walk(join(import.meta.dirname, '..', 'src', 'sim')),
+  ...walk(join(import.meta.dirname, '..', 'src', 'art')),
+].filter((f) => f.endsWith('.ts'));
 
 describe('sim architecture', () => {
   it('has source files', () => {
@@ -19,7 +22,7 @@ describe('sim architecture', () => {
     const src = readFileSync(file, 'utf8')
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/\/\/.*$/gm, '');
-    expect(src).not.toMatch(/from\s+['"]three/);
+    expect(src).not.toMatch(/from\s+['"](three|@babylonjs)/);
     expect(src).not.toMatch(/Math\.random|Date\.now|performance\.now|\bwindow\b|\bdocument\b/);
   });
 });

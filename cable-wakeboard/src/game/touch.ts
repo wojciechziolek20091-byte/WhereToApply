@@ -39,21 +39,48 @@ export function mountTouchControls(root: HTMLElement, keys: Keyboard): void {
   root.appendChild(wrap);
 }
 
-/** A start screen; the game needs a click or tap before it receives keys. */
-export function mountStartScreen(root: HTMLElement, onStart: () => void): void {
+/** Rider choices shown on the start screen. */
+const RIDERS: { id: string; label: string; swatch: [string, string] }[] = [
+  { id: 'Sheet', label: 'Sage and navy', swatch: ['#62906a', '#1e223a'] },
+  { id: 'A', label: 'Royal blue', swatch: ['#2652cc', '#96d82c'] },
+  { id: 'B', label: 'Green and brick', swatch: ['#349856', '#9e3c2e'] },
+];
+
+/**
+ * A start screen with a rider picker. The game needs a click or tap before it
+ * receives keys. `onPick` fires when a rider is chosen, `onStart` on Start.
+ */
+export function mountStartScreen(
+  root: HTMLElement,
+  onStart: () => void,
+  onPick: (rider: string) => void = () => {},
+  initial = 'Sheet',
+): void {
   const overlay = document.createElement('div');
   overlay.className = 'start';
+  const riders = RIDERS.map(
+    (r) => `<button type="button" class="rider-pick" id="rider-${r.id}" data-rider="${r.id}" aria-pressed="${r.id === initial}">
+        <span class="rider-swatch" style="background:linear-gradient(135deg, ${r.swatch[0]} 50%, ${r.swatch[1]} 50%)"></span>${r.label}</button>`,
+  ).join('');
   overlay.innerHTML = `
     <div class="start-card">
-      <p class="start-eyebrow">Gray-box build, 30 km/h cable, 4 towers</p>
+      <p class="start-eyebrow">Full-size cable, 30 km/h, 4 towers, 2 kickers, a box and a rail</p>
       <h1 class="start-title">Cable Wakeboard</h1>
       <p class="start-body">Cut out from the line, cut back in, and release the pop while the rope is loaded.
         Two laps per run, two falls and you are out. Three judges score the run.</p>
+      <div class="rider-row" role="group" aria-label="Rider">${riders}</div>
       <button type="button" id="start-ride" class="start-btn">Start riding</button>
       <p class="start-keys">Keyboard: A/D carve, hold and release Space to pop, W/S at the pop to flip,
         J K L I U O grabs, Enter restarts. Touch screens get on-screen buttons.</p>
     </div>`;
   root.appendChild(overlay);
+  overlay.querySelectorAll<HTMLButtonElement>('.rider-pick').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      overlay.querySelectorAll('.rider-pick').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
+      onPick(btn.dataset.rider!);
+    });
+  });
   const start = () => {
     overlay.hidden = true;
     window.focus();

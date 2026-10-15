@@ -48,6 +48,10 @@ purpose-built park. Assumptions made to fill the gaps:
   architecture test (no `three` or `Math.random` in `src/sim`), CLAUDE.md
   final pass.
 
+- [x] **M9 Game engine.** Babylon.js renderer with the faceted low-poly art
+  shared with Roblox (exported from RiderBuilder.luau), dusk sky and sun,
+  faceted water and features, pastel spray, rider picker. Deployed as a web game.
+
 ## Known limitations
 
 - The rope is a straight spring-damper: no sag, no rope mass, no whip.
@@ -56,7 +60,8 @@ purpose-built park. Assumptions made to fill the gaps:
 - Raley and invert visuals are rough approximations of the body.
 - Jib balance is a 1D model; there is no rail-to-rail transfer or presses.
 - Judges are formula-based with a seeded bias, not a learned model.
-- Renderer has no level of detail, shadows or water surface motion.
+- Rider is one rigid mesh: no limb animation for crouch, grabs or raleys yet.
+- Water is static faceted geometry; no waves or wake trail.
 
 ## Backlog (later sessions)
 

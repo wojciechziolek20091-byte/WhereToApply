@@ -48,11 +48,19 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   scoring/    judges.ts (panel), metrics.ts.
   session.ts  createRun/stepRun: passes, falls, respawn, trick log, scoring.
   index.ts    Public exports.
-src/render/   graybox.ts: Three.js gray-box renderer. Reads SimState; never writes it.
+src/art/      Engine-free art: mesh.ts (primitives and hulls -> flat-shaded triangle
+              arrays), riders.ts + riderParts.json (rider art exported from the Luau
+              RiderBuilder by scripts/export-rider-art.sh). No engine imports.
+src/render/   babylon/: the game's engine (Babylon.js): BabylonRenderer.ts (scene,
+              rider, spray, chase camera), dusk.ts (palette). graybox.ts: old
+              three.js view, kept for debugging via ?renderer=graybox.
+              Renderers read SimState; they never write it.
 src/game/     Browser glue: keyboard.ts (keys -> InputFrame), hud.ts, main.ts loop.
 scripts/      Tuning probes (vite-node).
 roblox/       Roblox side (Luau, Rojo project): rider builder, dusk lighting, spray.
-              See roblox/README.md. Not yet driven by the sim.
+              See roblox/README.md. RiderBuilder.luau is the source of truth for
+              rider art: after changing it, run scripts/export-rider-art.sh
+              <path/to/luau> to refresh src/art/riderParts.json for the web game.
 tests/        Vitest specs, mostly for src/sim.
 docs/MECHANICS.md  Sport mechanics and where each lives in code. Keep in sync.
 PLAN.md       Milestones and backlog.
@@ -101,7 +109,13 @@ retune the numbers there if a deliberate tuning change moves them.
 
 - Rope stiffness stands in for the body; raising it a lot needs a smaller
   timestep or the rope will ring.
-- `tests/architecture.test.ts` fails if anything under `src/sim` imports three
+- Import Babylon per module (`@babylonjs/core/Meshes/mesh`, not `@babylonjs/core`):
+  the barrel import makes `vite build` take minutes and gigabytes of RAM.
+  Classes that need scene components get a bare side-effect import next to them.
+- Babylon runs with `scene.useRightHandedSystem = true` so sim, three.js, Roblox
+  and Babylon share one convention. Babylon matrices are row-vector: basis
+  vectors go in the rows.
+- `tests/architecture.test.ts` fails if anything under `src/sim` or `src/art` imports three, Babylon
   or uses `Math.random` / `Date.now` / `performance` / `window` / `document`
   (comments are ignored).
 - Physics tests use `flatSim()` (no features) so riders do not hit a kicker
