@@ -34,3 +34,52 @@ export function bundleSim(): string {
   parts.push('local Sim = __src.init(__Sim)');
   return parts.join('\n');
 }
+
+export const SHARED_DIR = join(__dirname, '../../roblox/src/shared');
+
+const SHARED_PRELUDE = `
+local __src, __cache, __folders = {}, {}, {}
+local __root = {}
+local function __folder(name)
+	local f = __folders[name]
+	if f then return f end
+	f = { __path = name, Parent = __root }
+	setmetatable(f, { __index = function(_, child) return { __path = name .. "/" .. child, Parent = f } end })
+	__folders[name] = f
+	return f
+end
+setmetatable(__root, { __index = function(_, name)
+	if __src[name .. "/init"] then return __folder(name) end
+	return { __path = name, Parent = __root }
+end })
+local function require(inst)
+	local path = inst.__path
+	local isFolder = __src[path .. "/init"] ~= nil
+	local key = if isFolder then path .. "/init" else path
+	if __cache[key] == nil then
+		__cache[key] = __src[key](if isFolder then __folder(path) else inst)
+	end
+	return __cache[key]
+end
+`;
+
+/**
+ * Luau source with the shared folders as a module tree (Sim/, Anim/ and the
+ * given shared modules), defining locals `Sim` and `Anim`.
+ */
+export function bundleShared(modules: string[] = ['RiderPose']): string {
+  const parts = [SHARED_PRELUDE];
+  for (const folder of ['Sim', 'Anim']) {
+    const dir = join(SHARED_DIR, folder);
+    for (const file of readdirSync(dir).filter((f) => f.endsWith('.luau')).sort()) {
+      const body = readFileSync(join(dir, file), 'utf8').replace(/^--!.*$/gm, '');
+      parts.push(`__src[${JSON.stringify(`${folder}/${file.replace(/\.luau$/, '')}`)}] = function(script)\n${body}\nend`);
+    }
+  }
+  for (const m of modules) {
+    const body = readFileSync(join(SHARED_DIR, `${m}.luau`), 'utf8').replace(/^--!.*$/gm, '');
+    parts.push(`__src[${JSON.stringify(m)}] = function(script)\n${body}\nend`);
+  }
+  parts.push('local Sim = require(__root.Sim)\nlocal Anim = require(__root.Anim)');
+  return parts.join('\n');
+}

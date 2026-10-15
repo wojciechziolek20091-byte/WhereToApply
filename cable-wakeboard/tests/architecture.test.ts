@@ -76,3 +76,46 @@ describe('Luau sim architecture', () => {
     }
   });
 });
+
+describe('animation architecture', () => {
+  const animDir = join(import.meta.dirname, '..', 'src', 'anim');
+  const animFiles = walk(animDir).filter((f) => f.endsWith('.ts'));
+  const luauAnimDir = join(import.meta.dirname, '..', 'roblox', 'src', 'shared', 'Anim');
+  const TWIN: Record<string, string> = {
+    animator: 'Animator',
+    channels: 'Channels',
+    clip: 'Clip',
+    config: 'AnimConfig',
+    ik: 'TwoBoneIK',
+    index: 'init',
+    poses: 'RiderPoses',
+    quat: 'Quat',
+    ragdoll: 'Ragdoll',
+    replication: 'AnimReplication',
+    skeleton: 'Skeleton',
+    spring: 'Spring',
+    state: 'RiderAnimStateAdapter',
+    testDriver: 'AnimTestDriver',
+  };
+
+  it.each(animFiles)('%s is engine-free (no Babylon, three.js, DOM)', (file) => {
+    const src = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    expect(src).not.toMatch(/from\s+['"](three|@babylonjs)/);
+    expect(src).not.toMatch(/Math\.random|Date\.now|performance\.now|\bwindow\b|\bdocument\b/);
+  });
+
+  it('every TypeScript animation module has its Luau twin', () => {
+    const luau = new Set(walk(luauAnimDir).filter((f) => f.endsWith('.luau')).map((f) => f.slice(luauAnimDir.length + 1).replace(/\.luau$/, '')));
+    const missing = animFiles.map((f) => f.slice(animDir.length + 1).replace(/\.ts$/, '')).filter((n) => !luau.has(TWIN[n] ?? '?'));
+    expect(missing).toEqual([]);
+  });
+
+  it('Luau Anim modules use no Roblox APIs (they run in the plain luau CLI)', () => {
+    for (const f of walk(luauAnimDir).filter((x) => x.endsWith('.luau'))) {
+      const src = readFileSync(f, 'utf8').replace(/--.*$/gm, '');
+      expect(src, f).not.toMatch(/\b(game|workspace|Instance|Vector3|CFrame|task)\b[.:(]/);
+    }
+  });
+});

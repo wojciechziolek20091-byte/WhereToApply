@@ -1,7 +1,8 @@
 -- How to orient the rider model. Twin of src/render/pose.ts.
 --   yaw     travel heading + spin in the air / board angle on a feature / blind spin-out
 --   invert  axis (board frame: x along the board, z toward the toes) and angle
---   lean    tilt about the board's long axis for the edge and the raley swing
+--   lean    tilt about the board's long axis for the edge
+--   raley   the raley's body extension (rad); the animator turns it into the swing
 local Sim = require(script.Parent.Sim)
 
 local RiderPose = {}
@@ -41,7 +42,8 @@ function RiderPose.of(r)
 		yaw = yaw,
 		toes = toes,
 		invert = invert,
-		lean = -toes * (r.edgeAngle + raley * 1.6),
+		lean = -toes * r.edgeAngle,
+		raley = raley,
 		handleBehind = r.handle == "behind",
 	}
 end

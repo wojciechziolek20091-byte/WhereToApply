@@ -3,6 +3,8 @@
  * the data has one source:
  *   roblox/src/shared/Sim/Config.luau      from src/sim/config.ts (DEFAULT_CONFIG)
  *   roblox/src/shared/Sim/ParkLayout.luau  from src/sim/parkLayout.ts
+ *   roblox/src/shared/Anim/AnimConfig.luau from src/anim/config.ts (DEFAULT_ANIM_CONFIG)
+ *   roblox/src/shared/Anim/RiderPoses.luau from src/anim/poses.ts (all clips)
  * Run after editing either:
  *   npx vite-node scripts/gen-luau-data.ts
  * tests/parity.test.ts fails if the two drift apart.
@@ -11,6 +13,8 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG, DT, GRAVITY } from '../src/sim/config';
 import { LAKESIDE_PARK, TEST_PARK } from '../src/sim/parkLayout';
+import { DEFAULT_ANIM_CONFIG } from '../src/anim/config';
+import { ALL_CLIPS, CRASH_LEAD_IN } from '../src/anim/poses';
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const LUAU_KEYWORDS = new Set(['local', 'end', 'function', 'then', 'repeat', 'until', 'nil', 'not', 'and', 'or']);
@@ -89,4 +93,30 @@ return Config
 `;
 if (DT !== 1 / 60) throw new Error('Config.luau hard-codes DT = 1 / 60; update the generator');
 writeFileSync(join(__dirname, '../roblox/src/shared/Sim/Config.luau'), config);
-console.log('wrote ParkLayout.luau and Config.luau');
+
+const animConfig = `-- GENERATED from src/anim/config.ts by scripts/gen-luau-data.ts. Do not edit:
+-- edit the TypeScript file (it documents every entry) and rerun the script.
+-- Every timing, angle and spring of the rider animation: degrees, metres,
+-- seconds, springs as { freq = Hz, damping = ratio }.
+local AnimConfig = {}
+
+AnimConfig.DEFAULT = ${lua(DEFAULT_ANIM_CONFIG, '')}
+
+return AnimConfig
+`;
+writeFileSync(join(__dirname, '../roblox/src/shared/Anim/AnimConfig.luau'), animConfig);
+
+const poses = `-- GENERATED from src/anim/poses.ts by scripts/gen-luau-data.ts. Do not edit:
+-- edit the TypeScript file (it explains the axes and every clip) and rerun.
+-- RiderPoses: every base pose, trick clip, grab and crash lead-in as data,
+-- for the canonical regular rider; mirrorPose makes goofy and switch.
+local RiderPoses = {}
+
+RiderPoses.ALL_CLIPS = ${lua(ALL_CLIPS, '')}
+
+RiderPoses.CRASH_LEAD_IN = ${lua(CRASH_LEAD_IN, '')}
+
+return RiderPoses
+`;
+writeFileSync(join(__dirname, '../roblox/src/shared/Anim/RiderPoses.luau'), poses);
+console.log('wrote ParkLayout.luau, Config.luau, AnimConfig.luau and RiderPoses.luau');
