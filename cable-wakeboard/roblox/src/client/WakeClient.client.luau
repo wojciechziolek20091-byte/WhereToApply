@@ -211,6 +211,11 @@ local function buildPark(sim)
 		block("DockWalkway", cx + right.x * side * d, 0.3, cz + right.z * side * d, 1.6, 0.16, len, mid.heading, COLORS.deck)
 	end
 
+	for i, b in site.buoys do
+		local buoy = part(`Buoy{i}`, Vector3.new(1.6, 1.6, 1.6) * S, CFrame.new(b.x * S, 0, b.z * S), Color3.fromRGB(230, 196, 60))
+		buoy.Shape = Enum.PartType.Ball
+	end
+
 	local path = sim.path
 	local step = 3
 	local prev = Sim.Cable.cablePointAt(path, 0).pos
@@ -234,8 +239,15 @@ local function buildPark(sim)
 			part(d.id, Vector3.new(d.width * S, d.height * S, length * S), cf, COLORS.kicker, "WedgePart")
 			part(d.id .. "Float", Vector3.new(length * S, 0.4 * S, (d.width + 0.5) * S), CFrame.new(stud(mid)) * yaw(f.heading), COLORS.kickerSide)
 		else
-			local cf = CFrame.new(stud(mid) + Vector3.new(0, d.height * S / 2, 0)) * yaw(f.heading)
-			part(d.id, Vector3.new(length * S, d.height * S, math.max(d.width, 0.3) * S), cf, COLORS.rail)
+			if d.style == "tube" then
+				-- Round pipe: a cylinder's axis is its X, which yaw() turns onto the heading.
+				local cf = CFrame.new(stud(mid) + Vector3.new(0, (d.height - d.width / 2) * S, 0)) * yaw(f.heading)
+				local pipe = part(d.id, Vector3.new(length * S, d.width * S, d.width * S), cf, COLORS.rail)
+				pipe.Shape = Enum.PartType.Cylinder
+			else
+				local cf = CFrame.new(stud(mid) + Vector3.new(0, d.height * S / 2, 0)) * yaw(f.heading)
+				part(d.id, Vector3.new(length * S, d.height * S, math.max(d.width, 0.3) * S), cf, COLORS.rail)
+			end
 			part(d.id .. "Float", Vector3.new(length * S, 0.3 * S, 1.4 * S), CFrame.new(stud(mid)) * yaw(f.heading), COLORS.kickerSide)
 		end
 	end

@@ -17,7 +17,7 @@ const path = buildCablePath(DEFAULT_CONFIG.cable);
 const towers = DEFAULT_CONFIG.cable.towers;
 const nearTower = (p: { x: number; z: number }, r: number) => towers.some((t) => Math.hypot(t.x - p.x, t.z - p.z) < r);
 
-describe('lakeside park site', () => {
+describe('default park site', () => {
   it('lake outline is star-shaped (the land ring and forest rely on it)', () => {
     expect(isStarShaped(site.lake)).toBe(true);
   });
@@ -53,14 +53,24 @@ describe('lakeside park site', () => {
     }
   });
 
-  it('features follow the map order along the lap and do not overlap', () => {
-    const feats = [...DEFAULT_PARK.features].sort((a, b) => a.s - b.s);
-    for (let i = 0; i + 1 < feats.length; i++) {
-      const a = feats[i]!;
-      expect(a.s + featureLength(a)).toBeLessThan(feats[i + 1]!.s);
+  it('features do not overlap (side-by-side pairs are fine)', () => {
+    const feats = DEFAULT_PARK.features;
+    for (const a of feats) {
+      for (const b of feats) {
+        if (a === b) continue;
+        const sideBySide = Math.abs(a.offset - b.offset) > (a.width + b.width) / 2 + 2;
+        const apart = a.s + featureLength(a) < b.s || b.s + featureLength(b) < a.s;
+        expect(sideBySide || apart).toBe(true);
+      }
     }
-    expect(DEFAULT_PARK.features.filter((f) => f.kind === 'kicker')).toHaveLength(8);
-    expect(DEFAULT_PARK.features.filter((f) => f.kind === 'slider')).toHaveLength(4);
+    // The sketch: 5 kickers, 3 pipes, a box and a kick rail.
+    expect(feats.filter((f) => f.kind === 'kicker')).toHaveLength(5);
+    expect(feats.filter((f) => f.kind === 'slider' && f.style === 'tube')).toHaveLength(3);
+    expect(feats.filter((f) => f.kind === 'slider' && f.style !== 'tube')).toHaveLength(2);
+  });
+
+  it('every feature is within rope reach of the line', () => {
+    for (const f of DEFAULT_PARK.features) expect(Math.abs(f.offset)).toBeLessThanOrEqual(10);
   });
 
   it('starts the rider at the starting dock, on land nowhere', () => {

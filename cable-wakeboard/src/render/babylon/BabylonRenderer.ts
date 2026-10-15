@@ -125,22 +125,24 @@ function siteMesh(name: string, tb: TriangleBuilder, scene: Scene, material: Sta
   return mesh;
 }
 
-/** A thin square beam from a to b (convex hull of two squares). */
-function beamHull(a: V3, b: V3, r: number, color: readonly [number, number, number]): HullPart {
+/** A beam from a to b: square by default, round-ish (a prism of `sides` faces) for pipes. */
+function beamHull(a: V3, b: V3, r: number, color: readonly [number, number, number], sides = 4): HullPart {
   const d: V3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const len = Math.hypot(d[0], d[1], d[2]) || 1;
   const u: V3 = [d[0] / len, d[1] / len, d[2] / len];
   const ref: V3 = Math.abs(u[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
   const n1 = norm3([u[1] * ref[2] - u[2] * ref[1], u[2] * ref[0] - u[0] * ref[2], u[0] * ref[1] - u[1] * ref[0]]);
   const n2: V3 = [u[1] * n1[2] - u[2] * n1[1], u[2] * n1[0] - u[0] * n1[2], u[0] * n1[1] - u[1] * n1[0]];
-  const corners = [[1, 1], [1, -1], [-1, -1], [-1, 1]] as const;
   const verts: V3[] = [];
   for (const end of [a, b]) {
-    for (const [i, j] of corners) {
+    for (let k = 0; k < sides; k++) {
+      const t = ((k + 0.5) / sides) * Math.PI * 2;
+      const i = Math.cos(t) * Math.SQRT2, j = Math.sin(t) * Math.SQRT2;
       verts.push([end[0] + (n1[0] * i + n2[0] * j) * r, end[1] + (n1[1] * i + n2[1] * j) * r, end[2] + (n1[2] * i + n2[2] * j) * r]);
     }
   }
-  const faces = [[0, 1, 2, 3], [4, 5, 6, 7], [0, 1, 5, 4], [1, 2, 6, 5], [2, 3, 7, 6], [3, 0, 4, 7]];
+  const ring = Array.from({ length: sides }, (_, k) => k);
+  const faces = [ring, ring.map((k) => k + sides), ...ring.map((k) => [k, (k + 1) % sides, ((k + 1) % sides) + sides, k + sides])];
   return { verts, faces, color };
 }
 
@@ -221,6 +223,7 @@ function rectangleSite(sim: SimState): SiteDef {
     buildings: [],
     areas: [],
     roads: [],
+    buoys: [],
   };
 }
 
@@ -584,6 +587,10 @@ export class BabylonRenderer {
       distanceToOutline({ x, z }, site.lake) > 4 &&
       site.islands.every((i) => !pointInPolygon({ x, z }, i.outline) && distanceToOutline({ x, z }, i.outline) > 4) &&
       sim.features.every((f) => Math.hypot(f.origin.x - x, f.origin.z - z) > 14);
+    for (const b of site.buoys) {
+      hulls.push(rockHull([b.x, 0, b.z], [1.6, 0.9, 1.6], look.towerTop));
+      hulls.push(boxHull([b.x, 0.8, b.z], [0.05, 0.5, 0.05], look.buoy));
+    }
     const rng = createRng(5);
     for (let i = 0; i < 20; i++) {
       const p = cablePointAt(path, (i / 20) * path.length + 20);
@@ -629,7 +636,15 @@ export class BabylonRenderer {
       return placeHulls([...ramp, ...sides, float], origin, f.heading);
     }
     const entry = extrudeProfile([[0, 0.02], [d.entryLength, d.height]], Math.max(d.width, 0.6), () => look.ramp(0.3));
-    const top = d.style === 'box'
+    const top = d.style === 'tube'
+      ? [
+          // Round pipe on two legs, as in the sketch.
+          beamHull([d.entryLength, d.height - d.width / 2, 0], [d.entryLength + d.length, d.height - d.width / 2, 0], d.width / 2, look.rail, 10),
+          boxHull([d.entryLength + 0.6, (d.height - d.width) / 2, 0], [0.06, (d.height - d.width) / 2, 0.06], look.rail),
+          boxHull([d.entryLength + d.length - 0.6, (d.height - d.width) / 2, 0], [0.06, (d.height - d.width) / 2, 0.06], look.rail),
+          boxHull([d.entryLength + d.length / 2, 0, 0], [d.length / 2 + 0.3, 0.12, 0.8], look.kickerSide),
+        ]
+      : d.style === 'box'
       ? [boxHull([d.entryLength + d.length / 2, d.height / 2, 0], [d.length / 2, d.height / 2, d.width / 2], look.box)]
       : [
           boxHull([d.entryLength + d.length / 2, d.height - 0.06, 0], [d.length / 2, 0.06, d.width / 2 + 0.04], look.rail),
@@ -820,12 +835,13 @@ export class BabylonRenderer {
     // Fog is tuned for the chase camera; from the air it would hide the park.
     this.scene.fogDensity = this.look.fogDensity * 0.3;
     if (topDown) {
-      this.camera.position.set(c.x, 330, c.z + 0.01);
-      this.camera.setTarget(new Vector3(c.x, 0, c.z));
+      // High enough for the lake plus the buildings on its shores.
+      this.camera.position.set(c.x, 430, c.z + 15 + 0.01);
+      this.camera.setTarget(new Vector3(c.x, 0, c.z + 15));
       return;
     }
-    this.camera.position.set(c.x - 10, 190, c.z + 230);
-    this.camera.setTarget(new Vector3(c.x, 0, c.z - 10));
+    this.camera.position.set(c.x + 40, 200, c.z + 300);
+    this.camera.setTarget(new Vector3(c.x, 0, c.z + 10));
   }
 
   /** Close-up of the rider: front faces the rider's chest (toe side). */

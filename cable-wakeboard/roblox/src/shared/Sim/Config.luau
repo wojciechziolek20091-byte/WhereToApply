@@ -7,14 +7,14 @@ Config.GRAVITY = 9.81
 
 Config.DEFAULT_CONFIG = {
 	cable = {
-		-- The lakeside park's five towers (ParkLayout.luau), map towers 4, 5, 1, 2, 3
-		-- in order of travel: clockwise seen from above, starting on the south straight.
+		-- The sketch park's five towers (ParkLayout.luau): south-east, south-west,
+		-- north-west, the roof apex, the east shoulder. Clockwise seen from above.
 		towers = {
-			{ x = 87.1, z = 40.4 },
-			{ x = -124.3, z = 13.5 },
-			{ x = -92, z = -78.9 },
-			{ x = 54.8, z = -72.5 },
-			{ x = 123, z = -4.7 },
+			{ x = 56.2, z = 102.5 },
+			{ x = -56.2, z = 110.4 },
+			{ x = -56.2, z = -72 },
+			{ x = 15.8, z = -110.4 },
+			{ x = 54.7, z = -55.2 },
 		},
 		cornerRadius = 12, -- arc around each tower wheel (m)
 		cableHeight = 9, -- cable above the water (m)

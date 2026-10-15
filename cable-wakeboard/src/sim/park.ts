@@ -29,7 +29,8 @@ export interface KickerDef extends FeatureBase {
 /** Flat-topped box or rail, entered by a straight entry ramp from the water. */
 export interface SliderDef extends FeatureBase {
   kind: 'slider';
-  style: 'box' | 'rail';
+  /** Look only: a flat box, a thin rail, or a round pipe. Physics is the same. */
+  style: 'box' | 'rail' | 'tube';
   /** Length of the flat top (m). */
   length: number;
   width: number;
@@ -95,6 +96,8 @@ export interface SiteDef {
   buildings: BuildingDef[];
   areas: AreaDef[];
   roads: RoadDef[];
+  /** Marker buoys drawn on the water. */
+  buoys: GroundPoint[];
 }
 
 export interface ParkDef {
@@ -114,7 +117,7 @@ export interface ResolvedFeature {
   heading: number;
 }
 
-/** Lakeside cable park, from the user's park map (see parkLayout.ts). */
+/** The park from the user's sketch, with scenery from their park map and photos (see parkLayout.ts). */
 export const DEFAULT_PARK: ParkDef = LAKESIDE_PARK;
 
 export function resolvePark(park: ParkDef, path: CablePath): ResolvedFeature[] {

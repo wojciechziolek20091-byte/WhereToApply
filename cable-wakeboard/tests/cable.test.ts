@@ -14,7 +14,7 @@ const cfg = {
   ],
 };
 
-describe('lakeside park cable', () => {
+describe('default park cable', () => {
   const path = buildCablePath(DEFAULT_CONFIG.cable);
 
   it('is about 600 m a lap, five towers, clockwise seen from above', () => {

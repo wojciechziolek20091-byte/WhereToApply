@@ -1,6 +1,12 @@
 import { makeConfig } from '../src/sim/config';
 import { neutralInput, type InputFrame } from '../src/sim/input';
-import { FLAT_PARK } from '../src/sim/park';
+import { FLAT_PARK, type ParkDef } from '../src/sim/park';
+
+/** One kicker right on the cable line, so riding straight goes over it. */
+const KICKER_PARK: ParkDef = {
+  name: 'One kicker',
+  features: [{ kind: 'kicker', id: 'k1', name: 'Kicker', s: 75, offset: 0, length: 4.5, width: 3.5, height: 1.1, lipAngle: 0.5 }],
+};
 import { createRun, stepRun, type RunState } from '../src/sim/session';
 
 function runFor(run: RunState, seconds: number, input: (t: number) => Partial<InputFrame> = () => ({})) {
@@ -45,12 +51,12 @@ describe('run session', () => {
   });
 
   it('logs a landed trick', () => {
-    const run = createRun(makeConfig({}));
-    // Default park: from the starting dock, straight over the dock kicker west.
+    const run = createRun(makeConfig({}), KICKER_PARK);
+    // Ride straight over the kicker on the line.
     runFor(run, 12);
     expect(run.tricks.length).toBeGreaterThan(0);
     expect(run.tricks[0]!.trick.name).toBe('Straight Kicker Air');
-    expect(run.tricks[0]!.featureId).toBe('k3');
+    expect(run.tricks[0]!.featureId).toBe('k1');
   });
 });
 
@@ -69,7 +75,7 @@ describe('HUD points', () => {
   });
 
   it('adds up during a run', () => {
-    const run = createRun(makeConfig({}));
+    const run = createRun(makeConfig({}), KICKER_PARK);
     runFor(run, 12);
     expect(run.points).toBeGreaterThan(0);
   });

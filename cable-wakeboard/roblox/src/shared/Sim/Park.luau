@@ -7,7 +7,7 @@ local ParkLayout = require(script.Parent.ParkLayout)
 
 local Park = {}
 
--- Lakeside cable park, from the user's park map (see ParkLayout.luau).
+-- The park from the user's sketch, with scenery from their park map and photos (see ParkLayout.luau).
 Park.DEFAULT_PARK = ParkLayout.LAKESIDE_PARK
 
 -- No features: flat water only. Used by physics tests.

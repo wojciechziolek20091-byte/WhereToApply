@@ -32,7 +32,8 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   config.ts   SimConfig and DEFAULT_CONFIG. All tunables live here.
   cable.ts    Cable path (towers + filleted corners), carrier kinematics.
   park.ts     Park types (features, site) and resolvePark().
-  parkLayout.ts The default park from the user's map: features, start dock, site
+  parkLayout.ts The default park: layout from the user's sketch (docs/park-sketch.jpg),
+              scenery from their park map. Features, start dock, site
               (shore, island, buildings...). Luau copy is GENERATED:
               `npx vite-node scripts/gen-park-luau.ts` -> Sim/ParkLayout.luau.
   features.ts Feature geometry queries.
@@ -152,16 +153,16 @@ one to edit first (it has the unit tests); then mirror it line by line.
 
 ## Map coordinates
 
-The park map was converted at 0.215 m per pixel with the map centre at the
-origin: x east, z south (so north is up in `?cam=map`). Travel is clockwise
-from above; `offset` > 0 is inside the loop.
+The park sketch (`docs/park-sketch.jpg`) was converted at 0.24 m per pixel,
+north up: x east, z south (so `?cam=map` looks like the sketch). Travel is
+clockwise from above; `offset` > 0 is inside the loop.
 
 ## Tuning reference (defaults, flat water)
 
 - Trailing flat behind the carrier: about 380 N at 8.3 m/s.
 - Hard cut: 1.5 to 2.8 kN, up to about 45 km/h, about 11 m out from the line.
 - Well-timed flat-water pop: about 4.7 m/s, 1.3 s air, 1.3 m peak.
-- A dock kicker (1.1 m, lip 0.5 rad) straight with no pop: about 1.1 s air, 1.8 m peak.
+- A 1.1 m kicker (lip 0.5 rad) straight with no pop: about 1.1 s air, 1.8 m peak.
 
 `tests/riding.test.ts`, `pop.test.ts` and `features.test.ts` pin these loosely;
 retune the numbers there if a deliberate tuning change moves them.

@@ -21,7 +21,7 @@ src/shared/Sim/                 The game simulation, one ModuleScript per file (
                                 is the folder's module). Same code as ../src/sim.
 src/shared/WakeInput.luau       Held keys -> InputFrame, same keys as the web game
 src/shared/SiteGeometry.luau    Polygon helpers (ear clipping) for drawing the park site
-src/client/WakeClient.client.luau  Plays the sim: the lakeside park from the map (water,
+src/client/WakeClient.client.luau  Plays the sim: the park from the sketch and map (water,
                                 banks, island, dock, terrace, buildings, roads), rider,
                                 rope, chase camera, HUD
 src/shared/RiderBuilder.luau    RiderBuilder.build(options) -> Model

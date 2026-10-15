@@ -18,7 +18,7 @@ comes from **features** (kickers, sliders, boxes) and from **line tension**.
 
 | Real world | Sim | Notes |
 |---|---|---|
-| Full-size cable: 4 to 6 towers in a closed loop, usually run counter-clockwise | `CableConfig.towers`, `buildCablePath()` in `cable.ts` | Default layout is the lakeside park from the user's map: 5 towers, about 595 m a lap, run clockwise viewed from above (see section 7). |
+| Full-size cable: 4 to 6 towers in a closed loop, usually run counter-clockwise | `CableConfig.towers`, `buildCablePath()` in `cable.ts` | Default layout is the user's sketch: 5 towers in a "house" shape, about 586 m a lap, run clockwise viewed from above (see section 7). |
 | The cable turns around a wheel at each tower | `CableConfig.cornerRadius`; the path is straight segments joined by arcs | |
 | Cable height above the water, roughly 8 to 12 m | `CableConfig.cableHeight` (default 9 m) | Gives the rope an **upward** angle that a boat rope never has. |
 | Carrier speed is set by the operator, roughly 20 to 36 km/h; park riding is often around 30 km/h | `CableConfig.carrierSpeed` (default 8.3 m/s, about 30 km/h) | Constant: the carrier does not slow down for you. |
@@ -195,15 +195,19 @@ Defined as data in `park.ts` (`FeatureDef`) and queried in `features.ts`:
   across). Releasing the load on a slider ollies off it.
 - Hitting a feature from the wrong side is a `featureCrash` fall.
 
-**The default park** (`parkLayout.ts`, from the user's park map and photos): a
-lake with a long island in the middle, five lattice towers, about 595 m a lap
-run clockwise, so the inside of the loop is to the rider's right
-(`offset` > 0). Runs start from the **starting dock** on the south straight
-(`ParkDef.startS`), between the two dock kickers. Twelve features in map
-order: 8 floating kickers (white ramps with blue sides) and 4 rails. Features
-the map draws far inside the loop are pulled in to 6-10 m off the line, which
-is what an 18 m rope can reach. The site (shoreline, island, watch terrace,
-clubhouse, tents, halls, parking, roads, fields) is `ParkDef.site`: scenery for
+**The default park** (`parkLayout.ts`): the cable layout is the user's sketch
+(`docs/park-sketch.jpg`), a five-tower "house" loop with tall sides and a
+peaked roof to the north, about 586 m a lap, run clockwise so the inside of
+the loop is to the rider's right (`offset` > 0). Ten features where the sketch
+puts them: 5 kickers (one under the south line, a big kicker at the east
+shoulder tower, a small one, and a pair either side of the east line), 3 round
+pipes (two side by side inside the west line, one on the north-west roof
+edge), a box outside the west line and a kick rail on the north-east roof
+edge. Shapes the sketch draws far off the line are pulled in to 4-10 m, which
+is what an 18 m rope can reach. Runs start from the starting dock on the south
+line (`ParkDef.startS`). The scenery follows the user's park map and photos
+(lake, long wooded island in the middle, watch terrace and clubhouse to the
+west, tents and halls to the south, fields to the north): `ParkDef.site`, for
 the renderers only. The sim does not collide with land; instead the shoreline
 keeps at least 12 m from the cable and the island at least 18 m
 (`tests/site.test.ts`).
