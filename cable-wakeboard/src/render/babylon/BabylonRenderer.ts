@@ -304,7 +304,7 @@ export class BabylonRenderer {
     ctx.fillRect(0, 0, 64, 64);
     tex.update();
     tex.hasAlpha = true;
-    const ps = new ParticleSystem('spray', 1500, this.scene);
+    const ps = new ParticleSystem('spray', 3000, this.scene);
     ps.particleTexture = tex;
     ps.emitter = this.sprayEmitter;
     ps.minEmitBox = new Vector3(-0.15, 0, -0.15);
@@ -312,13 +312,16 @@ export class BabylonRenderer {
     ps.color1 = new Color4(...DUSK.sprayA, 0.95);
     ps.color2 = new Color4(...DUSK.sprayB, 0.85);
     ps.colorDead = new Color4(...DUSK.sprayDead, 0);
-    ps.minSize = 0.08;
-    ps.maxSize = 0.28;
-    ps.minLifeTime = 0.3;
-    ps.maxLifeTime = 0.75;
+    ps.minSize = 0.16;
+    ps.maxSize = 0.46;
+    // Babylon counts particle life in update steps; one step per 60 Hz frame
+    // makes the lifetimes below read as seconds.
+    ps.updateSpeed = 1 / 60;
+    ps.minLifeTime = 0.35;
+    ps.maxLifeTime = 0.9;
     ps.gravity = new Vector3(0, -9.8, 0);
-    ps.minEmitPower = 2;
-    ps.maxEmitPower = 4.5;
+    ps.minEmitPower = 2.5;
+    ps.maxEmitPower = 5.5;
     ps.blendMode = ParticleSystem.BLENDMODE_STANDARD;
     ps.emitRate = 0;
     ps.start();
@@ -373,7 +376,7 @@ export class BabylonRenderer {
     const heel = { x: Math.sin(r.heading) * toes, z: -Math.cos(r.heading) * toes };
     const side = r.edgeAngle >= 0 ? heel : { x: -heel.x, z: -heel.z };
     this.sprayEmitter.set(riderPos.x - tail.x * 0.6 + side.x * 0.25, 0.05, riderPos.z - tail.z * 0.6 + side.z * 0.25);
-    this.spray.emitRate = 600 * intensity;
+    this.spray.emitRate = 1400 * intensity;
     this.spray.direction1 = new Vector3(-tail.x * 0.6 + side.x * 0.5, 1.2, -tail.z * 0.6 + side.z * 0.5);
     this.spray.direction2 = new Vector3(-tail.x * 1.2 + side.x * 1.4, 2.2, -tail.z * 1.2 + side.z * 1.4);
 

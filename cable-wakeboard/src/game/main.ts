@@ -82,3 +82,4 @@ requestAnimationFrame(frame);
 
 // Handy in the browser console while tuning.
 (window as unknown as { cable: () => RunState }).cable = () => run;
+(window as unknown as { renderer: GameRenderer }).renderer = renderer;
