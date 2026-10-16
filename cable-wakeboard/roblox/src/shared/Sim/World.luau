@@ -62,6 +62,15 @@ function World.createSim(cfg, park, carrierStartS)
 	cfg = cfg or Config.DEFAULT_CONFIG
 	park = park or Park.DEFAULT_PARK
 	carrierStartS = carrierStartS or park.startS or 30
+	-- A park with its own cable (the beginner 2-tower system) rides on that.
+	if park.cable then
+		local merged = table.clone(cfg)
+		merged.cable = table.clone(cfg.cable)
+		for k, v in park.cable do
+			merged.cable[k] = v
+		end
+		cfg = merged
+	end
 	local path = Cable.buildCablePath(cfg.cable)
 	local carrier = Cable.createCarrier(path, carrierStartS, cfg.cable.carrierSpeed)
 	return {

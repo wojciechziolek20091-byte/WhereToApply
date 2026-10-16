@@ -69,6 +69,7 @@ local FeatureConfig = {
 		MinOffLine = 2,
 		ApproachClearance = 8,
 		ExitClearance = 12,
+		ExitCorridor = 3,
 		CopingMin = 0.03,
 		KickerMinSubsegments = 6,
 		MaxParts = 120,

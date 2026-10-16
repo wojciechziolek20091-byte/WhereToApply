@@ -8,8 +8,9 @@ local FeatureShapes = require(script.Parent.FeatureShapes)
 
 local Park = {}
 
--- The park from the user's sketch, with scenery from their park map and photos (see ParkLayout.luau).
-Park.DEFAULT_PARK = ParkLayout.LAKESIDE_PARK
+-- The default park: the wake park's lines on the user's loop and site (see
+-- ParkLayout.luau). The user's sketch layout is ParkLayout.LAKESIDE_PARK.
+Park.DEFAULT_PARK = ParkLayout.WAKE_PARK
 
 -- No features: flat water only. Used by physics tests.
 Park.FLAT_PARK = { name = "Flat water", features = {} }

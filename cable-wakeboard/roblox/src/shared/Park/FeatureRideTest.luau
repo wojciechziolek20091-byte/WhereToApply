@@ -34,10 +34,13 @@ FeatureRideTest.EXPECTED_AIR = {
 
 export type Row = { id: string, test: string, pass: boolean, detail: string, numbers: { [string]: number } }
 
+-- The cable the features are on (nil: the main loop). Set by runAll.
+local currentCable: any = nil
+
 local function makeSim(def: any)
 	-- The balance meter is the player's job; the ride test checks the geometry.
 	local cfg = Sim.Config.makeConfig({ feature = { balanceEnabled = false } })
-	local s = Sim.World.createSim(cfg, { name = "ride test", features = { def } }, def.s - 10)
+	local s = Sim.World.createSim(cfg, { name = "ride test", features = { def }, cable = currentCable }, def.s - 10)
 	return s, s.features[1]
 end
 
@@ -413,27 +416,64 @@ local function testOllieOn(def: any, rows: { Row }, maxTries: number)
 	row(rows, def.id, "Ollie on from the water", found ~= nil, if found then string.format("from v=%.1f m, pop %.1f m along the main (%d tries)", found.beside, found.rel, tries) else `not found ({tries} tries)`, { tries = tries })
 end
 
+-- Steer onto a line along the cable's direction through a point (the wall ride
+-- is turned off the cable, so its own frame's v is not the rider's lateral).
+local function lineUpThrough(sim: any, f: any, pu: number, pv: number, yaw: number): number
+	local m = sim.rider.mode
+	if m ~= "riding" and m ~= "waterTrickLoad" then
+		return 0
+	end
+	local h = f.heading - yaw
+	local P = Sim.Features.toWorld(f, pu, pv, 0)
+	local d = Sim.Vec.sub(sim.rider.pos, P)
+	local fwd, right = Sim.Vec.forwardOf(h), Sim.Vec.rightOf(h)
+	local along = Sim.Vec.dot(d, fwd)
+	if along < -30 or along > -0.5 then
+		return 0
+	end
+	local cp = Sim.Cable.cablePointAt(sim.path, f.def.s).pos
+	local offsetP = Sim.Vec.dot(Sim.Vec.sub(P, cp), right)
+	local pred = Sim.Vec.dot(d, right) - 0.14 * offsetP + Sim.Vec.dot(sim.rider.vel, right) * 0.8
+	return if pred < -0.1 then 1 elseif pred > 0.1 then -1 else 0
+end
+
 local function testWall(def: any, rows: { Row })
-	local peak, onWall = 0, 0
-	local reg, regResult = registryCheck()
-	local _, _, events = ride(def, 9, function()
-		return nil
-	end, function(sim, f, l)
-		reg(sim, f, l)
-		if sim.rider.mode == "onFeature" then
-			onWall += 1
-			peak = math.max(peak, sim.rider.pos.y)
+	local shape = Sim.Park.shapeOfDef(def)
+	local w = shape.pieces[1].wall
+	-- Approach lines along the cable's direction, aimed at points near the
+	-- wall's front edge and into the transition; the best one counts.
+	local aims = { { 0, 0.6 }, { -0.5, 1.0 }, { 0, 1.0 }, { -0.5, 0.6 }, { 0.5, 1.0 }, { 0.5, 0.6 } }
+	local best: any = nil
+	for _, aim in aims do
+		local peak, onWall = 0, 0
+		local reg, regResult = registryCheck()
+		local pu, pv = aim[1], w.base + w.side * aim[2]
+		local _, _, events = ride(def, 9, function(_, sim, f)
+			return { steer = lineUpThrough(sim, f, pu, pv, def.yaw or 0) }
+		end, function(sim, f, l)
+			reg(sim, f, l)
+			if sim.rider.mode == "onFeature" then
+				onWall += 1
+				peak = math.max(peak, sim.rider.pos.y)
+			end
+		end)
+		local slide = find(events, function(e)
+			return e.type == "slideDone"
+		end)
+		local crash = crashOf(events)
+		local ok = slide ~= nil and table.concat(slide.jib.slideOrder, "/") == "wallRide" and crash == nil
+		if ok and (not best or peak > best.peak) then
+			best = { peak = peak, time = onWall / 60, reg = { regResult() }, aim = aim }
 		end
-	end)
-	local slide = find(events, function(e)
-		return e.type == "slideDone"
-	end)
-	local crash = crashOf(events)
-	local name = if slide then table.concat(slide.jib.slideOrder, "/") else "-"
-	row(rows, def.id, "Up the wall and out", slide ~= nil and name == "wallRide" and peak >= 0.5 and crash == nil,
-		string.format("%s %.2f s, %.2f m up%s", name, onWall / 60, peak, if crash then ", crash " .. crash else ""), { wallTime = onWall / 60, wallHeight = peak })
-	local h, t, wst = regResult()
-	row(rows, def.id, "Registry on the wall", t > 0 and h / t >= 0.9, string.format("%d/%d ticks, %.1f cm", h, t, wst * 100))
+	end
+	if best then
+		row(rows, def.id, "Up the wall and out", best.peak >= 0.5,
+			string.format("wallRide %.2f s, %.2f m up (aimed %.1f m along, %.1f m in)", best.time, best.peak, best.aim[1], best.aim[2]), { wallTime = best.time, wallHeight = best.peak })
+		local h, t, wst = table.unpack(best.reg)
+		row(rows, def.id, "Registry on the wall", t > 0 and h / t >= 0.9, string.format("%d/%d ticks, %.1f cm", h, t, wst * 100))
+	else
+		row(rows, def.id, "Up the wall and out", false, "no approach got up the wall cleanly")
+	end
 end
 
 -- Ride-test one catalogue feature def (as placed in a park: s, offset, yaw).
@@ -464,7 +504,9 @@ function FeatureRideTest.run(def: any): { Row }
 	return rows
 end
 
-function FeatureRideTest.runAll(defs: { any }, quiet: boolean?): ({ Row }, boolean)
+-- `cable`: the park's own cable (ParkDef.cable), e.g. the beginner 2-tower system.
+function FeatureRideTest.runAll(defs: { any }, quiet: boolean?, cable: any?): ({ Row }, boolean)
+	currentCable = cable
 	FeatureRegistry.init()
 	local all: { Row } = {}
 	local ok = true

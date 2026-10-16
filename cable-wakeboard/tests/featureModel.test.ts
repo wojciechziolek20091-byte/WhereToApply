@@ -83,13 +83,20 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     expect(out).toContain('FEATURE VALIDATOR OK');
   });
 
-  it('FeatureRideTest: every catalogue feature is rideable with the Luau sim (spec section 10)', { timeout: 180000 }, () => {
+  it.each(['catalog', 'wake', 'beginner'])('FeatureRideTest on the %s map: every feature is rideable with the Luau sim (spec section 10)', { timeout: 180000 }, (park) => {
     const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
     const spec = readFileSync(join(ROBLOX, 'tests/feature_ridetest_spec.luau'), 'utf8');
-    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), `PARK = "${park}"`, spec].join('\n'));
     const fails = out.split('\n').filter((l) => l.startsWith('FAIL'));
     expect(fails).toEqual([]);
     expect(out).toContain('RIDE TEST OK');
+  });
+
+  it('buildPark: every feature of the wake park and the beginner system passes the validator with placement; idempotent', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/park_build_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('PARK BUILD OK');
   });
 
   it('FeatureBob: only the Visual folder bobs (+-3 cm), and it rests near a rider', { timeout: 60000 }, () => {

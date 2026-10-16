@@ -3,8 +3,8 @@ import { BabylonRenderer } from '../render/babylon/BabylonRenderer';
 import { LOOKS } from '../render/babylon/looks';
 import { GrayboxRenderer, snapshotOf, type RenderSnapshot } from '../render/graybox';
 import { DEFAULT_CONFIG } from '../sim/config';
-import { DEFAULT_PARK } from '../sim/park';
-import { CATALOG_TEST_PARK, TEST_PARK } from '../sim/parkLayout';
+import { DEFAULT_PARK, type ParkDef } from '../sim/park';
+import { BEGINNER_PARK, CATALOG_TEST_PARK, LAKESIDE_PARK, TEST_PARK } from '../sim/parkLayout';
 import { createRun, stepRun, type RunState } from '../sim/session';
 import { advanceStepper, createStepper } from '../sim/stepper';
 import type { SimEvent } from '../sim/events';
@@ -31,8 +31,13 @@ document.head.appendChild(style);
 const view = document.getElementById('view')!;
 const hudEl = document.getElementById('hud')!;
 const params = new URLSearchParams(location.search);
-/** `?park=test`: the spec's test map (kicker, flush funbox, gap box, 8 m rail on the line). `?park=catalog`: every wake park catalogue feature. */
-const PARK = params.get('park') === 'test' ? TEST_PARK : params.get('park') === 'catalog' ? CATALOG_TEST_PARK : DEFAULT_PARK;
+/**
+ * The wake park (default). `?park=beginner`: the 2-tower beginner system.
+ * `?park=sketch`: the user's sketch layout. `?park=test`: the mechanics spec's
+ * test map. `?park=catalog`: every catalogue feature on the line.
+ */
+const PARKS: Record<string, ParkDef> = { test: TEST_PARK, catalog: CATALOG_TEST_PARK, beginner: BEGINNER_PARK, sketch: LAKESIDE_PARK };
+const PARK = PARKS[params.get('park') ?? ''] ?? DEFAULT_PARK;
 
 /** `?physics=old`: section 11 of the animation spec off (no tuck-driven rotation, pre-wind, shoulder rope, landing cost, COM pivot). */
 const OLD_PHYSICS = params.get('physics') === 'old';
@@ -55,7 +60,7 @@ function createRenderer(): GameRenderer {
   canvas.style.touchAction = 'none';
   view.appendChild(canvas);
   const look = params.get('look') === 'dusk' ? LOOKS.dusk : LOOKS.day;
-  const r = new BabylonRenderer(canvas, run.sim, initialPalette, look);
+  const r = new BabylonRenderer(canvas, run.sim, initialPalette, look, PARK.site);
   const cam = params.get('cam');
   if (cam === 'front' || cam === 'back' || cam === 'side' || cam === 'aerial' || cam === 'map') r.debugCam = cam;
   return r;
@@ -90,7 +95,16 @@ mountStartScreen(
   },
   (rider) => renderer.setPalette?.(rider as RiderPalette),
   initialPalette,
+  parkBlurb(PARK),
 );
+
+/** The start screen's one-line description of the park. */
+function parkBlurb(park: ParkDef): string {
+  const towers = park.cable?.towers?.length ?? DEFAULT_CONFIG.cable.towers.length;
+  const lines = new Set(park.features.flatMap((f) => (f.kind === 'feature' && f.line ? [f.line] : [])));
+  const what = lines.size > 0 ? `${lines.size === 1 ? 'one line' : `${lines.size} lines`}, ${park.features.length} features` : `${park.features.length} features`;
+  return `${park.name}: ${towers === 2 ? '2-tower system' : `${towers}-tower cable`}, 30 km/h, ${what}`;
+}
 
 function frame(now: number): void {
   const scales = DEFAULT_ANIM_CONFIG.Debug.TimeScales;

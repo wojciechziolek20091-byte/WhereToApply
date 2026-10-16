@@ -1,7 +1,8 @@
 import type { CablePath } from './cable';
+import type { CableConfig } from './config';
 import { cablePointAt } from './cable';
 import { type Vec3, addScaled, horizontal, rightOf } from './math/vec';
-import { LAKESIDE_PARK } from './parkLayout';
+import { WAKE_PARK } from './parkLayout';
 import type { ShapeParams } from './featureCatalog';
 import { buildShape, type FeatureShape, legacyShape } from './featureShapes';
 
@@ -54,6 +55,8 @@ export interface CatalogFeatureDef extends FeatureBase {
   side?: number;
   /** Line accent colour name (FeatureConfig.Accents); looks only. */
   accent?: string;
+  /** Which line of the park it belongs to ("Line 2"); signs and maps. */
+  line?: string;
 }
 
 export type FeatureDef = KickerDef | SliderDef | CatalogFeatureDef;
@@ -125,6 +128,8 @@ export interface ParkDef {
   startS?: number;
   /** Scenery for renderers. Optional; the sim ignores it. */
   site?: SiteDef;
+  /** This park's own cable (towers, mode...), over the config's. The beginner 2-tower system uses it. */
+  cable?: Partial<CableConfig>;
 }
 
 /** A feature placed in the world. */
@@ -141,8 +146,11 @@ export interface ResolvedFeature {
 export const shapeOfDef = (def: FeatureDef): FeatureShape =>
   def.kind === 'feature' ? buildShape(def.catalog, def.params, def.side ?? 1) : legacyShape(def);
 
-/** The park from the user's sketch, with scenery from their park map and photos (see parkLayout.ts). */
-export const DEFAULT_PARK: ParkDef = LAKESIDE_PARK;
+/**
+ * The default park: the wake park's lines (features spec) on the user's loop
+ * and site (see parkLayout.ts). The user's sketch layout is LAKESIDE_PARK.
+ */
+export const DEFAULT_PARK: ParkDef = WAKE_PARK;
 
 export function resolvePark(park: ParkDef, path: CablePath): ResolvedFeature[] {
   return park.features.map((def) => {

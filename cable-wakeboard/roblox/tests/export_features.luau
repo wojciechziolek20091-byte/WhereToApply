@@ -5,6 +5,9 @@
 local FeatureBuilder = require(__root.Park.FeatureBuilder)
 local FeatureModel = require(__root.Park.FeatureModel)
 local SHAPES = { Block = 0, WedgePart = 1, CornerWedgePart = 2, Ball = 3, Cylinder = 4 }
+local function jsonString(str)
+	return '"' .. string.gsub(string.gsub(str, "\\", "\\\\"), '"', '\\"') .. '"'
+end
 local function n(x)
 	return string.format("%.4f", x)
 end
@@ -31,6 +34,6 @@ for _, spec in SPECS do
 			end
 		end
 	end
-	table.insert(out, `"{spec.key}":\{"count":{FeatureModel.partCount(model)},"parts":[` .. table.concat(rows, ",") .. "]}")
+	table.insert(out, jsonString(spec.key) .. `:\{"count":{FeatureModel.partCount(model)},"parts":[` .. table.concat(rows, ",") .. "]}")
 end
 print("{" .. table.concat(out, ",") .. "}")

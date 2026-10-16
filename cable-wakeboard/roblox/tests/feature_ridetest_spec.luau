@@ -3,6 +3,7 @@
 -- Prints the pass / fail table and RIDE TEST OK / RIDE TEST FAILED.
 local FeatureRideTest = require(__root.Park.FeatureRideTest)
 local Sim = require(__root.Sim)
-local defs = rawget(_G, "DEFS") or Sim.ParkLayout.CATALOG_TEST_PARK.features
-local rows, ok = FeatureRideTest.runAll(defs)
+local which = PARK or "catalog"
+local park = if which == "wake" then Sim.ParkLayout.WAKE_PARK elseif which == "beginner" then Sim.ParkLayout.BEGINNER_PARK else Sim.ParkLayout.CATALOG_TEST_PARK
+local rows, ok = FeatureRideTest.runAll(park.features, false, park.cable)
 print(if ok then "RIDE TEST OK" else "RIDE TEST FAILED")

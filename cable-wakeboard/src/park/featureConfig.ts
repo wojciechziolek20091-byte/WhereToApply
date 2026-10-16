@@ -153,7 +153,9 @@ export const FEATURE_CONFIG = {
     RopeLength: DEFAULT_CONFIG.rope.length,
     MinOffLine: 2,
     ApproachClearance: 8,
+    /** Length of the clear zone after the exit (m) and its half width. */
     ExitClearance: 12,
+    ExitCorridor: 3,
     CopingMin: 0.03,
     KickerMinSubsegments: 6,
     MaxParts: 120,

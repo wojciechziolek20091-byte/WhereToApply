@@ -33,9 +33,12 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   config.ts   SimConfig and DEFAULT_CONFIG. All tunables live here.
   cable.ts    Cable path (towers + filleted corners), carrier kinematics.
   park.ts     Park types (features, site) and resolvePark().
-  parkLayout.ts The default park: layout from the user's sketch (docs/park-sketch.jpg),
-              scenery from their park map. Features, start dock, site
-              (shore, island, buildings...). TEST_PARK: the spec's test map.
+  parkLayout.ts Parks. WAKE_PARK (DEFAULT_PARK): the features spec's lines placed
+              in the spec's terms (WAKE_PARK_LAYOUT -> placeLayout), on the user's
+              loop and site (+ buoys, operator hut). BEGINNER_PARK: the 2-tower
+              system (its own `cable`). LAKESIDE_PARK: the user's sketch layout
+              (docs/park-sketch.jpg). TEST_PARK: mechanics test map.
+              CATALOG_TEST_PARK: every catalogue feature on the line (parity).
               Luau copies of parkLayout.ts AND config.ts are GENERATED:
               `npx vite-node scripts/gen-luau-data.ts` -> Sim/ParkLayout.luau, Sim/Config.luau.
   features.ts Feature geometry queries.
@@ -69,7 +72,10 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   scoring/    combo.ts (combo score, shared with the Roblox server), judges.ts (panel), metrics.ts.
   session.ts  createRun/stepRun: passes, crashes, respawn, trick log, combos, judges.
   index.ts    Public exports.
-src/park/     featureConfig.ts: FeatureConfig (studs, collision groups, tags, colours,
+src/park/     (Roblox side is roblox/src/shared/Park: FeatureConfig, FeatureModel,
+              FeatureBuilder, FeatureRegistry, FeatureValidator, FeatureRideTest,
+              FeatureBob, ParkBuilder, Layout; docs/FEATURES.md.)
+              featureConfig.ts: FeatureConfig (studs, collision groups, tags, colours,
               materials, validator thresholds, bob, sounds). GENERATED to
               roblox/src/shared/Park/FeatureConfig.luau (--!strict).
 src/art/      Engine-free art: site.ts (polygon helpers, ear clipping, triangle builder

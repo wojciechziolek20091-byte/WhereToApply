@@ -14,7 +14,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG, DT, GRAVITY } from '../src/sim/config';
-import { CATALOG_TEST_PARK, LAKESIDE_PARK, TEST_PARK } from '../src/sim/parkLayout';
+import { BEGINNER_LAYOUT, BEGINNER_PARK, CATALOG_TEST_PARK, LAKESIDE_PARK, TEST_PARK, WAKE_PARK, WAKE_PARK_LAYOUT } from '../src/sim/parkLayout';
 import { DEFAULT_ANIM_CONFIG } from '../src/anim/config';
 import { ALL_CLIPS, CRASH_LEAD_IN } from '../src/anim/poses';
 import { CATALOG_COMMON, FEATURE_CATALOG } from '../src/sim/featureCatalog';
@@ -38,9 +38,39 @@ ParkLayout.TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 ParkLayout.CATALOG_TEST_PARK = ${lua({ ...CATALOG_TEST_PARK, site: undefined }, '')}
 ParkLayout.CATALOG_TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 
+-- The wake park (the default): the features spec's lines on the loop. Its
+-- site adds marker buoys and the cable operator hut to the lakeside site.
+ParkLayout.WAKE_PARK = ${lua(WAKE_PARK, '')}
+
+-- The beginner 2-tower system, its own map with its own cable.
+ParkLayout.BEGINNER_PARK = ${lua({ ...BEGINNER_PARK, site: undefined }, '')}
+ParkLayout.BEGINNER_PARK.site = table.clone(ParkLayout.WAKE_PARK.site)
+ParkLayout.BEGINNER_PARK.site.docks = ${lua(BEGINNER_PARK.site!.docks, '')}
+ParkLayout.BEGINNER_PARK.site.buoys = ${lua(BEGINNER_PARK.site!.buoys, '')}
+
 return ParkLayout
 `;
 writeFileSync(join(__dirname, '../roblox/src/shared/Sim/ParkLayout.luau'), out);
+
+const layout = `--!strict
+-- GENERATED from src/sim/parkLayout.ts by scripts/gen-luau-data.ts. Do not edit:
+-- edit the TypeScript file and rerun the script.
+-- Park/Layout (features spec section 9): every feature of the wake park and
+-- the beginner 2-tower system, in the spec's terms: catalogue type, params,
+-- segmentOfCable (1-based straight in order of travel), distanceAlong (m),
+-- sideOffset (m, + right of the cable line), facing ("WithCable",
+-- "AgainstCable" or an angle in radians). The sim's park defs
+-- (Sim.ParkLayout.WAKE_PARK / BEGINNER_PARK) are made from these.
+-- ParkBuilder.buildPark() builds them into Workspace.Park.Features.
+local Layout = {}
+
+Layout.MAIN = ${lua(WAKE_PARK_LAYOUT, '')}
+
+Layout.BEGINNER = ${lua(BEGINNER_LAYOUT, '')}
+
+return Layout
+`;
+writeFileSync(join(__dirname, '../roblox/src/shared/Park/Layout.luau'), layout);
 
 const config = `-- GENERATED from src/sim/config.ts by scripts/gen-luau-data.ts. Do not edit:
 -- edit the TypeScript file (it documents every entry) and rerun the script.

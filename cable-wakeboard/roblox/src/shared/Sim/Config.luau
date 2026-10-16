@@ -40,7 +40,7 @@ Config.DEFAULT_CONFIG = {
 		standRate = 4,
 	},
 	ollie = { chargeTime = 0.5, minV = 3.5, maxV = 6.5, clearance = 0.1 },
-	kicker = { lipPopWindow = 0.12, lipPopBonus = 0.2 },
+	kicker = { lipPopWindow = 0.12, lipPopBonus = 0.3 },
 	safety = { popWindowFraction = 0.08, popWindowMinMetres = 1, perfectFraction = 0.4, sketchyMultiplier = 0.8, gapPopScale = 0.25 },
 	spin = { rate = 9.42477796076938, accelTime = 0.1, maxCarry = 1.5707963267948966 },
 	flip = { rate = 6.981317007977318, maxCarry = 1.0471975511965976 },

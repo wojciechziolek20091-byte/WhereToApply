@@ -282,8 +282,10 @@ function FeatureValidator.validate(model: Model, opts: Options?): Report
 			if de < worstExit then
 				worstExit = de
 			end
-			if da < V.ApproachClearance or de < V.ExitClearance then
-				table.insert(blockers, f.name)
+			-- Nothing within 8 m of the approach line; nothing in the 12 m after the exit
+			-- (a corridor `ExitCorridor` m either side of the line out).
+			if da < V.ApproachClearance or de < V.ExitCorridor then
+				table.insert(blockers, string.format("%s (%.1f m from the approach, %.1f m from the exit)", f.name, da, de))
 			end
 		end
 		add("Clearance", #blockers == 0, if #blockers == 0

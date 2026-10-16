@@ -28,7 +28,11 @@
  * `npx vite-node scripts/gen-park-luau.ts`. The towers are in config.ts
  * (`cable.towers`).
  */
-import type { ParkDef } from './park';
+import type { CatalogFeatureDef, ParkDef, SiteDef } from './park';
+import { buildCablePath, cablePointAt } from './cable';
+import { type CableConfig, DEFAULT_CONFIG } from './config';
+import { FEATURE_CATALOG } from './featureCatalog';
+import { cos, sin } from './math/detmath';
 
 export const LAKESIDE_PARK: ParkDef = {
   name: 'Sketch cable park',
@@ -218,7 +222,164 @@ export const CATALOG_TEST_PARK: ParkDef = {
     kind: 'feature' as const, id: `cat_${catalog}`, name: catalog, catalog, s,
     // The wall ride is turned into the riders' line so the pull carries them up it;
     // the transfer box sits off the line with its second box toward the cable, so the pull helps the hop across.
-    ...(catalog === 'WallRide' ? { offset: -1, yaw: -0.6 } : catalog === 'Transfer' ? { offset: 3, side: -1 } : { offset: 0 }),
+    ...(catalog === 'WallRide' ? { offset: 2, yaw: -0.6, side: 1 } : catalog === 'Transfer' ? { offset: 3, side: -1 } : { offset: 0 }),
   })),
   site: LAKESIDE_PARK.site,
+};
+
+/**
+ * A placement in the features spec's own terms (section 9): which straight of
+ * the cable (1-based, in order of travel from s = 0), how far along it, how
+ * far off the cable line (+ right of travel), and which way it faces.
+ */
+export interface LayoutEntry {
+  id: string;
+  catalog: string;
+  params?: CatalogFeatureDef['params'];
+  segmentOfCable: number;
+  distanceAlong: number;
+  sideOffset: number;
+  facing: 'WithCable' | 'AgainstCable' | number;
+  line: string;
+  accent: string;
+  /** Transfer box / wall ride: which side the second box or the wall is on. */
+  side?: number;
+  name?: string;
+}
+
+/** Arc length where each straight of a cable starts, and its length, in order of travel. */
+export function cableStraights(cable: CableConfig): { s0: number; length: number }[] {
+  const path = buildCablePath(cable);
+  if (path.shuttle) return [{ s0: 0, length: path.segments[0]!.length }];
+  return path.segments.filter((g) => g.kind === 'line').map((g) => ({ s0: g.s0, length: g.length }));
+}
+
+/** Layout entries to feature defs on a cable. */
+export function placeLayout(entries: LayoutEntry[], cable: CableConfig): CatalogFeatureDef[] {
+  const straights = cableStraights(cable);
+  return entries.map((e) => {
+    const st = straights[e.segmentOfCable - 1];
+    if (!st) throw new Error(`${e.id}: no straight ${e.segmentOfCable}`);
+    if (e.distanceAlong < 0 || e.distanceAlong > st.length) throw new Error(`${e.id}: ${e.distanceAlong} m is off straight ${e.segmentOfCable}`);
+    const yaw = e.facing === 'WithCable' ? 0 : e.facing === 'AgainstCable' ? Math.PI : e.facing;
+    return {
+      kind: 'feature',
+      id: e.id,
+      name: e.name ?? FEATURE_CATALOG[e.catalog]!.meta.label,
+      catalog: e.catalog,
+      ...(e.params ? { params: e.params } : {}),
+      s: st.s0 + e.distanceAlong,
+      offset: e.sideOffset,
+      ...(yaw !== 0 ? { yaw } : {}),
+      ...(e.side !== undefined ? { side: e.side } : {}),
+      accent: e.accent,
+      line: e.line,
+    };
+  });
+}
+
+/**
+ * The wake park's lines (features spec section 9) on the user's loop. The
+ * loop's straights in order of travel (segmentOfCable): 1 south (88 m,
+ * east-bound, the start dock on its outside), 2 east (143 m), 3 north-east
+ * (53 m), 4 north-west (64 m), 5 west (162 m). + offset is right of travel:
+ * the outside of the loop. Section 5's clearance (8 m along the approach,
+ * 12 m after the exit) needs about 20 m between features, so the lines fit
+ * the straights' real lengths:
+ *   Line 1  medium kicker, pipe rail, funbox    east
+ *   Line 2  gap box, flat-down rail, transfer   west
+ *   Line 3  pro kicker, rooftop, step-up rail   the end of the west straight,
+ *                                               then the south before the dock
+ *   Line 4  pyramid, wall ride, spine           the roof (north-east, north-west)
+ */
+export const WAKE_PARK_LAYOUT: LayoutEntry[] = [
+  { id: 'L1_MediumKicker_01', catalog: 'MediumKicker', segmentOfCable: 2, distanceAlong: 18, sideOffset: 4, facing: 'WithCable', line: 'Line 1', accent: 'Orange' },
+  { id: 'L1_PipeRail_01', catalog: 'PipeRail', segmentOfCable: 2, distanceAlong: 48, sideOffset: 3, facing: 'WithCable', line: 'Line 1', accent: 'Orange' },
+  { id: 'L1_Funbox_01', catalog: 'Funbox', segmentOfCable: 2, distanceAlong: 83, sideOffset: 3, facing: 'WithCable', line: 'Line 1', accent: 'Orange' },
+  { id: 'L4_Pyramid_01', catalog: 'Pyramid', segmentOfCable: 3, distanceAlong: 14, sideOffset: 4, facing: 'WithCable', line: 'Line 4', accent: 'Magenta' },
+  { id: 'L4_WallRide_01', catalog: 'WallRide', segmentOfCable: 3, distanceAlong: 41, sideOffset: 2, facing: -0.6, line: 'Line 4', accent: 'Magenta', side: 1 },
+  { id: 'L4_Spine_01', catalog: 'Spine', segmentOfCable: 4, distanceAlong: 14, sideOffset: 3, facing: 'WithCable', line: 'Line 4', accent: 'Magenta' },
+  { id: 'L2_GapBox_01', catalog: 'GapBox', segmentOfCable: 5, distanceAlong: 16, sideOffset: 3, facing: 'WithCable', line: 'Line 2', accent: 'Teal' },
+  { id: 'L2_KinkRail_01', catalog: 'KinkRail', segmentOfCable: 5, distanceAlong: 49, sideOffset: 3, facing: 'WithCable', line: 'Line 2', accent: 'Teal' },
+  { id: 'L2_Transfer_01', catalog: 'Transfer', segmentOfCable: 5, distanceAlong: 85, sideOffset: 4, facing: 'WithCable', line: 'Line 2', accent: 'Teal', side: -1 },
+  { id: 'L3_ProKicker_01', catalog: 'ProKicker', segmentOfCable: 5, distanceAlong: 116, sideOffset: 4, facing: 'WithCable', line: 'Line 3', accent: 'Yellow' },
+  { id: 'L3_Rooftop_01', catalog: 'Rooftop', segmentOfCable: 5, distanceAlong: 148, sideOffset: 3, facing: 'WithCable', line: 'Line 3', accent: 'Yellow' },
+  { id: 'L3_StepUp_01', catalog: 'StepUp', segmentOfCable: 1, distanceAlong: 15, sideOffset: 3, facing: 'WithCable', line: 'Line 3', accent: 'Yellow' },
+];
+
+/**
+ * The beginner 2-tower system (spec section 9): one 150 m straight inside the
+ * loop, between the island and the east straight, 20 m from both. The
+ * carrier runs out north and back; the features face the outbound run.
+ */
+export const BEGINNER_CABLE: Partial<CableConfig> = {
+  mode: 'twoTower',
+  towers: [{ x: 35, z: 105 }, { x: 35, z: -45 }],
+};
+
+export const BEGINNER_LAYOUT: LayoutEntry[] = [
+  { id: 'B_Slider_01', catalog: 'Slider', segmentOfCable: 1, distanceAlong: 28, sideOffset: 3, facing: 'WithCable', line: 'Beginner', accent: 'Teal' },
+  { id: 'B_BeginnerKicker_01', catalog: 'BeginnerKicker', segmentOfCable: 1, distanceAlong: 62, sideOffset: 3, facing: 'WithCable', line: 'Beginner', accent: 'Teal' },
+  {
+    id: 'B_Funbox_01', catalog: 'Funbox', segmentOfCable: 1, distanceAlong: 96, sideOffset: 3, facing: 'WithCable', line: 'Beginner', accent: 'Teal',
+    // A lower funbox for the beginner line.
+    params: { mains: [{ height: 0.6, gapBefore: 0, kinks: [{ length: 6, angle: 0 }] }], safetyLength: 2.2, exitLength: 2.2 },
+  },
+];
+
+/**
+ * Marker buoys along the lines: on the other side of the cable from each
+ * line's features (out of their approach and landing zones), at the start
+ * and end of every straight that has features.
+ */
+function lineBuoys(entries: LayoutEntry[], cable: CableConfig): { x: number; z: number }[] {
+  const path = buildCablePath(cable);
+  const straights = cableStraights(cable);
+  const out: { x: number; z: number }[] = [];
+  const seen = new Set<number>();
+  for (const e of entries) {
+    if (seen.has(e.segmentOfCable)) continue;
+    seen.add(e.segmentOfCable);
+    const st = straights[e.segmentOfCable - 1]!;
+    for (const along of [6, st.length - 6]) {
+      const p = cablePointAt(path, st.s0 + along);
+      const off = -Math.sign(e.sideOffset) * 9;
+      out.push({ x: Math.round((p.pos.x - sin(p.heading) * off) * 10) / 10, z: Math.round((p.pos.z + cos(p.heading) * off) * 10) / 10 });
+    }
+  }
+  return out;
+}
+
+/** The site with the wake park's extras: marker buoys along the lines and the cable operator hut by the start dock. */
+const WAKE_SITE: SiteDef = {
+  ...LAKESIDE_PARK.site!,
+  buildings: [
+    ...LAKESIDE_PARK.site!.buildings,
+    { name: 'Cable operator hut', x: 14, z: 138, width: 4.5, depth: 3.5, height: 2.8, heading: 0, roof: 'flat', color: 'wood' },
+  ],
+  buoys: lineBuoys(WAKE_PARK_LAYOUT, DEFAULT_CONFIG.cable),
+};
+
+/** The wake park (default): the spec's four lines on the loop, the user's site. */
+export const WAKE_PARK: ParkDef = {
+  name: 'Lakeside Wake',
+  startS: 83,
+  features: placeLayout(WAKE_PARK_LAYOUT, DEFAULT_CONFIG.cable),
+  site: WAKE_SITE,
+};
+
+/**
+ * The beginner 2-tower system as its own map (`?park=beginner`): the same
+ * lake and shore, its own start dock by the first tower and its own buoys.
+ */
+export const BEGINNER_PARK: ParkDef = {
+  name: 'Beginner line',
+  startS: 22,
+  cable: BEGINNER_CABLE,
+  features: placeLayout(BEGINNER_LAYOUT, { ...DEFAULT_CONFIG.cable, ...BEGINNER_CABLE }),
+  site: {
+    ...WAKE_SITE,
+    docks: [{ name: 'Beginner dock', s: 2, offset: -8, length: 8, width: 4 }],
+    buoys: lineBuoys(BEGINNER_LAYOUT, { ...DEFAULT_CONFIG.cable, ...BEGINNER_CABLE }),
+  },
 };

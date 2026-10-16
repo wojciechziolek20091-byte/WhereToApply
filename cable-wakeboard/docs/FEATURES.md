@@ -348,3 +348,60 @@ wall ride, is about 60 parts):
     and the freeze. The web game does not bob.
 - **Shadows:** Visual parts cast shadows; Ride/Crash parts are invisible and
   cast none.
+
+## Park layout (milestone 9)
+
+- **Where the layout lives:** `src/sim/parkLayout.ts` holds the layout in
+  the spec's terms. Each entry gives `type`, `params`, `segmentOfCable`
+  (1-based straight in order of travel), `distanceAlong`, `sideOffset`
+  (+ right of the cable line) and `facing` (`WithCable` / `AgainstCable` /
+  an angle).
+  - `placeLayout` turns entries into the sim's feature defs.
+  - The generated `Park/Layout.luau` holds the same entries for Roblox.
+- **The default park is the wake park (`WAKE_PARK`), on your loop and site.**
+  - **The order of the lines is not the spec's.** The spec's clearance rule
+    (8 m along the approach, 12 m after the exit) needs about 20 m between
+    features, and the south straight (88 m) has the start dock on its
+    outside. So the lines fit the straights' real lengths, in order of
+    travel from the dock:
+
+| Line | Features | Where | Accent |
+|---|---|---|---|
+| Line 1 | medium kicker, pipe rail, funbox | east straight, outside | orange |
+| Line 4 | pyramid, wall ride (turned 34 deg into the line), spine | the roof: north-east, north-west | magenta |
+| Line 2 | gap box, flat-down rail, transfer box (B toward the cable) | west straight, outside | teal |
+| Line 3 | pro kicker, rooftop, step-up rail | the end of the west straight, then the south straight before the dock | yellow |
+
+- **Beginner 2-tower system (`BEGINNER_PARK`, `?park=beginner`):**
+  - One 150 m straight inside the loop, between the island and the east
+    straight, 20 m from both.
+  - Its features: a slider, the beginner kicker, and a lower funbox (0.6 m).
+  - The carrier shuttles out and back, and the features face the outbound
+    run.
+  - It is its own map: the sim runs one cable at a time.
+  - `ParkDef.cable` lets a park bring its own cable (TS and Luau).
+- **Your sketch layout is kept:** `LAKESIDE_PARK`, `?park=sketch` (web) or
+  the Workspace attribute `WakePark = "sketch"` (Roblox).
+- **Site extras:**
+  - Marker buoys at both ends of every straight with features, on the far
+    side of the cable from them (out of their approach and landing zones).
+  - A cable operator hut by the start dock.
+  - The beginner map has its own dock and buoys.
+  - Trees and shore are the existing site.
+- **`Park/ParkBuilder.luau`:** `buildPark(park)`:
+  - clears `Workspace.Park.Features`;
+  - builds every catalogue feature at the sim's placement;
+  - validates each one against all of section 5, including cable reach and
+    clearance from the other features, the docks and the buoys;
+  - places only those that pass, warning with the failed rules for the rest;
+  - re-indexes the registry.
+  - It is idempotent (`park_build_spec.luau`). The client calls it, and
+    `WakePark = "wake" | "beginner" | "sketch"` picks the park.
+- **Results:** all 12 wake park features and all 3 beginner features pass the
+  validator with placement. The ride test passes on the catalogue map, the
+  wake park and the beginner line.
+- **Tuning on the way:** `kicker.lipPopBonus` went from 0.2 to 0.3. The pro
+  kicker at its east-straight spot reached only 1.38-1.40 s with the ideal
+  pop (the spec wants 1.4-2.0). Now beginner / medium / pro are 0.85 / 1.18 /
+  1.47 s.
+- **Feature IDs** follow the spec: `L1_MediumKicker_01`, `B_Slider_01`...

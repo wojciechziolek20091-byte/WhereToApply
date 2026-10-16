@@ -42,8 +42,7 @@ local SiteGeometry = require(shared:WaitForChild("SiteGeometry"))
 local Anim = require(shared:WaitForChild("Anim"))
 local RiderRig = require(shared:WaitForChild("RiderRig"))
 local WaterSpray = require(shared:WaitForChild("WaterSpray"))
-local FeatureBuilder = require(shared:WaitForChild("Park"):WaitForChild("FeatureBuilder"))
-local FeatureModel = require(shared:WaitForChild("Park"):WaitForChild("FeatureModel"))
+local ParkBuilder = require(shared:WaitForChild("Park"):WaitForChild("ParkBuilder"))
 local FeatureRegistry = require(shared:WaitForChild("Park"):WaitForChild("FeatureRegistry"))
 local FeatureConfig = require(shared:WaitForChild("Park"):WaitForChild("FeatureConfig"))
 local FeatureBob = require(shared:WaitForChild("Park"):WaitForChild("FeatureBob"))
@@ -82,7 +81,15 @@ local function part(name, size, cf, color, shape)
 	return p
 end
 
-local run = Sim.Session.createRun()
+-- Which park: the wake park (default), the beginner 2-tower system or the
+-- user's sketch layout. Set the Workspace attribute "WakePark" to "beginner"
+-- or "sketch" in Studio to switch.
+local PARKS = { wake = Sim.ParkLayout.WAKE_PARK, beginner = Sim.ParkLayout.BEGINNER_PARK, sketch = Sim.ParkLayout.LAKESIDE_PARK }
+local PARK = PARKS[workspace:GetAttribute("WakePark") or "wake"] or Sim.Park.DEFAULT_PARK
+local function newRun()
+	return Sim.Session.createRun(nil, PARK)
+end
+local run = newRun()
 
 -- One flat triangle as two wedges (the usual Roblox technique). `thick` studs,
 -- centred on the triangle's plane.
@@ -146,9 +153,9 @@ local function block(name, x, y, z, w, h, d, heading, color)
 end
 
 -- Park: the user's map. Water, banks, island, terrace, roads, buildings, dock,
--- towers, cable and features, all from Sim.Park.DEFAULT_PARK and the sim state.
+-- towers, cable and features, all from the park (PARK) and the sim state.
 local function buildPark(sim)
-	local site = Sim.Park.DEFAULT_PARK.site
+	local site = PARK.site
 	local lake = site.lake
 	local c = SiteGeometry.centroid(lake)
 
@@ -252,17 +259,11 @@ local function buildPark(sim)
 		local h = (path.height + 1) * S
 		part(`Tower{i}`, Vector3.new(2, h, 2), CFrame.new(t.x * S, h / 2, t.z * S), COLORS.tower)
 	end
-	FeatureModel.setupCollisionGroups()
+	-- Wake park catalogue features: built and validated by ParkBuilder (from the sim's own ride pieces).
+	ParkBuilder.buildPark(PARK)
 	for _, f in sim.features do
 		local d = f.def
 		if d.kind == "feature" then
-			-- Wake park catalogue features: built by FeatureBuilder from the sim's own ride pieces.
-			local m = FeatureBuilder.build({
-				id = d.id, catalog = d.catalog, params = d.params, side = d.side, accent = d.accent, name = d.name,
-				origin = Vector3.new(f.origin.x, 0, f.origin.z), heading = f.heading,
-				offsetFromCable = d.offset, yaw = d.yaw,
-			})
-			m.Parent = FeatureModel.featuresFolder()
 			continue
 		end
 		local length = Sim.Park.featureLength(d)
@@ -523,7 +524,7 @@ local function onAction(name, state)
 	held[name] = state == Enum.UserInputState.Begin or state == Enum.UserInputState.Change
 	local began = state == Enum.UserInputState.Begin
 	if name == "Restart" and began then
-		run = Sim.Session.createRun()
+		run = newRun()
 	elseif name == "Debug" and began then
 		debugOpen = not debugOpen
 		debugLabel.Visible = debugOpen

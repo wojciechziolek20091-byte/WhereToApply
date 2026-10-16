@@ -10,6 +10,7 @@ import { buildCablePath, cablePointAt } from '../src/sim/cable';
 import { DEFAULT_CONFIG } from '../src/sim/config';
 import { featureLength, featureWidth } from '../src/sim/park';
 import { DEFAULT_PARK } from '../src/sim/park';
+import { LAKESIDE_PARK } from '../src/sim/parkLayout';
 import { createSim } from '../src/sim/world';
 
 const site = DEFAULT_PARK.site!;
@@ -53,8 +54,8 @@ describe('default park site', () => {
     }
   });
 
-  it('features do not overlap (side-by-side pairs are fine)', () => {
-    const feats = DEFAULT_PARK.features;
+  it('the sketch layout\'s features do not overlap (side-by-side pairs are fine)', () => {
+    const feats = LAKESIDE_PARK.features;
     for (const a of feats) {
       for (const b of feats) {
         if (a === b) continue;

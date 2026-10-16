@@ -1,5 +1,5 @@
 import type { CatalogFeatureDef } from '../sim/park';
-import { CATALOG_TEST_PARK } from '../sim/parkLayout';
+import { BEGINNER_PARK, CATALOG_TEST_PARK, WAKE_PARK } from '../sim/parkLayout';
 import { FEATURE_CATALOG } from '../sim/featureCatalog';
 
 /**
@@ -24,7 +24,7 @@ export const artKey = (d: ArtInputs): string => `${d.catalog}|${JSON.stringify(d
 export function featureArtSpecs(): FeatureArtSpec[] {
   const defs: ArtInputs[] = [
     ...Object.keys(FEATURE_CATALOG).map((catalog) => ({ catalog })),
-    ...CATALOG_TEST_PARK.features.filter((d): d is CatalogFeatureDef => d.kind === 'feature'),
+    ...[CATALOG_TEST_PARK, WAKE_PARK, BEGINNER_PARK].flatMap((p) => p.features.filter((d): d is CatalogFeatureDef => d.kind === 'feature')),
   ];
   const seen = new Map<string, FeatureArtSpec>();
   for (const d of defs) {

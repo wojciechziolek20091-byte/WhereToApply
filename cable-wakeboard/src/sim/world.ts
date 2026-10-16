@@ -81,6 +81,8 @@ export function createSim(
   park: ParkDef = DEFAULT_PARK,
   carrierStartS = park.startS ?? 30,
 ): SimState {
+  // A park with its own cable (the beginner 2-tower system) rides on that.
+  if (park.cable) cfg = { ...cfg, cable: { ...cfg.cable, ...park.cable } };
   const path = buildCablePath(cfg.cable);
   const carrier = createCarrier(path, carrierStartS, cfg.cable.carrierSpeed);
   const base = { cfg, path, carrier };

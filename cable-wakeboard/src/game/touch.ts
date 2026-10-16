@@ -56,6 +56,7 @@ export function mountStartScreen(
   onStart: () => void,
   onPick: (rider: string) => void = () => {},
   initial = 'Sheet',
+  eyebrow = 'Full-size cable, 30 km/h, 5 towers, 5 kickers, a box, a kick rail, 3 pipes',
 ): void {
   const overlay = document.createElement('div');
   overlay.className = 'start';
@@ -65,10 +66,11 @@ export function mountStartScreen(
   ).join('');
   overlay.innerHTML = `
     <div class="start-card">
-      <p class="start-eyebrow">Full-size cable, 30 km/h, 5 towers, 5 kickers, a box, a kick rail, 3 pipes</p>
+      <p class="start-eyebrow">${eyebrow}</p>
       <h1 class="start-title">Cable Wakeboard</h1>
       <p class="start-body">Edge hard away from the line until the rope is LOADED, then release Space for a raley,
-        backroll or frontroll. Spin, flip, grab and pass the handle in the air; slide the box and pipes.
+        backroll or frontroll. Spin, flip, grab and pass the handle in the air; slide boxes and rails
+        (tap A/D as you pop to hop across a transfer).
         Chain tricks inside 2 seconds for a combo. Two laps per run, two crashes and you are out.</p>
       <div class="rider-row" role="group" aria-label="Rider">${riders}</div>
       <button type="button" id="start-ride" class="start-btn">Start riding</button>
