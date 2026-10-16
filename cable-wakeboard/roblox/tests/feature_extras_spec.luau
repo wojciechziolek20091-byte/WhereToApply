@@ -35,7 +35,7 @@ local all = {}
 local tagSeen = {}
 for _, def in Sim.ParkLayout.WAKE_PARK.features do
 	if def.catalog == "MediumKicker" or def.catalog == "GapBox" or def.catalog == "PipeRail" then
-		local s = Sim.World.createSim(cfg, { name = "x", features = { def } }, def.s - 10)
+		local s = Sim.World.createSim(cfg, { name = "x", features = { def }, cable = Sim.ParkLayout.WAKE_PARK.cable }, def.s - 10)
 		local f = s.features[1]
 		local shape = f.shape
 		local safety = shape.pieces[1]

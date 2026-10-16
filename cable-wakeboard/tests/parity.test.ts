@@ -18,7 +18,7 @@ const LUAU = process.env.LUAU;
 const TRACE_LUAU = join(__dirname, '../roblox/tests/sim_trace.luau');
 const DUMP_LUAU = join(__dirname, '../roblox/tests/sim_dump.luau');
 /** Run to the end of both passes (about 2.5 min of game time). */
-const TICKS = 12000;
+const TICKS = 20000;
 const SEEDS = [1, 7, 2026];
 
 function runLuau(tail: string): string {

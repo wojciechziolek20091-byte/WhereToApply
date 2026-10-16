@@ -30,12 +30,16 @@ import {
   centroid,
   distanceToOutline,
   distanceToPolyline,
+  distanceToSegment,
   growRadially,
   pointInPolygon,
   TriangleBuilder,
 } from '../../art/site';
 import type { RiderPalette } from '../../art/riders';
-import { cablePointAt } from '../../sim/cable';
+import { buildCablePath, cablePointAt } from '../../sim/cable';
+import { DEFAULT_CONFIG } from '../../sim/config';
+import { towerParts } from '../../art/tower';
+import { FEATURE_CONFIG } from '../../park/featureConfig';
 import { kickerHeightAt } from '../../sim/features';
 import { createRng, nextFloat, nextRange } from '../../sim/math/rng';
 import { clamp01 } from '../../sim/math/scalar';
@@ -206,7 +210,8 @@ function dockHulls(dock: DockDef, sim: SimState, site: SiteDef, look: Look): Hul
   // Walkway: from the dock's outer edge away from the line until it reaches land.
   const side = dock.offset < 0 ? -1 : 1;
   let len = 0;
-  while (len < 60 && pointInPolygon({ x: cx + right.x * side * (dock.width / 2 + len), z: cz + right.z * side * (dock.width / 2 + len) }, site.lake)) len += 1;
+  const water = (p: GroundPoint) => pointInPolygon(p, site.lake) && site.islands.every((i) => !pointInPolygon(p, i.outline));
+  while (len < 60 && water({ x: cx + right.x * side * (dock.width / 2 + len), z: cz + right.z * side * (dock.width / 2 + len) })) len += 1;
   len += 4;
   parts.push(boxHull([0, 0.3, side * (dock.width / 2 + len / 2)], [0.8, 0.08, len / 2], look.deck));
   // A rider's bench and a flag at the start.
@@ -297,6 +302,8 @@ export class BabylonRenderer {
   debugCam: 'front' | 'back' | 'side' | 'aerial' | 'map' | null = null;
   /** Feature captures (features spec): look at a feature by id from an angle. */
   featureCam: { id: string; angle: 'approach' | 'side' | 'rear' | 'top' | 'low'; dist?: number } | null = null;
+  /** Capture camera at a point looking at another (sim metres), e.g. a tower close-up. */
+  pointCam: { from: [number, number, number]; to: [number, number, number] } | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -542,7 +549,9 @@ export class BabylonRenderer {
         hulls.push(rockHull([x + ox, y, z + oz], [r * 1.1, r * nextRange(rng, 0.9, 1.3), r * 1.1], look.treeLeaves(nextFloat(rng))));
       }
     };
+    const towers = (site.cables ?? []).flatMap((c) => c.towers);
     const clear = (p: GroundPoint, margin: number): boolean =>
+      towers.every((t) => Math.hypot(p.x - t.base.x, p.z - t.base.z) > 16 && distanceToSegment(p, t.base, t.wheel) > 7) &&
       !pointInPolygon(p, site.lake) &&
       distanceToOutline(p, site.lake) > 7 &&
       site.areas.every((a) => !pointInPolygon(p, a.outline) && distanceToOutline(p, a.outline) > margin) &&
@@ -570,10 +579,13 @@ export class BabylonRenderer {
     ring(8, 50, 700, 0.8, 1.4, 3);
     ring(50, 170, 650, 1.2, 2.0, 2);
     for (const island of site.islands) {
-      const ic = centroid(island.outline);
-      for (let i = 0; i < 90; i++) {
-        const p = { x: ic.x + nextRange(rng, -16, 16), z: ic.z + nextRange(rng, -40, 40) };
-        if (pointInPolygon(p, island.outline) && distanceToOutline(p, island.outline) > 1.8) {
+      const xs = island.outline.map((p) => p.x);
+      const zs = island.outline.map((p) => p.z);
+      const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+      const count = Math.min(220, Math.round(((x1 - x0) * (z1 - z0)) / 40));
+      for (let i = 0; i < count; i++) {
+        const p = { x: nextRange(rng, x0, x1), z: nextRange(rng, z0, z1) };
+        if (pointInPolygon(p, island.outline) && distanceToOutline(p, island.outline) > 1.8 && towers.every((t) => Math.hypot(p.x - t.base.x, p.z - t.base.z) > 10 && distanceToSegment(p, t.base, t.wheel) > 5)) {
           tree(p.x, p.z, nextRange(rng, 0.7, 1.15), island.height);
         }
       }
@@ -587,8 +599,25 @@ export class BabylonRenderer {
     const { cfg, path } = sim;
     const look = this.look;
     const hulls: HullPart[] = [];
-    // Lattice towers like the map's: four tapering legs, cross braces, a wheel arm on top.
-    for (const t of cfg.cable.towers) {
+    // Towers (layout spec section 2): the site's cable systems, on land with a
+    // boom out to each wheel (src/art/tower.ts). Parks without them keep the
+    // old lattice towers at the cable corners.
+    const site0 = this.site;
+    const style = (role: string): [number, number, number] => {
+      const c = FEATURE_CONFIG.Style[role]!.color;
+      return [c[0] / 255, c[1] / 255, c[2] / 255];
+    };
+    const groundAt = (p: GroundPoint) => site0.islands.find((i) => pointInPolygon(p, i.outline))?.height ?? LAND_Y;
+    for (const system of site0.cables ?? []) {
+      for (const t of system.towers) {
+        for (const p of towerParts(t, cfg.cable.cableHeight, groundAt(t.base))) {
+          if (p.kind === 'box') hulls.push(boxHull(p.a, p.b, style(p.role)));
+          else if (p.kind === 'beam') hulls.push(beamHull(p.a, p.b, p.r, style(p.role)));
+          else hulls.push(beamHull([p.a[0], p.a[1] - p.b[1], p.a[2]], [p.a[0], p.a[1] + p.b[1], p.a[2]], p.r, style(p.role), 12));
+        }
+      }
+    }
+    for (const t of site0.cables ? [] : cfg.cable.towers) {
       const h = cfg.cable.cableHeight + 1;
       const legs = [[-1, -1], [1, -1], [1, 1], [-1, 1]] as const;
       const at = (k: number, y: number): V3 => {
@@ -624,6 +653,16 @@ export class BabylonRenderer {
     for (let s = 0; s <= path.length + 1; s += 2) pts.push(v3(cablePointAt(path, s).pos));
     const cable = CreateLines('cable', { points: pts }, this.scene);
     cable.color = c3(look.cable);
+    // The site's other cable systems (the beginner line when riding the loop, and back), as scenery.
+    for (const system of this.site.cables ?? []) {
+      const wheels = system.towers.map((t) => t.wheel);
+      if (wheels.every((w, i) => w.x === cfg.cable.towers[i]?.x && w.z === cfg.cable.towers[i]?.z)) continue;
+      const other = buildCablePath({ ...DEFAULT_CONFIG.cable, mode: system.mode, towers: wheels });
+      const op: Vector3[] = [];
+      const end = other.shuttle ? other.segments[0]!.length : other.length;
+      for (let s = 0; s <= end + 1; s += 2) op.push(v3(cablePointAt(other, Math.min(s, end)).pos));
+      CreateLines(`cable-${system.name}`, { points: op }, this.scene).color = c3(look.cable);
+    }
   }
 
   private featureHulls(f: ResolvedFeature): HullPart[] {
@@ -866,7 +905,10 @@ export class BabylonRenderer {
     // Keep the shadow camera on the rider.
     this.sun.position = v3(riderPos).add(new Vector3(...this.look.sunDirection).normalize().scale(40));
 
-    if (this.featureCam && this.featureCamera(sim)) {
+    if (this.pointCam) {
+      this.camera.position.set(...this.pointCam.from);
+      this.camera.setTarget(new Vector3(...this.pointCam.to));
+    } else if (this.featureCam && this.featureCamera(sim)) {
       // Feature capture camera.
     } else if (this.debugCam === 'aerial' || this.debugCam === 'map') this.aerialCamera(this.debugCam === 'map');
     else if (this.debugCam) this.closeUpCamera(this.scrub ? { x: frame.com.x, y: frame.com.y - 0.9, z: frame.com.z } : riderPos, this.scrub ? 0 : r.heading, toes);

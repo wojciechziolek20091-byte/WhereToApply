@@ -119,6 +119,18 @@ export interface SiteDef {
   roads: RoadDef[];
   /** Marker buoys drawn on the water. */
   buoys: GroundPoint[];
+  /**
+   * The cable systems standing on the site (layout spec section 2), drawn by
+   * the renderers whichever park is ridden: each tower's wheel (the cable
+   * corner, over the water) and its mast base on land with the arm between.
+   */
+  cables?: SiteCableDef[];
+}
+
+export interface SiteCableDef {
+  name: string;
+  mode: 'loop' | 'twoTower';
+  towers: { wheel: GroundPoint; base: GroundPoint; out: GroundPoint; arm: number; apex: GroundPoint }[];
 }
 
 export interface ParkDef {

@@ -43,6 +43,7 @@ local Anim = require(shared:WaitForChild("Anim"))
 local RiderRig = require(shared:WaitForChild("RiderRig"))
 local WaterSpray = require(shared:WaitForChild("WaterSpray"))
 local ParkBuilder = require(shared:WaitForChild("Park"):WaitForChild("ParkBuilder"))
+local TowerBuilder = require(shared:WaitForChild("Park"):WaitForChild("TowerBuilder"))
 local FeatureRegistry = require(shared:WaitForChild("Park"):WaitForChild("FeatureRegistry"))
 local FeatureConfig = require(shared:WaitForChild("Park"):WaitForChild("FeatureConfig"))
 local FeatureBob = require(shared:WaitForChild("Park"):WaitForChild("FeatureBob"))
@@ -186,14 +187,36 @@ local function buildPark(sim)
 	band(beach, lawn, LAND_Y, COLORS.lawn)
 	band(lawn, SiteGeometry.growRadially(lake, 600), LAND_Y, COLORS.land)
 
+	-- Islands (the ring island is two halves round the beginner lagoon), with
+	-- trees on a grid inside them, clear of the shore and the towers.
+	local towerSites = {}
+	for _, system in site.cables or {} do
+		for _, t in system.towers do
+			table.insert(towerSites, t)
+		end
+	end
 	for _, island in site.islands do
 		polygon("Island", island.outline, island.height / 2, COLORS.lawn, island.height * S + 1)
-		local ic = SiteGeometry.centroid(island.outline)
-		for k = 1, 14 do
-			local p = island.outline[k % #island.outline + 1]
-			local x, z = ic.x + (p.x - ic.x) * 0.5, ic.z + (p.z - ic.z) * 0.5
-			block("Trunk", x, island.height + 1.1, z, 0.5, 2.2, 0.5, 0, COLORS.trunk)
-			part("Leaves", Vector3.new(5, 5, 5) * S * 0.6, CFrame.new(x * S, (island.height + 3.4) * S, z * S), COLORS.leaves, "Part").Shape = Enum.PartType.Ball
+		local x0, x1, z0, z1 = math.huge, -math.huge, math.huge, -math.huge
+		for _, p in island.outline do
+			x0, x1, z0, z1 = math.min(x0, p.x), math.max(x1, p.x), math.min(z0, p.z), math.max(z1, p.z)
+		end
+		local count = 0
+		for gx = x0 + 6, x1 - 6, 14 do
+			for gz = z0 + 6, z1 - 6, 14 do
+				local x, z = gx + ((gz * 7) % 5) - 2.5, gz + ((gx * 3) % 5) - 2.5
+				local ok = SiteGeometry.pointInPolygon({ x = x, z = z }, island.outline)
+				for _, t in towerSites do
+					if math.sqrt((x - t.base.x) ^ 2 + (z - t.base.z) ^ 2) < 12 then
+						ok = false
+					end
+				end
+				if ok and count < 40 then
+					count += 1
+					block("Trunk", x, island.height + 1.1, z, 0.5, 2.2, 0.5, 0, COLORS.trunk)
+					part("Leaves", Vector3.new(5, 5, 5) * S * 0.6, CFrame.new(x * S, (island.height + 3.4) * S, z * S), COLORS.leaves, "Part").Shape = Enum.PartType.Ball
+				end
+			end
 		end
 	end
 	for _, area in site.areas do
@@ -238,7 +261,18 @@ local function buildPark(sim)
 		-- Walkway from the dock's outer edge to the shore.
 		local side = if dock.offset < 0 then -1 else 1
 		local len = 0
-		while len < 60 and SiteGeometry.pointInPolygon({ x = cx + right.x * side * (dock.width / 2 + len), z = cz + right.z * side * (dock.width / 2 + len) }, lake) do
+		local function water(p)
+			if not SiteGeometry.pointInPolygon(p, lake) then
+				return false
+			end
+			for _, island in site.islands do
+				if SiteGeometry.pointInPolygon(p, island.outline) then
+					return false
+				end
+			end
+			return true
+		end
+		while len < 60 and water({ x = cx + right.x * side * (dock.width / 2 + len), z = cz + right.z * side * (dock.width / 2 + len) }) do
 			len += 1
 		end
 		len += 4
@@ -260,9 +294,49 @@ local function buildPark(sim)
 		part("Cable", Vector3.new(0.15, 0.15, (b - a).Magnitude), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(30, 30, 34))
 		prev = p
 	end
-	for i, t in sim.cfg.cable.towers do
-		local h = (path.height + 1) * S
-		part(`Tower{i}`, Vector3.new(2, h, 2), CFrame.new(t.x * S, h / 2, t.z * S), COLORS.tower)
+	-- The site's other cable systems (scenery), and every tower: on land, a boom
+	-- out to the wheel where the cable passes (Park/TowerBuilder, layout spec 2).
+	for _, system in site.cables or {} do
+		local same = true
+		for i, t in system.towers do
+			local w = sim.cfg.cable.towers[i]
+			if not w or w.x ~= t.wheel.x or w.z ~= t.wheel.z then
+				same = false
+			end
+		end
+		if not same then
+			local wheels = {}
+			for _, t in system.towers do
+				table.insert(wheels, t.wheel)
+			end
+			local cfg = table.clone(sim.cfg.cable)
+			cfg.mode = system.mode
+			cfg.towers = wheels
+			local other = Sim.Cable.buildCablePath(cfg)
+			local stop = if other.shuttle then other.segments[1].length else other.length
+			local q = Sim.Cable.cablePointAt(other, 0).pos
+			for s2 = step, stop + step, step do
+				local p = Sim.Cable.cablePointAt(other, math.min(s2, stop)).pos
+				local a, b = stud(q), stud(p)
+				part("Cable", Vector3.new(0.15, 0.15, (b - a).Magnitude), CFrame.lookAt((a + b) / 2, b), Color3.fromRGB(30, 30, 34))
+				q = p
+			end
+		end
+	end
+	if site.cables then
+		TowerBuilder.buildSite(site, path.height, function(x, z)
+			for _, island in site.islands do
+				if SiteGeometry.pointInPolygon({ x = x, z = z }, island.outline) then
+					return island.height
+				end
+			end
+			return LAND_Y
+		end)
+	else
+		for i, t in sim.cfg.cable.towers do
+			local h = (path.height + 1) * S
+			part(`Tower{i}`, Vector3.new(2, h, 2), CFrame.new(t.x * S, h / 2, t.z * S), COLORS.tower)
+		end
 	end
 	-- Wake park catalogue features: built and validated by ParkBuilder (from the sim's own ride pieces).
 	ParkBuilder.buildPark(PARK)

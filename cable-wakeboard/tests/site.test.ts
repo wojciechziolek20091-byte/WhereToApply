@@ -14,8 +14,9 @@ import { LAKESIDE_PARK } from '../src/sim/parkLayout';
 import { createSim } from '../src/sim/world';
 
 const site = DEFAULT_PARK.site!;
-const path = buildCablePath(DEFAULT_CONFIG.cable);
-const towers = DEFAULT_CONFIG.cable.towers;
+const cable = { ...DEFAULT_CONFIG.cable, ...DEFAULT_PARK.cable };
+const path = buildCablePath(cable);
+const towers = cable.towers;
 const nearTower = (p: { x: number; z: number }, r: number) => towers.some((t) => Math.hypot(t.x - p.x, t.z - p.z) < r);
 
 describe('default park site', () => {
@@ -32,11 +33,12 @@ describe('default park site', () => {
     }
   });
 
-  it('keeps the island at least 18 m from the cable and inside the lake', () => {
-    const island = site.islands[0]!.outline;
-    for (const p of island) expect(pointInPolygon(p, site.lake)).toBe(true);
-    for (let s = 0; s < path.length; s += 1) {
-      expect(distanceToOutline(cablePointAt(path, s).pos, island)).toBeGreaterThan(18);
+  it('keeps the islands at least 18 m from the cable and inside the lake', () => {
+    for (const { outline: island } of site.islands) {
+      for (const p of island) expect(pointInPolygon(p, site.lake)).toBe(true);
+      for (let s = 0; s < path.length; s += 1) {
+        expect(distanceToOutline(cablePointAt(path, s).pos, island)).toBeGreaterThan(18);
+      }
     }
   });
 
@@ -48,8 +50,10 @@ describe('default park site', () => {
         const p = { x: f.origin.x + fwd.x * featureLength(f.def) * t, z: f.origin.z + fwd.z * featureLength(f.def) * t };
         expect(pointInPolygon(p, site.lake)).toBe(true);
         expect(distanceToOutline(p, site.lake)).toBeGreaterThan(5);
-        expect(pointInPolygon(p, site.islands[0]!.outline)).toBe(false);
-        expect(distanceToOutline(p, site.islands[0]!.outline)).toBeGreaterThan(8);
+        for (const { outline } of site.islands) {
+          expect(pointInPolygon(p, outline)).toBe(false);
+          expect(distanceToOutline(p, outline)).toBeGreaterThan(8);
+        }
       }
     }
   });

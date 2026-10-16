@@ -177,3 +177,84 @@ VisualAudit's `material` check now runs with `FeatureStyle.allowed()`: every
 visible part of both parks uses a palette pair (0 findings).
 
 ![colours](layout/m3-features.jpg)
+
+## Milestone 4: towers on the shore, a new loop, the grown lake
+
+The spec's rules (towers 8 m beyond reachable water, a 10 m swing margin,
+features 12 m from shore, the target layout's 14 features) do not fit the
+sketch lake, so the wake park gets a new loop and a lake grown east and
+north to hold it. The west shore (watch terrace, clubhouse), the south shore
+(beach tents, halls, lodge, parking) and the access road stay where they were;
+the north fields and field road move 65 m north, the small pond 190 m east.
+The sketch, test and catalogue maps keep the old lake and towers
+(`DEFAULT_CONFIG.cable`); the wake and beginner parks carry their own `cable`.
+
+**Loop** (`WAKE_CABLE` in `src/sim/parkLayout.ts`, counter-clockwise, 911.6 m a lap):
+
+| Straight | From tower | Length | Heading |
+|---|---|---|---|
+| S1 | T0 (92, 111) | 164.6 m | north-east |
+| S2 | T1 (221, -13) | 172.1 m | north-west |
+| S3 | T2 (124, -179) | 178.0 m | south-west |
+| S4 | T3 (-56, -100) | 190.2 m | south (west side) |
+| S5 | T4 (-56, 110) | 131.2 m | east (south side), start dock at 98-115 m |
+
+Corners turn 45-89 degrees (cornerRadius 12). The loop came from a search
+over five tower positions for the smallest lake that gives each straight the
+length its target features need (S1 153, S2 163, S3 168, S4 181 m, S5 about
+115 m with the dock; computed from the catalogue's real feature lengths) with
+no corner sharper than 95 degrees.
+
+**Lake** (`shoreFor`): rays from the loop's centre stop at a shore line 28 m
+outside the cable (bowed out up to 3 m between towers) or at a tower's
+headland (a 10.5 m disk round its base), so the outline is star-shaped by
+construction (the land ring and forest need it) and each headland's neck is
+the land behind its head. 84,000 m2, 331 by 347 m (the sketch lake: 166 by 280 m).
+
+**Towers** (`towerSites`, `src/art/tower.ts`, `roblox/src/shared/Park/TowerBuilder.luau`):
+each mast stands on land on its corner's outward bisector, `WAKE_TOWER_ARMS`
+= 30 / 27 / 27 / 28 / 26 m back from the cable corner, and a boom with a tie
+carries the carrier wheel out to where the cable passes (the middle of the
+corner arc). Low-poly grey steel (FeatureStyle `Tower`), a concrete
+foundation (`Foundation`), three guy wires (`GuyWire`) to anchors further
+inland. CanCollide, CanQuery and CanTouch are off; tag `CableTower`. The arms
+are long because riders pass within a few metres of a cable corner (on the
+approach the rider is still on the line when the carrier turns): with 8 m of
+land beyond the water and 10 m of water beyond the rider, the mast has to
+stand about 21 m from the rider's closest pass. They were solved from the
+rider's envelope (no input and weaving edge to edge every 1-3 s, from five
+starts round the loop).
+
+**Beginner line**: its own 150 m 2-tower cable, (22.5, 40) to (97.5, -90),
+in a lagoon 60 m wide inside a ring island (22 m of land) in the middle of the
+loop, 29 m or more from the main cable. Both towers stand on the island,
+24 m beyond the line's ends (the shuttle rider runs nearly to the far tower).
+
+**Lap test** (`scripts/lapTest.ts`, `npx vite-node scripts/probe-lap-shore.ts`,
+checked by `tests/tower.test.ts`): no features, four riders. Closest approach
+to any shore (lake or island) and to a tower base:
+
+```
+Lakeside Wake
+  none         min shore 22.6 m   per tower 22.6 / 22.9 / 23.9 / 22.7 / 23.8   rider to base 33.1 / 33.4 / 34.4 / 33.2 / 34.3
+  weave 1.2 s  min shore 13.7 m   per tower 14.0 / 14.9 / 16.8 / 18.5 / 13.7   rider to base 24.5 / 25.3 / 27.3 / 31.6 / 24.2
+  weave 1.6 s  min shore 11.4 m   per tower 14.0 / 14.3 / 11.4 / 18.0 / 12.7   rider to base 24.5 / 24.8 / 21.9 / 40.2 / 23.2
+  weave 2.4 s  min shore 10.9 m   per tower 10.9 / 11.9 / 11.4 / 17.2 / 12.2   rider to base 21.4 / 22.4 / 21.9 / 27.6 / 22.7
+Beginner line
+  none         min shore 16.9 m   per tower 16.9 / 16.9   rider to base 27.5 / 27.5
+  weave 1.2 s  min shore 10.6 m   per tower 10.6 / 13.2   rider to base 30.2 / 27.4
+  weave 1.6 s  min shore 10.4 m   per tower 10.4 / 16.3   rider to base 30.2 / 28.4
+  weave 2.4 s  min shore 10.7 m   per tower 10.9 / 10.7   rider to base 30.2 / 28.4
+```
+
+No crashes. Every tower base is 10.3 m or more from water (8 m + the
+foundation). Holding one edge for a whole lap (not a riding line) still
+reaches past the margin; that is the rope, not the corner.
+
+The milestone keeps the features spec's lines, moved round with the
+straights (milestone 5 re-lays them). The parity test now runs 20,000 ticks
+(a lap is 110 s).
+
+![top-down](layout/m4-map.jpg)
+![aerial](layout/m4-aerial.jpg)
+![towers](layout/m4-towers.jpg)
