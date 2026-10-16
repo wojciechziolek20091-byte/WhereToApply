@@ -9,6 +9,9 @@
 --   zFight        two visible block faces pointing the same way in the same
 --                 plane (within `PlaneTol` studs) that overlap
 --   waterFight    a visible horizontal face within `PlaneTol` of the water
+--   onRide        a visible face on (or less than `MinDrop` studs under) a
+--                 Ride part's face, pointing the same way (the spec: visuals
+--                 sit 0.02-0.05 studs below the ride surface, never above)
 --   decals        SurfaceGui / Decal / Texture / SurfaceAppearance instances
 --   transparent   a part with 0 < Transparency < 1 overlapping another visible part
 --   duplicate     two parts with the same class, size and CFrame
@@ -19,6 +22,7 @@
 local VisualAudit = {}
 
 local PlaneTol = 0.01
+local MinDrop = 0.02
 local TinySize = 0.25
 local StrayDistance = 40 * 3.57
 
@@ -153,10 +157,13 @@ function VisualAudit.scan(folder: Instance, opts: Options?): Report
 				end
 			end
 		end
-		-- Duplicates.
+		-- Duplicates: same geometry in the same folder, or two visible parts.
+		-- (A Ride part and its Visual share geometry by design; the Visual is
+		-- sunk below it, and the zFight check covers visible pairs.)
 		local seen: { [string]: string } = {}
 		for _, p in parts do
-			local k = key(p)
+			local folderName = if p.Parent then p.Parent.Name else "?"
+			local k = (if visible(p) then "visible" else folderName) .. "|" .. key(p)
 			if seen[k] then
 				add("duplicate", fid, p.Name, "same as " .. seen[k])
 			else
@@ -213,6 +220,33 @@ function VisualAudit.scan(folder: Instance, opts: Options?): Report
 				end
 			end
 		end
+		-- Visuals on a ride surface: every Ride block's faces against the visible blocks'.
+		for _, rp in parts do
+			local folder = rp.Parent
+			if not (folder and folder.Name == "Ride" and isBlock(rp)) then
+				continue
+			end
+			-- The ride surface is the top face (faces() order: +X, -X, +Y, ...).
+			do
+				local rf = faces(rp)[3]
+				for _, V in blockFaces do
+					if not boxesOverlap(rp, V.p) and (rp.CFrame.Position - V.p.CFrame.Position).Magnitude > (rp.Size.Magnitude + V.p.Size.Magnitude) / 2 then
+						continue
+					end
+					local hit = false
+					for _, g in V.f do
+						-- g's plane is above rf's minus MinDrop: on it or above it.
+						if rf.n:Dot(g.n) > 0.999 and g.d > rf.d - MinDrop and g.d < rf.d + MinDrop and rectsOverlap(rf, g) then
+							hit = true
+							break
+						end
+					end
+					if hit then
+						add("onRide", fid, V.p.Name, "on " .. rp.Name)
+					end
+				end
+			end
+		end
 		-- Transparency layering.
 		for _, p in vis do
 			if transparency(p) > 0 then
@@ -228,7 +262,7 @@ function VisualAudit.scan(folder: Instance, opts: Options?): Report
 	return report
 end
 
-local ORDER = { "zFight", "waterFight", "decals", "transparent", "duplicate", "stray", "brokenAsset", "tiny", "material" }
+local ORDER = { "zFight", "waterFight", "onRide", "decals", "transparent", "duplicate", "stray", "brokenAsset", "tiny", "material" }
 
 -- Print the counts, then the first `limit` findings of each check.
 function VisualAudit.print(r: Report, limit: number?)

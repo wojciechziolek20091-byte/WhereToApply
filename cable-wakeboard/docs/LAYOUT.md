@@ -111,3 +111,42 @@ Resolution (milestone 4): a new 5-tower loop with straights of about
 115-165 m (about 815 m a lap), the lake grown east and north to hold it with
 the towers on shore pads, the island kept in the middle out of the swing
 zone, and a separate beginner lagoon east of the lake.
+
+## Milestone 2: clean-up
+
+FeatureBuilder changes (`roblox/src/shared/Park/FeatureBuilder.luau`):
+
+- Removed: the SurfaceGui decals (park wordmark and line tags), chevrons, dot
+  rows, difficulty stripes, wear strips, foam strips, wet bands, the algae
+  tint under the water, bolt heads, and the corner buoys on every feature
+  (buoys move to BuoyLayout in milestone 6). The anchor chains stay.
+- Every visual surface that shows a ride surface (top sheets, the pipe, the
+  coping, the wall face, the pyramid's faces) is sunk `FeatureConfig.VisualDrop`
+  = 0.03 studs below it along its normal; never on or above it.
+- Joints: consecutive stretches overlap at a kink, so every other stretch is
+  5 mm narrower each side and no two share a side face. Side panels sit
+  2.5-3.5 cm inside the top sheet's edge, frame legs and braces further in.
+- Kicker skirts tile the area under the curve (an upright column and a wedge
+  per segment) instead of overlapping slabs.
+- The spine's landing slope shares the launch ramp's back wall (there were two
+  in the same place); the rail web stops 1 cm short of the top sheet's ends;
+  the pyramid's sheets are built in order so the narrow/wide alternation
+  holds; the sign's difficulty band is inset from the board's edges.
+
+Web renderer: the 20 random dome buoys, the 10 markers on the cable line and
+the rock mounds at the tower bases are gone.
+
+VisualAudit now also checks `onRide` (a visible face on, or less than 0.02
+studs under, a ride surface, pointing the same way); with `VisualDrop` set to
+0 it finds 62 + 15, so the check works. After the clean-up:
+
+| Check | Wake park | Beginner |
+|---|---|---|
+| Parts | 915 → 540 | 227 → 118 |
+| zFight / onRide / decals / transparent / duplicate / stray / brokenAsset / tiny | all 0 | all 0 |
+
+`tests/featureModel.test.ts` now fails on any finding. The ride test (every
+feature ridden with the Luau sim) and the validator pass unchanged: the ride
+data was not touched.
+
+![after the clean-up](layout/m2-features.jpg)

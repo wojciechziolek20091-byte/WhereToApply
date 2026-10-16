@@ -600,7 +600,6 @@ export class BabylonRenderer {
         for (let y = 0; y + 2 < h; y += 2.5) hulls.push(beamHull(at(k, y), at(k + 1, y + 2.5), 0.05, look.tower));
       }
       hulls.push(boxHull([t.x, h + 0.2, t.z], [1.4, 0.16, 0.3], look.towerTop));
-      hulls.push(rockHull([t.x, 0, t.z], [2.4, 0.6, 2.4], look.rock(0.4)));
     }
     for (const f of sim.features) hulls.push(...this.featureHulls(f));
     // Catalogue features: the Roblox FeatureBuilder's parts (src/art/featureArt.ts).
@@ -612,30 +611,11 @@ export class BabylonRenderer {
       this.shadows.addShadowCaster(mesh);
     }
 
-    // Buoys: white domes with a short mast around the course, wherever there is open water.
-    const site = this.site;
-    const open = (x: number, z: number) =>
-      pointInPolygon({ x, z }, site.lake) &&
-      distanceToOutline({ x, z }, site.lake) > 4 &&
-      site.islands.every((i) => !pointInPolygon({ x, z }, i.outline) && distanceToOutline({ x, z }, i.outline) > 4) &&
-      sim.features.every((f) => Math.hypot(f.origin.x - x, f.origin.z - z) > 14);
-    for (const b of site.buoys) {
+    // Buoys: the site's (layout spec section 5). The random domes round the
+    // course and the markers on the cable line are gone (milestone 2 clean-up).
+    for (const b of this.site.buoys) {
       hulls.push(rockHull([b.x, 0, b.z], [1.6, 0.9, 1.6], look.towerTop));
       hulls.push(boxHull([b.x, 0.8, b.z], [0.05, 0.5, 0.05], look.buoy));
-    }
-    const rng = createRng(5);
-    for (let i = 0; i < 20; i++) {
-      const p = cablePointAt(path, (i / 20) * path.length + 20);
-      const off = (i % 2 === 0 ? nextRange(rng, 14, 18) : -nextRange(rng, 8, 10));
-      const x = p.pos.x - Math.sin(p.heading) * off;
-      const z = p.pos.z + Math.cos(p.heading) * off;
-      if (!open(x, z)) continue;
-      hulls.push(rockHull([x, 0, z], [1.5, 0.75, 1.5], look.buoy));
-      hulls.push(boxHull([x, 0.6, z], [0.05, 0.4, 0.05], look.buoy));
-    }
-    for (let i = 0; i < 10; i++) {
-      const p = cablePointAt(path, (i / 10) * path.length + 45);
-      hulls.push(rockHull([p.pos.x, 0, p.pos.z], [0.5, 0.45, 0.5], i % 2 === 0 ? [0.85, 0.15, 0.15] : [0.12, 0.2, 0.6]));
     }
     const park = meshFromData('park', buildHullMesh(hulls), this.scene, this.flat);
     park.receiveShadows = true;

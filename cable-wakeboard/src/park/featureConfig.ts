@@ -65,9 +65,6 @@ export const FEATURE_CONFIG = {
     Chain: [70, 72, 76] as RGB,
     BuoyOrange: [244, 112, 28] as RGB,
     BuoyWhite: [244, 244, 240] as RGB,
-    WetBand: [40, 52, 58] as RGB,
-    Algae: [64, 96, 70] as RGB,
-    Foam: [250, 252, 252] as RGB,
     Wall: [236, 238, 240] as RGB,
     Sign: [250, 250, 246] as RGB,
     Dock: [150, 112, 74] as RGB,
@@ -95,31 +92,16 @@ export const FEATURE_CONFIG = {
   CopingRadius: 0.04,
   /** Visual top sheet thickness (m): the ride surface is its top face. */
   TopSheet: 0.05,
-  /** Bolt rows along the coping: spacing (m). */
-  BoltSpacing: 0.6,
+  /**
+   * Layout spec section 3: visual surfaces sit this far (studs) below the
+   * ride surface they show, never on or above it, so they never z-fight.
+   */
+  VisualDrop: 0.03,
   /** Ride sub-segments per kicker transition (validator: at least 6). */
   KickerSubsegments: 10,
 
-  /**
-   * Original park graphics (spec 7): fictional branding only. Four designs:
-   * the park wordmark and the line tag (text, Roblox SurfaceGuis), chevrons
-   * and a dot row (simple shapes, parts).
-   */
-  Decals: {
-    ParkName: 'LAKESIDE WAKE',
-    Tagline: 'CABLE PARK',
-    Designs: ['Wordmark', 'LineTag', 'Chevrons', 'Dots'],
-    Font: 'GothamBlack',
-  },
   /** Anchor chains (m): how far out from the corners they reach the water, and their thickness. */
   Chain: { Reach: 1.4, Thickness: 0.05 },
-  /** Corner buoys (m). */
-  BuoyRadius: 0.22,
-  /** Wet band height at the waterline (m) and foam strip width (m). */
-  WetBand: 0.12,
-  Foam: 0.35,
-  /** Bolt heads per side of a stretch at most (part budget). */
-  MaxBoltsPerSide: 12,
 
   /** Floating features bob (spec 7). Only the Visual folder moves, and never near a rider. */
   Bob: { Amplitude: 0.03, Frequency: 0.2, FreezeRadius: 6 },
