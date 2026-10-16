@@ -16,6 +16,7 @@ import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import { CreateLines, CreateLineSystem } from '@babylonjs/core/Meshes/Builders/linesBuilder';
 import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
+import { CreateTorus } from '@babylonjs/core/Meshes/Builders/torusBuilder';
 import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
@@ -302,6 +303,8 @@ export class BabylonRenderer {
   debugCam: 'front' | 'back' | 'side' | 'aerial' | 'map' | null = null;
   /** Feature captures (features spec): look at a feature by id from an angle. */
   featureCam: { id: string; angle: 'approach' | 'side' | 'rear' | 'top' | 'low'; dist?: number } | null = null;
+  /** Buoy meshes and their rest height and bob phase. */
+  private buoyMeshes: { mesh: Mesh; y: number; phase: number }[] = [];
   /** Capture camera at a point looking at another (sim metres), e.g. a tower close-up. */
   pointCam: { from: [number, number, number]; to: [number, number, number] } | null = null;
 
@@ -640,11 +643,35 @@ export class BabylonRenderer {
       this.shadows.addShadowCaster(mesh);
     }
 
-    // Buoys: the site's (layout spec section 5). The random domes round the
-    // course and the markers on the cable line are gone (milestone 2 clean-up).
-    for (const b of this.site.buoys) {
-      hulls.push(rockHull([b.x, 0, b.z], [1.6, 0.9, 1.6], look.towerTop));
-      hulls.push(boxHull([b.x, 0.8, b.z], [0.05, 0.5, 0.05], look.buoy));
+    // Buoys (layout spec section 5): round balls from the site's BuoyLayout,
+    // 40 % under the water, a dark band (the anchor line is under the water,
+    // drawn in Roblox only); they bob in render().
+    const B = FEATURE_CONFIG.Buoy;
+    // Smooth spheres (Babylon's own, shaded smooth) and a thin torus for the band.
+    const mats = new Map<string, StandardMaterial>();
+    const matFor = (role: string) => {
+      let m = mats.get(role);
+      if (!m) {
+        m = new StandardMaterial(`buoy-${role}`, this.scene);
+        m.diffuseColor = new Color3(...style(role));
+        m.specularColor = new Color3(0.25, 0.25, 0.25);
+        m.ambientColor = new Color3(0.3, 0.3, 0.35);
+        mats.set(role, m);
+      }
+      return m;
+    };
+    const buoyDefs = this.site.buoyLayout ?? this.site.buoys.map((p, i) => ({ id: `Buoy_${i + 1}`, kind: 'Boundary' as const, x: p.x, z: p.z, diameter: 1.2, marks: '' }));
+    for (const b of buoyDefs) {
+      const y = b.diameter * (0.5 - B.Submerged);
+      const mesh = CreateSphere(b.id, { diameter: b.diameter, segments: 12 }, this.scene);
+      mesh.material = matFor(b.kind === 'Lane' ? 'BuoyLane' : 'BuoyBoundary');
+      const band = CreateTorus(`${b.id}-band`, { diameter: b.diameter * 1.0, thickness: b.diameter * B.Band, tessellation: 32 }, this.scene);
+      band.material = matFor('BuoyBand');
+      band.parent = mesh;
+      mesh.position.set(b.x, y, b.z);
+      let h = 0;
+      for (let i = 0; i < b.id.length; i++) h = (h * 31 + b.id.charCodeAt(i)) % 100003;
+      this.buoyMeshes.push({ mesh, y, phase: (h / 100003) * Math.PI * 2 });
     }
     const park = meshFromData('park', buildHullMesh(hulls), this.scene, this.flat);
     park.receiveShadows = true;
@@ -905,6 +932,11 @@ export class BabylonRenderer {
     // Keep the shadow camera on the rider.
     this.sun.position = v3(riderPos).add(new Vector3(...this.look.sunDirection).normalize().scale(40));
 
+    {
+      const B = FEATURE_CONFIG.Buoy;
+      const t = performance.now() / 1000;
+      for (const b of this.buoyMeshes) b.mesh.position.y = b.y + B.BobAmplitude * Math.sin(2 * Math.PI * B.BobFrequency * t + b.phase);
+    }
     if (this.pointCam) {
       this.camera.position.set(...this.pointCam.from);
       this.camera.setTarget(new Vector3(...this.pointCam.to));

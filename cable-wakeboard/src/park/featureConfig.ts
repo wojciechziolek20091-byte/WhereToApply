@@ -108,6 +108,12 @@ export const FEATURE_CONFIG = {
   /** Anchor chains (m): how far out from the corners they reach the water, and their thickness. */
   Chain: { Reach: 1.4, Thickness: 0.05 },
 
+  /**
+   * Buoys (layout spec section 5): 40 % of the ball under the water, a dark
+   * band round the middle, an anchor line straight down; bob +-5 cm at
+   * 0.25 Hz with a random phase per buoy; riding through one splashes.
+   */
+  Buoy: { Submerged: 0.4, Band: 0.05, AnchorLength: 1.5, AnchorRadius: 0.02, BobAmplitude: 0.05, BobFrequency: 0.25, SplashRadius: 0.4, SplashCooldown: 1.0, Tag: 'Buoy' },
   /** Floating features bob (spec 7). Only the Visual folder moves, and never near a rider. */
   Bob: { Amplitude: 0.03, Frequency: 0.2, FreezeRadius: 6 },
 

@@ -18,7 +18,9 @@ export type Check = { rule: string, pass: boolean, detail: string }
 export type Report = { id: string, ok: boolean, checks: { Check }, parts: number }
 
 -- A footprint on the water (metres): a centre line from a to b with a half width.
-export type Footprint = { name: string, a: Vector2, b: Vector2, half: number }
+-- `clearance` (m): how far it must stay from the approach line, when not
+-- `ApproachClearance` (buoys: the layout spec's 6 m).
+export type Footprint = { name: string, a: Vector2, b: Vector2, half: number, clearance: number? }
 
 export type Options = {
 	-- Sim cable path (Sim.Cable.buildCablePath), for the reach rule.
@@ -284,7 +286,7 @@ function FeatureValidator.validate(model: Model, opts: Options?): Report
 			end
 			-- Nothing within 8 m of the approach line; nothing in the 12 m after the exit
 			-- (a corridor `ExitCorridor` m either side of the line out).
-			if da < V.ApproachClearance or de < V.ExitCorridor then
+			if da < (f.clearance or V.ApproachClearance) or de < V.ExitCorridor then
 				table.insert(blockers, string.format("%s (%.1f m from the approach, %.1f m from the exit)", f.name, da, de))
 			end
 		end

@@ -22,6 +22,9 @@ export interface LapResult {
   /** Closest to each tower's base (m). */
   perBase: number[];
   crashes: number;
+  /** Closest to a boundary buoy, and to a lane marker (riders ride between those), m. */
+  boundaryBuoy: number;
+  laneBuoy: number;
 }
 
 export { shoreDistance };
@@ -32,7 +35,8 @@ export function lapTest(park: ParkDef, seconds = 240): LapResult[] {
   const towers = system?.towers ?? cable.towers.map((w) => ({ wheel: w, base: w, out: { x: 0, z: 0 }, arm: 0 }));
   return LAP_POLICIES.map((policy) => {
     const run = createRun(DEFAULT_CONFIG, { name: 'lap test', features: [], startS: park.startS, cable: park.cable, site: park.site });
-    const res: LapResult = { policy, minShore: Infinity, perTower: towers.map(() => Infinity), perBase: towers.map(() => Infinity), crashes: 0 };
+    const res: LapResult = { policy, minShore: Infinity, perTower: towers.map(() => Infinity), perBase: towers.map(() => Infinity), crashes: 0, boundaryBuoy: Infinity, laneBuoy: Infinity };
+    const buoys = park.site!.buoyLayout ?? [];
     const period = policy === 'none' ? 0 : Number(policy.split(' ')[1]);
     for (let i = 0; i < 60 * seconds && !run.finished; i++) {
       const inp = neutralInput();
@@ -42,6 +46,11 @@ export function lapTest(park: ParkDef, seconds = 240): LapResult[] {
       const r = run.sim.rider.pos;
       const d = shoreDistance(park, r);
       res.minShore = Math.min(res.minShore, d);
+      for (const b of buoys) {
+        const d = Math.hypot(b.x - r.x, b.z - r.z) - b.diameter / 2;
+        if (b.kind === 'Lane') res.laneBuoy = Math.min(res.laneBuoy, d);
+        else res.boundaryBuoy = Math.min(res.boundaryBuoy, d);
+      }
       towers.forEach((t, k) => {
         if (Math.hypot(t.wheel.x - r.x, t.wheel.z - r.z) < 70) res.perTower[k] = Math.min(res.perTower[k]!, d);
         res.perBase[k] = Math.min(res.perBase[k]!, Math.hypot(t.base.x - r.x, t.base.z - r.z));

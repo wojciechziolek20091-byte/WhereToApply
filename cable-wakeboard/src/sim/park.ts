@@ -117,8 +117,10 @@ export interface SiteDef {
   buildings: BuildingDef[];
   areas: AreaDef[];
   roads: RoadDef[];
-  /** Marker buoys drawn on the water. */
+  /** Buoy positions (the sim's and validators' view of `buoyLayout`). */
   buoys: GroundPoint[];
+  /** The buoys in full (layout spec section 5): kind, diameter, what each marks. */
+  buoyLayout?: { id: string; kind: 'Boundary' | 'Lane'; x: number; z: number; diameter: number; marks: string }[];
   /**
    * The cable systems standing on the site (layout spec section 2), drawn by
    * the renderers whichever park is ridden: each tower's wheel (the cable

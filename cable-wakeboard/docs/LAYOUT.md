@@ -378,3 +378,41 @@ Ride test (`FeatureRideTest`, the Luau sim, every feature as placed):
 | B_Slider | Ollie on from the water | PASS | from v=-3.0 m, pop -1.3 m along the main (110 tries) |
 
 ![top-down, feature IDs](layout/m5-map-labelled.jpg)
+
+## Milestone 6: buoys (BuoyLayout)
+
+All earlier buoys are gone: the sketch site's single marker, the features
+spec's line markers, FeatureBuilder's corner buoys (milestone 2) and the web
+renderer's domes. Buoys now come from `buoyLayout()` in
+`src/sim/parkLayout.ts`, stored on the site as `site.buoyLayout`
+(`{ id, kind, x, z, diameter, marks }`; `site.buoys` keeps the positions for
+the validators):
+
+| What | Kind | Size | Count (wake / beginner site) |
+|---|---|---|---|
+| Ring over the water round each tower headland, 15 m from the mast (18 m on the 2-tower line), 7 evenly over the water arc facing the cable | Boundary (orange 255,120,20) | 1.2 m | 5 x 7 + 2 x 7 |
+| Lane either side of the line out of the start dock, 3.5 m off it, every 8 m for 40 m | Lane (white) | 0.8 m | 10 / 10 |
+| Shore hazards every 27 m: the ring island (5 m off), the lagoon shore (4 m in), the watch terrace (8 m off) | Boundary | 1.2 m | 8 + 16 + 9 |
+
+92 buoys on each site. Every one is in open water, never inside a feature's
+approach or run-out zone and never within 6 m of a feature (LayoutValidator's
+Buoys, Run-out clear and Approach clear rows all pass: wake park 173, beginner
+24, no failures).
+
+**Roblox** (`roblox/src/shared/Park/Buoys.luau`): a Ball part 40 % under the
+water (centre 0.1 x diameter above it), a thin dark band (a cylinder 2 %
+wider than the ball, 5 % of its height) and an anchor line 1.5 m straight
+down; SmoothPlastic, reflectance 0.1 (FeatureStyle `BuoyBoundary` /
+`BuoyLane` / `BuoyBand` / `AnchorLine`). CanCollide, CanQuery, CanTouch off;
+tag `Buoy`. `Buoys.step(t, riderPos)` (one call per frame from WakeClient)
+bobs every buoy +-5 cm at 0.25 Hz with a phase from its id, and splashes a
+buoy the rider goes through (no crash: the sim never sees buoys).
+FeatureValidator's placement check takes buoys as 6 m obstacles (3 m for the
+lane markers, which flank the line by design).
+
+**Web**: smooth spheres with a torus band, bobbing the same way.
+
+Lap test (no features): riders come no closer than 5.8 m to a boundary buoy;
+they ride between the lane markers (and through one when weaving: a splash).
+
+![buoys](layout/m6-buoys.jpg)

@@ -4,6 +4,6 @@ import { lapTest } from './lapTest';
 for (const park of [WAKE_PARK, BEGINNER_PARK]) {
   console.log(park.name);
   for (const r of lapTest(park)) {
-    console.log(`  ${r.policy.padEnd(12)} min shore ${r.minShore.toFixed(1)} m   per tower ${r.perTower.map((d) => d.toFixed(1)).join(' / ')}   rider to base ${r.perBase.map((d) => d.toFixed(1)).join(' / ')}   crashes ${r.crashes}`);
+    console.log(`  ${r.policy.padEnd(12)} min shore ${r.minShore.toFixed(1)} m   per tower ${r.perTower.map((d) => d.toFixed(1)).join(' / ')}   rider to base ${r.perBase.map((d) => d.toFixed(1)).join(' / ')}   boundary buoy ${r.boundaryBuoy.toFixed(1)} m   lane marker ${r.laneBuoy.toFixed(1)} m   crashes ${r.crashes}`);
   }
 }

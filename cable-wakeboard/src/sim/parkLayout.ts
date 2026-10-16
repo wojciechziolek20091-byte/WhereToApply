@@ -29,7 +29,7 @@
  * (`cable.towers`).
  */
 import type { CatalogFeatureDef, ParkDef, SiteDef } from './park';
-import { buildCablePath } from './cable';
+import { buildCablePath, cablePointAt } from './cable';
 import { type CableConfig, DEFAULT_CONFIG } from './config';
 import { FEATURE_CATALOG } from './featureCatalog';
 import { buildShape } from './featureShapes';
@@ -777,3 +777,225 @@ export const BEGINNER_PARK: ParkDef = {
     buoys: [],
   },
 };
+
+/** A buoy (layout spec section 5): a round float at (x, z), `diameter` m. */
+export interface BuoyDef {
+  id: string;
+  /** Boundary / no-go (orange, 1.2 m) or a start lane marker (white, 0.8 m). */
+  kind: 'Boundary' | 'Lane';
+  x: number;
+  z: number;
+  diameter: number;
+  /** What it marks: a tower zone, a dock lane, a shore hazard. */
+  marks: string;
+}
+
+/** BuoyLayout rules (m). */
+export const BUOY_RULES = {
+  boundary: 1.2,
+  marker: 0.8,
+  /** Ring round each tower headland: this far from the mast base, 7 buoys over the water arc. */
+  towerRing: 15,
+  towerCount: 7,
+  /** Start lane: either side of the line out of each dock, every 8 m for 40 m. */
+  laneStep: 8,
+  laneLength: 40,
+  laneHalfWidth: 3.5,
+  /** Shore hazards (the island and the lagoon, the watch terrace): every 27 m, this far off the shore. */
+  shoreStep: 27,
+  islandOff: 5,
+  lagoonOff: 4,
+  terraceOff: 8,
+  /** Clear of the shore by at least this much (m). */
+  minShore: 2,
+};
+
+type Quad = GroundPoint[];
+const inPoly = (p: GroundPoint, poly: readonly GroundPoint[]): boolean => {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i]!;
+    const b = poly[j]!;
+    if (a.z > p.z !== b.z > p.z && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) c = !c;
+  }
+  return c;
+};
+const segDist = (p: GroundPoint, a: GroundPoint, b: GroundPoint): number => {
+  const dx = b.x - a.x;
+  const dz = b.z - a.z;
+  const l2 = dx * dx + dz * dz;
+  const t = l2 > 0 ? Math.min(Math.max(((p.x - a.x) * dx + (p.z - a.z) * dz) / l2, 0), 1) : 0;
+  const x = a.x + dx * t - p.x;
+  const z = a.z + dz * t - p.z;
+  return Math.sqrt(x * x + z * z);
+};
+const outline = (p: GroundPoint, poly: readonly GroundPoint[]): number => {
+  let d = Infinity;
+  for (let i = 0; i < poly.length; i++) d = Math.min(d, segDist(p, poly[i]!, poly[(i + 1) % poly.length]!));
+  return d;
+};
+
+/** Footprints and approach / run-out zones of a park's features (as LayoutValidator draws them). */
+function featureZones(features: CatalogFeatureDef[], cable: CableConfig): { foot: Quad; zones: Quad[] }[] {
+  const path = buildCablePath(cable);
+  return features.map((d) => {
+    const p = cablePointAt(path, d.s);
+    const sh = buildShape(d.catalog, d.params, d.side ?? 1);
+    const h = p.heading + (d.yaw ?? 0);
+    const ox = p.pos.x - sin(p.heading) * d.offset;
+    const oz = p.pos.z + cos(p.heading) * d.offset;
+    const fx = cos(h);
+    const fz = sin(h);
+    const at = (u: number, v: number): GroundPoint => ({ x: ox + fx * u - fz * v, z: oz + fz * u + fx * v });
+    const ro = FEATURE_CATALOG[d.catalog]!.meta.tag === 'Kicker' ? LAYOUT_RULES.runOut.Kicker : LAYOUT_RULES.runOut.Other;
+    const a = LAYOUT_RULES.approach;
+    return {
+      foot: [at(sh.uMin, sh.vMin), at(sh.uMax, sh.vMin), at(sh.uMax, sh.vMax), at(sh.uMin, sh.vMax)],
+      zones: [
+        [at(sh.uMin - a, sh.vMin - 1), at(sh.uMin, sh.vMin - 1), at(sh.uMin, sh.vMax + 1), at(sh.uMin - a, sh.vMax + 1)],
+        [at(sh.uMax, sh.vMin - 1), at(sh.uMax + ro, sh.vMin - 1), at(sh.uMax + ro, sh.vMax + 1), at(sh.uMax, sh.vMax + 1)],
+      ],
+    };
+  });
+}
+
+/** Points every `step` m along a closed outline, pushed `off` m along the outward (+) or inward (-) normal. */
+function along(poly: readonly GroundPoint[], step: number, off: number): GroundPoint[] {
+  const out: GroundPoint[] = [];
+  const sign = (() => {
+    let a = 0;
+    for (let i = 0; i < poly.length; i++) a += poly[i]!.x * poly[(i + 1) % poly.length]!.z - poly[(i + 1) % poly.length]!.x * poly[i]!.z;
+    return a > 0 ? 1 : -1;
+  })();
+  let carry = step / 2;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const len = Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+    if (len < 1e-9) continue;
+    // Outward normal for this winding.
+    const nx = (sign * (b.z - a.z)) / len;
+    const nz = (sign * -(b.x - a.x)) / len;
+    let t = carry;
+    while (t <= len) {
+      out.push({ x: a.x + ((b.x - a.x) * t) / len + nx * off, z: a.z + ((b.z - a.z) * t) / len + nz * off });
+      t += step;
+    }
+    carry = t - len;
+  }
+  return out;
+}
+
+/**
+ * BuoyLayout (layout spec section 5) for a site and the parks ridden on it:
+ * orange rings over the water round every tower headland, a white lane either
+ * side of the line out of each start dock, orange markers off the shore
+ * hazards. Every buoy is in open water, never in an approach or run-out zone
+ * and never within 6 m of a feature.
+ */
+export function buoyLayout(site: SiteDef, parks: { features: CatalogFeatureDef[]; cable: CableConfig; docks: SiteDef['docks'] }[], hazards: { name: string; outline: GroundPoint[]; off: number }[], rules = BUOY_RULES): BuoyDef[] {
+  const zones = parks.flatMap((p) => featureZones(p.features, p.cable));
+  const shore = (p: GroundPoint): number => {
+    let d = inPoly(p, site.lake) ? outline(p, site.lake) : -1;
+    for (const i of site.islands) if (inPoly(p, i.outline) || outline(p, i.outline) < rules.minShore) d = -1;
+    return d;
+  };
+  const ok = (p: GroundPoint, diameter: number): boolean =>
+    shore(p) >= rules.minShore + diameter / 2 &&
+    zones.every((z) => z.zones.every((q) => !inPoly(p, q)) && !inPoly(p, z.foot) && Math.min(...z.foot.map((_, i) => segDist(p, z.foot[i]!, z.foot[(i + 1) % 4]!))) >= LAYOUT_RULES.buoyClear);
+  const out: BuoyDef[] = [];
+  const push = (kind: BuoyDef['kind'], p: GroundPoint, marks: string) => {
+    const diameter = kind === 'Lane' ? rules.marker : rules.boundary;
+    if (!ok(p, diameter)) return;
+    out.push({ id: `${kind === 'Lane' ? 'Lane' : 'Buoy'}_${out.length + 1}`, kind, x: r1(p.x), z: r1(p.z), diameter, marks });
+  };
+  // Tower zones: the water arc round each base, 7 buoys spread over it.
+  for (const system of site.cables ?? []) {
+    // A 2-tower line's towers stand at a lagoon's tip: a wider ring there.
+    const ring = system.mode === 'twoTower' ? rules.towerRing + 3 : rules.towerRing;
+    system.towers.forEach((t, k) => {
+      const wet: number[] = [];
+      for (let deg = 0; deg < 360; deg += 2) {
+        const a = (deg * Math.PI) / 180;
+        if (shore({ x: t.base.x + cos(a) * ring, z: t.base.z + sin(a) * ring }) >= rules.minShore + rules.boundary / 2) wet.push(deg);
+      }
+      if (!wet.length) return;
+      // The run of wet angles (wrapping round) facing the cable: it holds the inward direction, or is the longest.
+      const isWet = new Set(wet);
+      const inward = ((Math.round((atan2(-t.out.z, -t.out.x) * 180) / Math.PI / 2) * 2) % 360 + 360) % 360;
+      let best = { start: 0, len: 0, facing: false };
+      for (const s0 of wet) {
+        if (isWet.has((s0 + 358) % 360) && wet.length < 180) continue;
+        let len = 0;
+        while (isWet.has((s0 + len * 2) % 360) && len < 180) len++;
+        const facing = ((inward - s0 + 360) % 360) < len * 2;
+        if ((facing && !best.facing) || (facing === best.facing && len > best.len)) best = { start: s0, len, facing };
+      }
+      const n = rules.towerCount;
+      for (let i = 0; i < n; i++) {
+        const deg = best.start + ((i + 0.5) / n) * (best.len - 1) * 2;
+        const a = (deg * Math.PI) / 180;
+        push('Boundary', { x: t.base.x + cos(a) * ring, z: t.base.z + sin(a) * ring }, `${system.name} tower ${k + 1}`);
+      }
+    });
+  }
+  // Start lanes.
+  for (const p of parks) {
+    const path = buildCablePath(p.cable);
+    for (const d of p.docks) {
+      for (let s = rules.laneStep; s <= rules.laneLength + 1e-9; s += rules.laneStep) {
+        const c = cablePointAt(path, d.s + d.length + s);
+        for (const side of [-1, 1]) {
+          const off = side * rules.laneHalfWidth;
+          push('Lane', { x: c.pos.x - sin(c.heading) * off, z: c.pos.z + cos(c.heading) * off }, `${d.name} lane`);
+        }
+      }
+    }
+  }
+  // Shore hazards.
+  for (const h of hazards) for (const p of along(h.outline, rules.shoreStep, h.off)) push('Boundary', p, h.name);
+  return out;
+}
+
+/**
+ * The site's buoys (layout spec section 5): computed once both parks exist.
+ * The wake park's site has its own dock lane; the beginner line's has its own.
+ */
+{
+  const outer = lagoonIsland(beginnerCable, 30 + 22, 0, SHORE_RULES, BEGINNER_TOWER_ARMS).lagoon;
+  const terrace = (() => {
+    const zs: GroundPoint[] = [];
+    for (let z = -50; z <= 75; z += 1) zs.push({ x: westShoreAt(WAKE_LAKE, z), z });
+    return zs;
+  })();
+  const hazards = [
+    { name: 'Island', outline: outer, off: BUOY_RULES.islandOff },
+    { name: 'Lagoon shore', outline: BEGINNER_LAGOON.lagoon, off: -BUOY_RULES.lagoonOff },
+  ];
+  const both = [
+    { features: WAKE_PARK.features as CatalogFeatureDef[], cable: wakeCable, docks: [] as SiteDef['docks'] },
+    { features: BEGINNER_PARK.features as CatalogFeatureDef[], cable: beginnerCable, docks: [] as SiteDef['docks'] },
+  ];
+  // The watch terrace's shore: a line of markers 8 m out (an open polyline, walked as a thin loop).
+  const terraceLine = [...terrace, ...[...terrace].reverse()];
+  const terraceHazard = { name: 'Watch terrace shore', outline: terraceLine, off: 0 };
+  const shifted = { ...terraceHazard, outline: terraceLine.map((p) => ({ x: p.x + BUOY_RULES.terraceOff, z: p.z })) };
+  const common = buoyLayout(WAKE_SITE, both, [...hazards, shifted]);
+  // De-duplicate the terrace line (walked both ways).
+  const seen = new Set<string>();
+  const shared = common.filter((b) => {
+    if (b.marks !== terraceHazard.name) return true;
+    const k = `${Math.round(b.x / 4)},${Math.round(b.z / 4)}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  const lanes = (i: number, docks: SiteDef['docks']) =>
+    buoyLayout({ ...WAKE_SITE, cables: [] }, both.map((p, j) => (j === i ? { ...p, docks } : p)), []);
+  const wakeBuoys = [...shared, ...lanes(0, WAKE_SITE.docks)].map((b, i) => ({ ...b, id: `${b.kind === 'Lane' ? 'Lane' : 'Buoy'}_${i + 1}` }));
+  const beginnerBuoys = [...shared, ...lanes(1, BEGINNER_PARK.site!.docks)].map((b, i) => ({ ...b, id: `${b.kind === 'Lane' ? 'Lane' : 'Buoy'}_${i + 1}` }));
+  WAKE_SITE.buoyLayout = wakeBuoys;
+  WAKE_SITE.buoys = wakeBuoys.map((b) => ({ x: b.x, z: b.z }));
+  BEGINNER_PARK.site!.buoyLayout = beginnerBuoys;
+  BEGINNER_PARK.site!.buoys = beginnerBuoys.map((b) => ({ x: b.x, z: b.z }));
+}

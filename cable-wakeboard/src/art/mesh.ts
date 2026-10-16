@@ -288,4 +288,27 @@ export function rockHull(centre: V3, size: V3, color: readonly [number, number, 
   };
 }
 
+/**
+ * A round ball (latitude / longitude, `rings` bands, `segments` round): the
+ * buoys' shape (layout spec section 5), smooth enough to read as a sphere.
+ */
+export function sphereHull(centre: V3, radius: number, color: readonly [number, number, number], rings = 7, segments = 12): HullPart {
+  const verts: V3[] = [[centre[0], centre[1] + radius, centre[2]]];
+  for (let i = 1; i < rings; i++) {
+    const phi = (Math.PI * i) / rings;
+    for (let j = 0; j < segments; j++) {
+      const th = (2 * Math.PI * j) / segments;
+      verts.push([centre[0] + radius * Math.sin(phi) * Math.cos(th), centre[1] + radius * Math.cos(phi), centre[2] + radius * Math.sin(phi) * Math.sin(th)]);
+    }
+  }
+  verts.push([centre[0], centre[1] - radius, centre[2]]);
+  const bottom = verts.length - 1;
+  const at = (i: number, j: number) => 1 + (i - 1) * segments + (j % segments);
+  const faces: number[][] = [];
+  for (let j = 0; j < segments; j++) faces.push([0, at(1, j + 1), at(1, j)]);
+  for (let i = 1; i < rings - 1; i++) for (let j = 0; j < segments; j++) faces.push([at(i, j), at(i, j + 1), at(i + 1, j + 1), at(i + 1, j)]);
+  for (let j = 0; j < segments; j++) faces.push([bottom, at(rings - 1, j), at(rings - 1, j + 1)]);
+  return { verts, faces, color };
+}
+
 export type { V3 };

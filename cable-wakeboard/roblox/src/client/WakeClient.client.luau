@@ -44,6 +44,7 @@ local RiderRig = require(shared:WaitForChild("RiderRig"))
 local WaterSpray = require(shared:WaitForChild("WaterSpray"))
 local ParkBuilder = require(shared:WaitForChild("Park"):WaitForChild("ParkBuilder"))
 local TowerBuilder = require(shared:WaitForChild("Park"):WaitForChild("TowerBuilder"))
+local Buoys = require(shared:WaitForChild("Park"):WaitForChild("Buoys"))
 local FeatureRegistry = require(shared:WaitForChild("Park"):WaitForChild("FeatureRegistry"))
 local FeatureConfig = require(shared:WaitForChild("Park"):WaitForChild("FeatureConfig"))
 local FeatureBob = require(shared:WaitForChild("Park"):WaitForChild("FeatureBob"))
@@ -280,10 +281,8 @@ local function buildPark(sim)
 		block("DockWalkway", cx + right.x * side * d, 0.3, cz + right.z * side * d, 1.6, 0.16, len, mid.heading, COLORS.deck)
 	end
 
-	for i, b in site.buoys do
-		local buoy = part(`Buoy{i}`, Vector3.new(1.6, 1.6, 1.6) * S, CFrame.new(b.x * S, 0, b.z * S), Color3.fromRGB(230, 196, 60))
-		buoy.Shape = Enum.PartType.Ball
-	end
+	-- Buoys: round floats from the site's BuoyLayout (Park/Buoys, layout spec 5).
+	Buoys.build(site)
 
 	local path = sim.path
 	local step = 3
@@ -823,6 +822,7 @@ RunService.RenderStepped:Connect(function(rawDt)
 	carrier.CFrame = CFrame.new(stud(renderCarrier)) * yaw(sim.carrier.heading)
 	-- Floating features bob, except near the rider.
 	FeatureBob.step(os.clock(), { stud(r.pos) }, dt)
+	Buoys.step(os.clock(), stud(r.pos))
 	FeatureTags.step(stud(r.pos))
 
 	-- Rope: to the handle, sagging when slack, thinner when taut.

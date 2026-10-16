@@ -53,8 +53,14 @@ local function siteFootprints(park: any, path: any): { FeatureValidator.Footprin
 			half = d.width / 2,
 		})
 	end
+	-- Buoys: boundary buoys 6 m from the approach line (layout spec 5); lane
+	-- markers flank the line out of the dock 3.5 m either side by design, so
+	-- 3 m. LayoutValidator keeps all of them out of the approach and run-out
+	-- zones themselves.
 	for i, p in site.buoys or {} do
-		table.insert(out, { name = `buoy {i}`, a = Vector2.new(p.x, p.z), b = Vector2.new(p.x, p.z), half = 0.6 })
+		local def = site.buoyLayout and site.buoyLayout[i]
+		local clearance = if def and def.kind == "Lane" then 3 else Layout.RULES.buoyClear
+		table.insert(out, { name = `buoy {i}`, a = Vector2.new(p.x, p.z), b = Vector2.new(p.x, p.z), half = 0.6, clearance = clearance })
 	end
 	return out
 end
