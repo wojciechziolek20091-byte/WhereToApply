@@ -29,9 +29,10 @@
  * (`cable.towers`).
  */
 import type { CatalogFeatureDef, ParkDef, SiteDef } from './park';
-import { buildCablePath, cablePointAt } from './cable';
+import { buildCablePath } from './cable';
 import { type CableConfig, DEFAULT_CONFIG } from './config';
 import { FEATURE_CATALOG } from './featureCatalog';
+import { buildShape } from './featureShapes';
 import { atan2, cos, sin } from './math/detmath';
 import type { GroundPoint } from './park';
 
@@ -309,6 +310,150 @@ export const WAKE_PARK_LAYOUT: LayoutEntry[] = [
 ];
 
 /**
+ * Real wake park layout rules (layout spec section 1). Metres and degrees.
+ * LayoutValidator (src/park/layoutValidator.ts, Park/LayoutValidator.luau)
+ * checks a park against them.
+ */
+export const LAYOUT_RULES = {
+  /** Travel seen from above. 'Clockwise' reverses the tower order (placeFeatures follows). */
+  direction: 'CounterClockwise' as 'CounterClockwise' | 'Clockwise',
+  /** No features this far before / after a corner. */
+  cornerBefore: 30,
+  cornerAfter: 25,
+  /** The cable after the start dock stays clear this far. */
+  startClear: 55,
+  /** Features only in this part of a straight (fractions). */
+  band: [0.2, 0.8] as [number, number],
+  /** Gap between consecutive features on a straight (end to start). */
+  spacing: [30, 60] as [number, number],
+  /** Offset from the cable line to the feature's centre, by category. */
+  offsets: { Rail: [2, 5], Box: [2, 5], Kicker: [4, 7], Big: [6, 9], Beginner: [2, 3] } as Record<string, [number, number]>,
+  /** Angle in toward the cable at the exit. */
+  angleIn: [5, 12] as [number, number],
+  /** Clear water after a feature's exit (kicker-type features: kickers, pyramid, spine) and before its start. */
+  runOut: { Kicker: 25, Other: 15 },
+  approach: 15,
+  /** Clearance from the shore (lake and islands) and from tower bases. */
+  shore: 12,
+  towerBase: 20,
+  /** Buoys: no closer to a feature than this, and never in an approach or run-out. */
+  buoyClear: 6,
+};
+
+/** Offset category of a catalogue feature (LAYOUT_RULES.offsets). */
+export function offsetCategory(type: string, beginner = false): string {
+  if (beginner) return 'Beginner';
+  if (type === 'Pyramid' || type === 'Spine' || type === 'WallRide') return 'Big';
+  if (type.endsWith('Kicker')) return 'Kicker';
+  const style = (FEATURE_CATALOG[type]!.params as { style?: string }).style;
+  return style === 'Pipe' || style === 'Rail' ? 'Rail' : 'Box';
+}
+
+/** A feature in the layout spec's format (section 1). */
+export interface ParkLayoutEntry {
+  featureId: string;
+  /** Catalogue type (featureCatalog.ts). */
+  type: string;
+  /** Straight of the cable, 1-based in order of travel (s = 0 leaves tower 0). */
+  straight: number;
+  /** Where the feature's centre is along the straight (0-1). */
+  alongFraction: number;
+  /** Side of the cable line, seen in the direction of travel (L: inside a counter-clockwise loop). */
+  side: 'L' | 'R';
+  /** Distance from the cable line to the feature's centre (m). */
+  sideOffset: number;
+  /** Degrees the feature is turned in toward the cable at its exit. */
+  angleIn: number;
+  params?: CatalogFeatureDef['params'];
+  /** Transfer box / wall ride: which side the second box or the wall is on (+1 right of the feature). */
+  partSide?: number;
+  name?: string;
+  /** Line accent (FeatureConfig.Accents), for the map. */
+  accent?: string;
+}
+
+/** A cable in the configured direction of travel: clockwise reverses the towers (tower 0 stays first). */
+export function travelCable(cable: CableConfig, direction = LAYOUT_RULES.direction): CableConfig {
+  if (direction === 'CounterClockwise' || cable.mode === 'twoTower') return cable;
+  const [first, ...rest] = cable.towers;
+  return { ...cable, towers: [first!, ...rest.reverse()] };
+}
+
+const r2 = (v: number) => Math.round(v * 100) / 100;
+const r4 = (v: number) => Math.round(v * 10000) / 10000;
+
+/**
+ * Layout entries to feature defs, from the cable path: each feature's centre
+ * at `alongFraction` of its straight and `sideOffset` off the line, turned
+ * `angleIn` toward the cable at the exit. Move the towers and the layout
+ * follows.
+ */
+export function placeFeatures(entries: ParkLayoutEntry[], cable: CableConfig, rules = LAYOUT_RULES): CatalogFeatureDef[] {
+  const straights = cableStraights(travelCable(cable, rules.direction));
+  return entries.map((e) => {
+    const st = straights[e.straight - 1];
+    if (!st) throw new Error(`${e.featureId}: no straight ${e.straight}`);
+    const shape = buildShape(e.type, e.params, e.partSide ?? 1);
+    const half = (shape.uMax - shape.uMin) / 2;
+    const vMid = (shape.vMin + shape.vMax) / 2;
+    const sideSign = e.side === 'R' ? 1 : -1;
+    const a = (e.angleIn * Math.PI) / 180;
+    // Toward the cable at the exit: a right-hand feature turns left (negative yaw), and back.
+    const yaw = -sideSign * a;
+    const centreS = st.s0 + e.alongFraction * st.length;
+    const centreLat = sideSign * e.sideOffset - vMid;
+    return {
+      kind: 'feature',
+      id: e.featureId,
+      name: e.name ?? FEATURE_CATALOG[e.type]!.meta.label,
+      catalog: e.type,
+      ...(e.params ? { params: e.params } : {}),
+      s: r2(centreS - half * cos(a)),
+      offset: r2(centreLat + sideSign * half * sin(a)),
+      yaw: r4(yaw),
+      ...(e.partSide !== undefined ? { side: e.partSide } : {}),
+      accent: e.accent ?? 'Orange',
+      line: `S${e.straight}`,
+    };
+  });
+}
+
+/**
+ * The wake park's target layout (layout spec section 1), counter-clockwise,
+ * S1 the first straight after the start dock. Features alternate sides
+ * (L = inside the loop); offsets to the feature's centre: rails and boxes
+ * 3-3.5 m, kickers 5.5-6 m, big features 7-8 m (the pyramid widest); every
+ * feature turned 8 degrees in toward the cable at its exit, the transfer 5
+ * (more and the hop to box B is out of reach) and the wall ride 12 (less and
+ * riders meet the wall too flat to climb it; both from the ride test).
+ * Positions spread each straight's features evenly between its corner
+ * zones and 20-80 % band with the run-outs and approaches kept clear
+ * (docs/LAYOUT.md, milestone 5).
+ */
+export const WAKE_LAYOUT: ParkLayoutEntry[] = [
+  { featureId: 'S1_Slider', type: 'Slider', straight: 1, alongFraction: 0.2333, side: 'L', sideOffset: 3.5, angleIn: 8, accent: 'Orange' },
+  { featureId: 'S1_Funbox', type: 'Funbox', straight: 1, alongFraction: 0.5082, side: 'R', sideOffset: 3.5, angleIn: 8, accent: 'Orange' },
+  { featureId: 'S1_MediumKicker', type: 'MediumKicker', straight: 1, alongFraction: 0.7746, side: 'L', sideOffset: 5.5, angleIn: 8, accent: 'Orange' },
+  { featureId: 'S2_PipeRail', type: 'PipeRail', straight: 2, alongFraction: 0.2405, side: 'R', sideOffset: 3.5, angleIn: 8, accent: 'Teal' },
+  { featureId: 'S2_GapBox', type: 'GapBox', straight: 2, alongFraction: 0.4962, side: 'L', sideOffset: 3.5, angleIn: 8, accent: 'Teal' },
+  { featureId: 'S2_FlatDownRail', type: 'KinkRail', straight: 2, alongFraction: 0.7554, side: 'R', sideOffset: 3.5, angleIn: 8, accent: 'Teal' },
+  { featureId: 'S3_ProKicker', type: 'ProKicker', straight: 3, alongFraction: 0.2275, side: 'L', sideOffset: 6, angleIn: 8, accent: 'Yellow' },
+  { featureId: 'S3_Rooftop', type: 'Rooftop', straight: 3, alongFraction: 0.5233, side: 'R', sideOffset: 3.5, angleIn: 8, accent: 'Yellow' },
+  { featureId: 'S3_Transfer', type: 'Transfer', straight: 3, alongFraction: 0.7677, side: 'L', sideOffset: 3, angleIn: 5, partSide: 1, accent: 'Yellow' },
+  { featureId: 'S4_StepUp', type: 'StepUp', straight: 4, alongFraction: 0.2346, side: 'R', sideOffset: 3.5, angleIn: 8, accent: 'Magenta' },
+  { featureId: 'S4_Pyramid', type: 'Pyramid', straight: 4, alongFraction: 0.4607, side: 'L', sideOffset: 8, angleIn: 8, accent: 'Magenta' },
+  { featureId: 'S4_Spine', type: 'Spine', straight: 4, alongFraction: 0.7518, side: 'R', sideOffset: 7, angleIn: 8, accent: 'Magenta' },
+  { featureId: 'S5_FlatRail', type: 'FlatRail', straight: 5, alongFraction: 0.271, side: 'L', sideOffset: 3.5, angleIn: 8, accent: 'Orange' },
+  { featureId: 'S5_WallRide', type: 'WallRide', straight: 5, alongFraction: 0.5648, side: 'R', sideOffset: 7.8, angleIn: 12, partSide: 1, accent: 'Orange' },
+];
+
+/** The beginner line (layout spec section 1): the beginner kicker, then the slider, 2.5 m off the line. */
+export const BEGINNER_LINE: ParkLayoutEntry[] = [
+  { featureId: 'B_BeginnerKicker', type: 'BeginnerKicker', straight: 1, alongFraction: 0.448, side: 'L', sideOffset: 2.5, angleIn: 6, accent: 'Teal' },
+  { featureId: 'B_Slider', type: 'Slider', straight: 1, alongFraction: 0.766, side: 'R', sideOffset: 2.5, angleIn: 6, accent: 'Teal' },
+];
+
+/**
  * The beginner 2-tower system (spec section 9): one 150 m line in its own
  * lagoon, inside the ring island in the middle of the loop (layout spec
  * milestone 4: both towers on the island, out of every riding area). The
@@ -523,29 +668,6 @@ export function lagoonIsland(cable: CableConfig, halfWidth = 30, ring = 20, rule
 }
 
 /**
- * Marker buoys along the lines: on the other side of the cable from each
- * line's features (out of their approach and landing zones), at the start
- * and end of every straight that has features.
- */
-function lineBuoys(entries: LayoutEntry[], cable: CableConfig): { x: number; z: number }[] {
-  const path = buildCablePath(cable);
-  const straights = cableStraights(cable);
-  const out: { x: number; z: number }[] = [];
-  const seen = new Set<number>();
-  for (const e of entries) {
-    if (seen.has(e.segmentOfCable)) continue;
-    seen.add(e.segmentOfCable);
-    const st = straights[e.segmentOfCable - 1]!;
-    for (const along of [6, st.length - 6]) {
-      const p = cablePointAt(path, st.s0 + along);
-      const off = -Math.sign(e.sideOffset) * 9;
-      out.push({ x: Math.round((p.pos.x - sin(p.heading) * off) * 10) / 10, z: Math.round((p.pos.z + cos(p.heading) * off) * 10) / 10 });
-    }
-  }
-  return out;
-}
-
-/**
  * The wake park's loop (layout spec milestone 4): five towers on the shore,
  * counter-clockwise, about 912 m a lap. Straights in order of travel (s = 0
  * leaves tower 0): S1 165 m (north-east), S2 172 m (north-west), S3 178 m
@@ -630,17 +752,13 @@ const WAKE_SITE: SiteDef = {
   const s5 = cableStraights(wakeCable)[4]!;
   WAKE_SITE.docks[0]!.s = r1(s5.s0 + 98);
 }
-// Milestone 4 keeps the features spec's lines; the loop's straights moved round
-// by one (the old south straight is now S5), and milestone 5 re-lays them.
-const WAKE_LINES = WAKE_PARK_LAYOUT.map((e) => ({ ...e, segmentOfCable: e.segmentOfCable === 1 ? 5 : e.segmentOfCable - 1 }));
-WAKE_SITE.buoys = lineBuoys(WAKE_LINES, wakeCable);
 
-/** The wake park (default): the spec's lines on the loop, the grown lake. */
+/** The wake park (default): the layout spec's target layout on the loop, the grown lake. */
 export const WAKE_PARK: ParkDef = {
   name: 'Lakeside Wake',
   startS: r1(WAKE_SITE.docks[0]!.s + 32),
   cable: WAKE_CABLE,
-  features: placeLayout(WAKE_LINES, wakeCable),
+  features: placeFeatures(WAKE_LAYOUT, wakeCable),
   site: WAKE_SITE,
 };
 
@@ -652,10 +770,10 @@ export const BEGINNER_PARK: ParkDef = {
   name: 'Beginner line',
   startS: 22,
   cable: BEGINNER_CABLE,
-  features: placeLayout(BEGINNER_LAYOUT, beginnerCable),
+  features: placeFeatures(BEGINNER_LINE, beginnerCable),
   site: {
     ...WAKE_SITE,
-    docks: [{ name: 'Beginner dock', s: 2, offset: -8, length: 8, width: 4 }],
-    buoys: lineBuoys(BEGINNER_LAYOUT, beginnerCable),
+    docks: [{ name: 'Beginner dock', s: 0, offset: -8, length: 8, width: 4 }],
+    buoys: [],
   },
 };

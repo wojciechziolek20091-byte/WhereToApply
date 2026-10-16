@@ -5,7 +5,7 @@
 -- the Ride/ parts and the art line up with the physics exactly; the art is
 -- low-poly and chunky to match the rest of the park.
 --
---   local m = FeatureBuilder.build({ id = "L1_Funbox_01", catalog = "Funbox",
+--   local m = FeatureBuilder.build({ id = "S1_Funbox", catalog = "Funbox",
 --       origin = Vector3.new(x, 0, z), heading = psi })
 --   m.Parent = FeatureModel.featuresFolder()
 --

@@ -21,10 +21,10 @@ for _, m in FeatureRegistry.all() do
 	check(anchor and anchor:FindFirstChild("SplashEntry") and anchor:FindFirstChild("SplashExit"), m.Name .. ": FX attachments")
 end
 FeatureFX.prepareAll()
--- Map data: 12 features in 4 lines.
+-- Map data: 14 features on the 5 straights (S1-S5).
 local groups = FeatureMap.byLine()
-check(#groups == 4, "4 lines on the map, got " .. #groups)
-check(#FeatureMap.entries() == 12, "12 features on the map")
+check(#groups == 5, "5 lines on the map, got " .. #groups)
+check(#FeatureMap.entries() == 14, "14 features on the map")
 FeatureMap.mount(Instance.new("Folder"), Sim.ParkLayout.WAKE_PARK.site)
 
 -- Ride the wake park with the Luau sim on a scripted line: steer onto each
@@ -65,13 +65,13 @@ for _, def in Sim.ParkLayout.WAKE_PARK.features do
 		end
 	end
 end
-check(tagSeen.L1_MediumKicker_01 and tagSeen.L2_GapBox_01, "name tags shown on approach")
+check(tagSeen.S1_MediumKicker and tagSeen.S2_GapBox, "name tags shown on approach")
 local splashes = 0
 for _, x in FeatureFX.log do if x.kind == "Splash" then splashes += 1 end end
 check(splashes >= 3, "splashes fired: " .. splashes)
-check(FeatureStats.get("tester", "L1_MediumKicker_01").hits >= 1, "kicker hit counted")
-check(FeatureStats.get("tester", "L1_MediumKicker_01").cleanLandings >= 1, "clean landing counted")
-local done = FeatureChallenges.completed(all, { L1_PipeRail_01 = 1.2 })
+check(FeatureStats.get("tester", "S1_MediumKicker").hits >= 1, "kicker hit counted")
+check(FeatureStats.get("tester", "S1_MediumKicker").cleanLandings >= 1, "clean landing counted")
+local done = FeatureChallenges.completed(all, { S2_PipeRail = 1.2 })
 local has = {}
 for _, id in done do has[id] = true end
 check(has.C_MediumAir, "medium kicker air challenge")

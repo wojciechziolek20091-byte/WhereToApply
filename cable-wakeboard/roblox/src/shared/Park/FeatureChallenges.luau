@@ -10,19 +10,19 @@ local FeatureChallenges = {}
 export type Challenge = { id: string, feature: string, text: string, kind: string, slide: string?, entry: string?, time: number?, full: boolean? }
 
 FeatureChallenges.LIST = {
-	{ id = "C_PipeBackboard", feature = "L1_PipeRail_01", text = "Backboard the full pipe rail", kind = "slide", slide = "backboard", full = true },
-	{ id = "C_MediumAir", feature = "L1_MediumKicker_01", text = "Air over 1.1 s off the medium kicker", kind = "airtime", time = 1.1 },
-	{ id = "C_FunboxFull", feature = "L1_Funbox_01", text = "50-50 the funbox top to bottom", kind = "slide", slide = "fiftyFifty", full = true },
-	{ id = "C_GapPopOn", feature = "L2_GapBox_01", text = "Pop-on the gap box", kind = "entry", entry = "popOn" },
-	{ id = "C_KinkFrontboard", feature = "L2_KinkRail_01", text = "Frontboard the flat-down rail for 1 s", kind = "slide", slide = "frontboard", time = 1.0 },
-	{ id = "C_Transfer", feature = "L2_Transfer_01", text = "Transfer from box A to box B", kind = "entry", entry = "ollieOn" },
-	{ id = "C_ProAir", feature = "L3_ProKicker_01", text = "Air over 1.5 s off the pro kicker", kind = "airtime", time = 1.5 },
-	{ id = "C_StepUp", feature = "L3_StepUp_01", text = "Pop up to the high rail of the step-up", kind = "entry", entry = "ollieOn" },
-	{ id = "C_Rooftop", feature = "L3_Rooftop_01", text = "50-50 over the rooftop", kind = "slide", slide = "fiftyFifty", time = 1.0 },
-	{ id = "C_Pyramid", feature = "L4_Pyramid_01", text = "Clear the pyramid: 1 s of air", kind = "airtime", time = 1.0 },
-	{ id = "C_Wall", feature = "L4_WallRide_01", text = "Ride the wall for 0.4 s", kind = "wallRide", time = 0.4 },
-	{ id = "C_Spine", feature = "L4_Spine_01", text = "Land the spine's down slope", kind = "airtime", time = 0.6 },
-	{ id = "C_BeginnerSlide", feature = "B_Slider_01", text = "Slide the whole beginner slider", kind = "slide", slide = "fiftyFifty", full = true },
+	{ id = "C_PipeBackboard", feature = "S2_PipeRail", text = "Backboard the full pipe rail", kind = "slide", slide = "backboard", full = true },
+	{ id = "C_MediumAir", feature = "S1_MediumKicker", text = "Air over 1.1 s off the medium kicker", kind = "airtime", time = 1.1 },
+	{ id = "C_FunboxFull", feature = "S1_Funbox", text = "50-50 the funbox top to bottom", kind = "slide", slide = "fiftyFifty", full = true },
+	{ id = "C_GapPopOn", feature = "S2_GapBox", text = "Pop-on the gap box", kind = "entry", entry = "popOn" },
+	{ id = "C_KinkFrontboard", feature = "S2_FlatDownRail", text = "Frontboard the flat-down rail for 1 s", kind = "slide", slide = "frontboard", time = 1.0 },
+	{ id = "C_Transfer", feature = "S3_Transfer", text = "Transfer from box A to box B", kind = "entry", entry = "ollieOn" },
+	{ id = "C_ProAir", feature = "S3_ProKicker", text = "Air over 1.5 s off the pro kicker", kind = "airtime", time = 1.5 },
+	{ id = "C_StepUp", feature = "S4_StepUp", text = "Pop up to the high rail of the step-up", kind = "entry", entry = "ollieOn" },
+	{ id = "C_Rooftop", feature = "S3_Rooftop", text = "50-50 over the rooftop", kind = "slide", slide = "fiftyFifty", time = 1.0 },
+	{ id = "C_Pyramid", feature = "S4_Pyramid", text = "Clear the pyramid: 1 s of air", kind = "airtime", time = 1.0 },
+	{ id = "C_Wall", feature = "S5_WallRide", text = "Ride the wall for 0.4 s", kind = "wallRide", time = 0.4 },
+	{ id = "C_Spine", feature = "S4_Spine", text = "Land the spine's down slope", kind = "airtime", time = 0.6 },
+	{ id = "C_BeginnerSlide", feature = "B_Slider", text = "Slide the whole beginner slider", kind = "slide", slide = "fiftyFifty", full = true },
 } :: { Challenge }
 
 -- Challenges for one feature.

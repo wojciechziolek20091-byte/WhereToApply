@@ -338,46 +338,69 @@ ParkLayout.CATALOG_TEST_PARK = {
 }
 ParkLayout.CATALOG_TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 
--- The wake park (the default): the features spec's lines on the loop. Its
--- site adds marker buoys and the cable operator hut to the lakeside site.
+-- The wake park (the default): the layout spec's target layout on its own
+-- loop (towers on the shore), round the grown lake and the ring island.
 ParkLayout.WAKE_PARK = {
 	name = "Lakeside Wake",
 	startS = 901.1,
 	cable = { towers = { { x = 92, z = 111 }, { x = 221, z = -13 }, { x = 124, z = -179 }, { x = -56, z = -100 }, { x = -56, z = 110 } } },
 	features = {
-		{ kind = "feature", id = "L1_MediumKicker_01", name = "Medium kicker", catalog = "MediumKicker", s = 18, offset = 4, accent = "Orange", line = "Line 1" },
-		{ kind = "feature", id = "L1_PipeRail_01", name = "Pipe rail", catalog = "PipeRail", s = 48, offset = 3, accent = "Orange", line = "Line 1" },
-		{ kind = "feature", id = "L1_Funbox_01", name = "Funbox", catalog = "Funbox", s = 83, offset = 3, accent = "Orange", line = "Line 1" },
-		{ kind = "feature", id = "L4_Pyramid_01", name = "Pyramid", catalog = "Pyramid", s = 194.61291482223902, offset = 4, accent = "Magenta", line = "Line 4" },
+		{ kind = "feature", id = "S1_Slider", name = "Slider", catalog = "Slider", s = 33.55, offset = -4.18, yaw = 0.1396, accent = "Orange", line = "S1" },
+		{ kind = "feature", id = "S1_Funbox", name = "Funbox", catalog = "Funbox", s = 76.97, offset = 4.44, yaw = -0.1396, accent = "Orange", line = "S1" },
 		{
 			kind = "feature",
-			id = "L4_WallRide_01",
-			name = "Wall ride",
-			catalog = "WallRide",
-			s = 221.61291482223902,
-			offset = 2,
-			yaw = -0.6,
-			side = 1,
-			accent = "Magenta",
-			line = "Line 4",
+			id = "S1_MediumKicker",
+			name = "Medium kicker",
+			catalog = "MediumKicker",
+			s = 124.04,
+			offset = -5.99,
+			yaw = 0.1396,
+			accent = "Orange",
+			line = "S1",
 		},
-		{ kind = "feature", id = "L4_Spine_01", name = "Spine", catalog = "Spine", s = 384.2029170540926, offset = 3, accent = "Magenta", line = "Line 4" },
-		{ kind = "feature", id = "L2_GapBox_01", name = "Gap box", catalog = "GapBox", s = 578.1334895200342, offset = 3, accent = "Teal", line = "Line 2" },
-		{ kind = "feature", id = "L2_KinkRail_01", name = "Flat-down rail", catalog = "KinkRail", s = 611.1334895200342, offset = 3, accent = "Teal", line = "Line 2" },
+		{ kind = "feature", id = "S2_PipeRail", name = "Pipe rail", catalog = "PipeRail", s = 215.68, offset = 4.39, yaw = -0.1396, accent = "Teal", line = "S2" },
+		{ kind = "feature", id = "S2_GapBox", name = "Gap box", catalog = "GapBox", s = 260.56, offset = -4.27, yaw = 0.1396, accent = "Teal", line = "S2" },
 		{
 			kind = "feature",
-			id = "L2_Transfer_01",
+			id = "S2_FlatDownRail",
+			name = "Flat-down rail",
+			catalog = "KinkRail",
+			s = 303.71,
+			offset = 4.47,
+			yaw = -0.1396,
+			accent = "Teal",
+			line = "S2",
+		},
+		{ kind = "feature", id = "S3_ProKicker", name = "Pro kicker", catalog = "ProKicker", s = 406.25, offset = -6.63, yaw = 0.1396, accent = "Yellow", line = "S3" },
+		{ kind = "feature", id = "S3_Rooftop", name = "Rooftop", catalog = "Rooftop", s = 457.89, offset = 4.27, yaw = -0.1396, accent = "Yellow", line = "S3" },
+		{
+			kind = "feature",
+			id = "S3_Transfer",
 			name = "Transfer box",
 			catalog = "Transfer",
-			s = 647.1334895200342,
-			offset = 4,
-			side = -1,
-			accent = "Teal",
-			line = "Line 2",
+			s = 501.56,
+			offset = -4.81,
+			yaw = 0.0873,
+			side = 1,
+			accent = "Yellow",
+			line = "S3",
 		},
-		{ kind = "feature", id = "L3_ProKicker_01", name = "Pro kicker", catalog = "ProKicker", s = 678.1334895200342, offset = 4, accent = "Yellow", line = "Line 3" },
-		{ kind = "feature", id = "L3_Rooftop_01", name = "Rooftop", catalog = "Rooftop", s = 710.1334895200342, offset = 3, accent = "Yellow", line = "Line 3" },
-		{ kind = "feature", id = "L3_StepUp_01", name = "Step-up rail", catalog = "StepUp", s = 786.1445633157243, offset = 3, accent = "Yellow", line = "Line 3" },
+		{ kind = "feature", id = "S4_StepUp", name = "Step-up rail", catalog = "StepUp", s = 600.7, offset = 4.35, yaw = -0.1396, accent = "Magenta", line = "S4" },
+		{ kind = "feature", id = "S4_Pyramid", name = "Pyramid", catalog = "Pyramid", s = 645.25, offset = -8.64, yaw = 0.1396, accent = "Magenta", line = "S4" },
+		{ kind = "feature", id = "S4_Spine", name = "Spine", catalog = "Spine", s = 696.74, offset = 8.18, yaw = -0.1396, accent = "Magenta", line = "S4" },
+		{ kind = "feature", id = "S5_FlatRail", name = "Flat rail", catalog = "FlatRail", s = 800.21, offset = -4.41, yaw = 0.1396, accent = "Orange", line = "S5" },
+		{
+			kind = "feature",
+			id = "S5_WallRide",
+			name = "Wall ride",
+			catalog = "WallRide",
+			s = 843.29,
+			offset = 6.57,
+			yaw = -0.2094,
+			side = 1,
+			accent = "Orange",
+			line = "S5",
+		},
 	},
 	site = {
 		lake = {
@@ -987,18 +1010,7 @@ ParkLayout.WAKE_PARK = {
 				points = { { x = -300, z = -229 }, { x = -100, z = -225 }, { x = 0, z = -227 }, { x = 150, z = -223 }, { x = 300, z = -229 } },
 			},
 		},
-		buoys = {
-			{ x = 93.6, z = 97 },
-			{ x = 203.6, z = -8.8 },
-			{ x = 205.4, z = -21.8 },
-			{ x = 124.7, z = -160 },
-			{ x = 112.3, z = -164.1 },
-			{ x = -39.7, z = -97.3 },
-			{ x = -47, z = -86.2 },
-			{ x = -47, z = 92.1 },
-			{ x = -38, z = 101.1 },
-			{ x = 81.2, z = 101.9 },
-		},
+		buoys = {  },
 		cables = {
 			{
 				name = "Main loop",
@@ -1071,23 +1083,22 @@ ParkLayout.BEGINNER_PARK = {
 	startS = 22,
 	cable = { mode = "twoTower", towers = { { x = 22.5, z = 40 }, { x = 97.5, z = -90 } } },
 	features = {
-		{ kind = "feature", id = "B_Slider_01", name = "Slider", catalog = "Slider", s = 28, offset = 3, accent = "Teal", line = "Beginner" },
-		{ kind = "feature", id = "B_BeginnerKicker_01", name = "Beginner kicker", catalog = "BeginnerKicker", s = 62, offset = 3, accent = "Teal", line = "Beginner" },
 		{
 			kind = "feature",
-			id = "B_Funbox_01",
-			name = "Funbox",
-			catalog = "Funbox",
-			params = { mains = { { height = 0.6, gapBefore = 0, kinks = { { length = 6, angle = 0 } } } }, safetyLength = 2.2, exitLength = 2.2 },
-			s = 96,
-			offset = 3,
+			id = "B_BeginnerKicker",
+			name = "Beginner kicker",
+			catalog = "BeginnerKicker",
+			s = 64.75,
+			offset = -2.76,
+			yaw = 0.1047,
 			accent = "Teal",
-			line = "Beginner",
+			line = "S1",
 		},
+		{ kind = "feature", id = "B_Slider", name = "Slider", catalog = "Slider", s = 110.09, offset = 3.01, yaw = -0.1047, accent = "Teal", line = "S1" },
 	},
 }
 ParkLayout.BEGINNER_PARK.site = table.clone(ParkLayout.WAKE_PARK.site)
-ParkLayout.BEGINNER_PARK.site.docks = { { name = "Beginner dock", s = 2, offset = -8, length = 8, width = 4 } }
-ParkLayout.BEGINNER_PARK.site.buoys = { { x = 17.7, z = 30.3 }, { x = 86.7, z = -89.3 } }
+ParkLayout.BEGINNER_PARK.site.docks = { { name = "Beginner dock", s = 0, offset = -8, length = 8, width = 4 } }
+ParkLayout.BEGINNER_PARK.site.buoys = {  }
 
 return ParkLayout

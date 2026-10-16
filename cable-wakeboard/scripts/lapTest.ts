@@ -5,9 +5,9 @@
  * and the islands'), overall and near each tower. Used by tests/tower.test.ts
  * and `npx vite-node scripts/probe-lap-shore.ts`.
  */
-import { distanceToOutline, distanceToSegment, pointInPolygon } from '../src/art/site';
+import { shoreDistance } from '../src/park/layoutValidator';
 import { neutralInput } from '../src/sim/input';
-import type { GroundPoint, ParkDef } from '../src/sim/park';
+import type { ParkDef } from '../src/sim/park';
 import { createRun, stepRun } from '../src/sim/session';
 import { DEFAULT_CONFIG } from '../src/sim/config';
 
@@ -24,31 +24,7 @@ export interface LapResult {
   crashes: number;
 }
 
-/** Island shore edges: every island edge except the seams two islands share (the ring island is two halves). */
-function islandShore(park: ParkDef): [GroundPoint, GroundPoint][] {
-  // Either direction: the halves wind opposite ways or the same way.
-  const key = (a: GroundPoint, b: GroundPoint) => [`${a.x},${a.z}`, `${b.x},${b.z}`].sort().join('|');
-  const edges: [GroundPoint, GroundPoint][] = [];
-  const seen = new Map<string, number>();
-  for (const { outline } of park.site!.islands) {
-    outline.forEach((a, i) => {
-      const b = outline[(i + 1) % outline.length]!;
-      edges.push([a, b]);
-      seen.set(key(a, b), (seen.get(key(a, b)) ?? 0) + 1);
-    });
-  }
-  return edges.filter(([a, b]) => seen.get(key(a, b)) === 1);
-}
-
-/** Signed distance from a point to the nearest shore (the lake's or an island's): + over water. */
-export function shoreDistance(park: ParkDef, p: GroundPoint): number {
-  const site = park.site!;
-  const lake = (pointInPolygon(p, site.lake) ? 1 : -1) * distanceToOutline(p, site.lake);
-  const onIsland = site.islands.some((i) => pointInPolygon(p, i.outline) || distanceToOutline(p, i.outline) < 1e-6);
-  let di = Infinity;
-  for (const [a, b] of islandShore(park)) di = Math.min(di, distanceToSegment(p, a, b));
-  return onIsland ? Math.min(lake, -di) : Math.min(lake, di);
-}
+export { shoreDistance };
 
 export function lapTest(park: ParkDef, seconds = 240): LapResult[] {
   const cable = { ...DEFAULT_CONFIG.cable, ...park.cable };

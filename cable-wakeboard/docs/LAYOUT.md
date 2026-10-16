@@ -258,3 +258,123 @@ straights (milestone 5 re-lays them). The parity test now runs 20,000 ticks
 ![top-down](layout/m4-map.jpg)
 ![aerial](layout/m4-aerial.jpg)
 ![towers](layout/m4-towers.jpg)
+
+## Milestone 5: the layout (ParkLayout, placeFeatures, LayoutValidator)
+
+**Data**: `WAKE_LAYOUT` and `BEGINNER_LINE` in `src/sim/parkLayout.ts`
+(generated to `roblox/src/shared/Park/Layout.luau` as `Layout.MAIN`,
+`Layout.BEGINNER`, with the rules as `Layout.RULES`) in the spec's format:
+`{ featureId, type, straight, alongFraction, side, sideOffset, angleIn, params }`.
+`alongFraction` and `sideOffset` are the feature's centre; `partSide` sets
+which side a transfer's second box or a wall ride's wall is on. The features
+spec's earlier lines stay as `WAKE_PARK_LAYOUT` / `Layout.FEATURES_SPEC_MAIN`
+for reference; nothing builds from them now.
+
+**Rules**: `LAYOUT_RULES` (counter-clockwise; 30 m before / 25 m after a
+corner clear; 55 m after the start dock clear; the 20-80 % band; gaps of
+30-60 m and at least run-out + approach; alternating sides; offsets rails and
+boxes 2-5 m, kickers 4-7 m, big features 6-9 m, beginner 2-3 m; angle in
+5-12 degrees; run-out 25 m after kicker-type features (kickers, pyramid,
+spine) and 15 m after the rest; approach 15 m; 12 m from shore; 20 m from
+tower bases; buoys 6 m away). `direction: 'Clockwise'` reverses the tower
+order and the layout follows.
+
+**placeFeatures** (`src/sim/parkLayout.ts`, twin `Park/PlaceFeatures.luau`,
+bit-exact): straight start and length from the cable path, the centre at
+`alongFraction`, `sideOffset` to the side of travel, turned `angleIn` toward
+the cable at the exit. Move the towers and the features move with them
+(`tests/layout.test.ts` shifts every tower 6 m and checks every feature
+follows). In Studio, after editing `Park/Layout`:
+`ParkBuilder.buildPark(PlaceFeatures.withLayout(Sim.ParkLayout.WAKE_PARK, Layout.MAIN))`.
+
+**LayoutValidator** (`src/park/layoutValidator.ts`, twin
+`Park/LayoutValidator.luau`; the tables match row for row): Direction, Band
+20-80 %, Corner zones, Start clear, Spacing, Alternating sides, Offset, Angle
+in, Reach (the centre within the 18 m rope of the line), Run-out clear and
+Approach clear (no feature, buoy, dock or tower in them), Shore, Tower bases,
+Buoys; and in Luau, Ride data (after a build: tags, attributes, ride parts with
+Start / End, LipPoint on kicker-type features, PopZoneStart on safeties, crash
+volumes, the Root where the def puts it). `buildPark` prints the table in
+Studio; `npx vite-node scripts/probe-layout.ts` prints it here.
+Result: wake park 159 passed, 0 failed; beginner line 22 passed, 0 failed;
+ride data intact on all 16 features.
+
+Two angles came from the ride test: the transfer is turned 5 degrees (at 8
+the hop to box B was out of reach) and the wall ride 12 (at 10 riders met the
+wall too flat and climbed 0.41 m, short of the 0.5 m test). The beginner
+dock moved to the start of its line so the 55 m clear zone fits before the
+kicker. Every feature of the target table exists; none were skipped or added.
+
+| Feature | Type | Straight | Along (centre) | Side | Offset | Angle in | Centre (x, z) |
+|---|---|---|---|---|---|---|---|
+| S1_Slider | Slider | S1 | 23.3 % | L | 3.5 m | 8 deg | 120.8, 78.5 |
+| S1_Funbox | Funbox | S1 | 50.8 % | R | 3.5 m | 8 deg | 158.3, 52.2 |
+| S1_MediumKicker | MediumKicker | S1 | 77.5 % | L | 5.5 m | 8 deg | 183.6, 15.3 |
+| S2_PipeRail | PipeRail | S2 | 24.1 % | R | 3.5 m | 8 deg | 198.4, -58.7 |
+| S2_GapBox | GapBox | S2 | 49.6 % | L | 3.5 m | 8 deg | 170.1, -93.1 |
+| S2_FlatDownRail | KinkRail | S2 | 75.5 % | R | 3.5 m | 8 deg | 153.7, -135.2 |
+| S3_ProKicker | ProKicker | S3 | 22.8 % | L | 6 m | 8 deg | 79.5, -152.9 |
+| S3_Rooftop | Rooftop | S3 | 52.3 % | R | 3.5 m | 8 deg | 27.5, -140.5 |
+| S3_Transfer | Transfer | S3 | 76.8 % | L | 3 m | 5 deg | -9.6, -117.1 |
+| S4_StepUp | StepUp | S4 | 23.5 % | R | 3.5 m | 8 deg | -59.5, -47.5 |
+| S4_Pyramid | Pyramid | S4 | 46.1 % | L | 8 m | 8 deg | -48.0, -4.5 |
+| S4_Spine | Spine | S4 | 75.2 % | R | 7 m | 8 deg | -63.0, 50.9 |
+| S5_FlatRail | FlatRail | S5 | 27.1 % | L | 3.5 m | 8 deg | -8.5, 106.8 |
+| S5_WallRide | WallRide | S5 | 56.5 % | R | 7.8 m | 12 deg | 30.3, 118.3 |
+| B_BeginnerKicker | BeginnerKicker | Beginner | 44.8 % | L | 2.5 m | 6 deg | 53.9, -19.5 |
+| B_Slider | Slider | Beginner | 76.6 % | R | 2.5 m | 6 deg | 82.1, -58.3 |
+
+Ride test (`FeatureRideTest`, the Luau sim, every feature as placed):
+47 checks, all PASS.
+
+| Feature | Test | Result | Detail |
+|---|---|---|---|
+| S1_Slider | Up the safety | PASS | rideOn, slid 0.97 s, clean exit |
+| S1_Slider | Registry along the feature | PASS | 66/66 ticks, 3.0 cm |
+| S1_Slider | Ollie on from the water | PASS | from v=2.4 m, pop -1.2 m along the main (14 tries) |
+| S1_Funbox | Up the safety | PASS | rideOn, slid 1.05 s, clean exit |
+| S1_Funbox | Kink joints | PASS | largest speed change in a tick 0.17 m/s |
+| S1_Funbox | Registry along the feature | PASS | 88/88 ticks, 3.6 cm |
+| S1_Funbox | Ollie on from the water | PASS | from v=2.7 m, pop -0.9 m along the main (25 tries) |
+| S1_MediumKicker | Launch (ideal pop) | PASS | lip 7.7 m/s at 31 deg, peak 1.99 m, air 1.15 s (plain 1.00), 9.7 m [want 1.0-1.4 s] |
+| S1_MediumKicker | Registry along the ramp | PASS | 32/32 ticks, 1.0 cm |
+| S2_PipeRail | Up the safety | PASS | rideOn, slid 1.22 s, clean exit |
+| S2_PipeRail | Registry along the feature | PASS | 90/90 ticks, 1.8 cm |
+| S2_PipeRail | Ollie on from the water | PASS | from v=-1.4 m, pop 3.5 m along the main (161 tries) |
+| S2_GapBox | Up the safety, pop in the window | PASS | popOn, slid 0.20 s, clean exit |
+| S2_GapBox | Registry along the feature | PASS | 34/34 ticks, 3.3 cm |
+| S2_GapBox | Ollie on from the water | PASS | from v=-2.5 m, pop -1.3 m along the main (39 tries) |
+| S2_FlatDownRail | Up the safety | PASS | rideOn, slid 1.12 s, clean exit |
+| S2_FlatDownRail | Kink joints | PASS | largest speed change in a tick 0.13 m/s |
+| S2_FlatDownRail | Registry along the feature | PASS | 95/95 ticks, 1.6 cm |
+| S2_FlatDownRail | Ollie on from the water | PASS | from v=-2.0 m, pop -0.0 m along the main (193 tries) |
+| S3_ProKicker | Launch (ideal pop) | PASS | lip 7.9 m/s at 39 deg, peak 3.22 m, air 1.42 s (plain 1.25), 12.1 m [want 1.4-2.0 s] |
+| S3_ProKicker | Registry along the ramp | PASS | 44/44 ticks, 1.9 cm |
+| S3_Rooftop | Up the safety | PASS | rideOn, slid 1.18 s, clean exit |
+| S3_Rooftop | Kink joints | PASS | largest speed change in a tick 0.16 m/s |
+| S3_Rooftop | Registry along the feature | PASS | 75/75 ticks, 3.8 cm |
+| S3_Rooftop | Ollie on from the water | PASS | from v=2.3 m, pop -1.2 m along the main (33 tries) |
+| S3_Transfer | Up the safety | PASS | rideOn, slid 0.72 s, clean exit |
+| S3_Transfer | Registry along the feature | PASS | 60/60 ticks, 1.5 cm |
+| S3_Transfer | Transfer A to B | PASS | pop at u=3.3 m, charge 0.35 s (3 tries) |
+| S3_Transfer | Ollie on from the water | PASS | from v=-1.6 m, pop -1.7 m along the main (42 tries) |
+| S4_StepUp | Up the safety | PASS | rideOn, slid 0.48 s, shortOllie into the high rail (expected) |
+| S4_StepUp | Registry along the feature | PASS | 43/43 ticks, 0.6 cm |
+| S4_StepUp | Pop up to the second rail | PASS | pop at u=5.2 m, charge 0.13 s (1 tries) |
+| S4_StepUp | Ollie on from the water | PASS | from v=-3.0 m, pop 0.6 m along the main (138 tries) |
+| S4_Pyramid | Launch and land | PASS | lip 8.0 m/s at 29 deg, peak 2.03 m, air 1.12 s (plain 0.98), 9.2 m |
+| S4_Pyramid | Registry along the ramp | PASS | 25/25 ticks, 4.1 cm |
+| S4_Spine | Launch, land on the down slope | PASS | lip 7.6 m/s at 23 deg, peak 1.81 m, air 0.92 s (plain 0.80), 7.5 m, on the landing ramp |
+| S4_Spine | Registry along the ramp | PASS | 50/50 ticks, 0.5 cm |
+| S5_FlatRail | Up the safety | PASS | rideOn, slid 1.22 s, clean exit |
+| S5_FlatRail | Registry along the feature | PASS | 93/93 ticks, 1.0 cm |
+| S5_FlatRail | Ollie on from the water | PASS | from v=1.2 m, pop -0.5 m along the main (58 tries) |
+| S5_WallRide | Up the wall and out | PASS | wallRide 0.43 s, 0.52 m up (aimed 0.0 m along, 1.0 m in) |
+| S5_WallRide | Registry on the wall | PASS | 26/26 ticks, 1.5 cm |
+| B_BeginnerKicker | Launch (ideal pop) | PASS | lip 8.0 m/s at 23 deg, peak 1.06 m, air 0.87 s (plain 0.75), 7.3 m [want 0.6-0.9 s] |
+| B_BeginnerKicker | Registry along the ramp | PASS | 19/19 ticks, 0.5 cm |
+| B_Slider | Up the safety | PASS | rideOn, slid 0.95 s, clean exit |
+| B_Slider | Registry along the feature | PASS | 65/65 ticks, 3.1 cm |
+| B_Slider | Ollie on from the water | PASS | from v=-3.0 m, pop -1.3 m along the main (110 tries) |
+
+![top-down, feature IDs](layout/m5-map-labelled.jpg)

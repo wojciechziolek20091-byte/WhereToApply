@@ -14,7 +14,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG, DT, GRAVITY } from '../src/sim/config';
-import { BEGINNER_LAYOUT, BEGINNER_PARK, CATALOG_TEST_PARK, LAKESIDE_PARK, TEST_PARK, WAKE_PARK, WAKE_PARK_LAYOUT } from '../src/sim/parkLayout';
+import { BEGINNER_LAYOUT, BEGINNER_LINE, BEGINNER_PARK, CATALOG_TEST_PARK, LAKESIDE_PARK, LAYOUT_RULES, TEST_PARK, WAKE_LAYOUT, WAKE_PARK, WAKE_PARK_LAYOUT } from '../src/sim/parkLayout';
 import { DEFAULT_ANIM_CONFIG } from '../src/anim/config';
 import { ALL_CLIPS, CRASH_LEAD_IN } from '../src/anim/poses';
 import { CATALOG_COMMON, FEATURE_CATALOG } from '../src/sim/featureCatalog';
@@ -38,8 +38,8 @@ ParkLayout.TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 ParkLayout.CATALOG_TEST_PARK = ${lua({ ...CATALOG_TEST_PARK, site: undefined }, '')}
 ParkLayout.CATALOG_TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 
--- The wake park (the default): the features spec's lines on the loop. Its
--- site adds marker buoys and the cable operator hut to the lakeside site.
+-- The wake park (the default): the layout spec's target layout on its own
+-- loop (towers on the shore), round the grown lake and the ring island.
 ParkLayout.WAKE_PARK = ${lua(WAKE_PARK, '')}
 
 -- The beginner 2-tower system, its own map with its own cable.
@@ -55,18 +55,26 @@ writeFileSync(join(__dirname, '../roblox/src/shared/Sim/ParkLayout.luau'), out);
 const layout = `--!strict
 -- GENERATED from src/sim/parkLayout.ts by scripts/gen-luau-data.ts. Do not edit:
 -- edit the TypeScript file and rerun the script.
--- Park/Layout (features spec section 9): every feature of the wake park and
--- the beginner 2-tower system, in the spec's terms: catalogue type, params,
--- segmentOfCable (1-based straight in order of travel), distanceAlong (m),
--- sideOffset (m, + right of the cable line), facing ("WithCable",
--- "AgainstCable" or an angle in radians). The sim's park defs
--- (Sim.ParkLayout.WAKE_PARK / BEGINNER_PARK) are made from these.
--- ParkBuilder.buildPark() builds them into Workspace.Park.Features.
+-- Park/Layout (layout spec section 1): the wake park and the beginner line in
+-- the spec's format: featureId, type (catalogue), straight (1-based in order
+-- of travel), alongFraction (the centre along the straight), side ("L" / "R"
+-- of travel), sideOffset (m, to the centre), angleIn (degrees toward the
+-- cable at the exit), params. Park/PlaceFeatures turns them into the sim's
+-- feature defs from the cable path (Sim.ParkLayout.WAKE_PARK /
+-- BEGINNER_PARK hold the result); Park/LayoutValidator checks them against
+-- RULES. FEATURES_SPEC_MAIN / FEATURES_SPEC_BEGINNER: the features spec's
+-- earlier lines (segmentOfCable / distanceAlong), kept for reference.
 local Layout = {}
 
-Layout.MAIN = ${lua(WAKE_PARK_LAYOUT, '')}
+Layout.MAIN = ${lua(WAKE_LAYOUT, '')}
 
-Layout.BEGINNER = ${lua(BEGINNER_LAYOUT, '')}
+Layout.BEGINNER = ${lua(BEGINNER_LINE, '')}
+
+Layout.RULES = ${lua(LAYOUT_RULES, '')}
+
+Layout.FEATURES_SPEC_MAIN = ${lua(WAKE_PARK_LAYOUT, '')}
+
+Layout.FEATURES_SPEC_BEGINNER = ${lua(BEGINNER_LAYOUT, '')}
 
 return Layout
 `;

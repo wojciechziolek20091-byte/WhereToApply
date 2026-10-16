@@ -13,6 +13,8 @@ local FeatureConfig = require(script.Parent.FeatureConfig)
 local FeatureModel = require(script.Parent.FeatureModel)
 local FeatureRegistry = require(script.Parent.FeatureRegistry)
 local FeatureValidator = require(script.Parent.FeatureValidator)
+local Layout = require(script.Parent.Layout)
+local LayoutValidator = require(script.Parent.LayoutValidator)
 local Sim = require(script.Parent.Parent.Sim)
 
 local ParkBuilder = {}
@@ -151,8 +153,44 @@ function ParkBuilder.buildPark(park: any?, quiet: boolean?): BuildReport
 	end
 	if not quiet then
 		print(`[buildPark] {p.name}: {#report.placed} features placed, {#report.refused} refused`)
+		ParkBuilder.layoutReport(p)
 	end
 	return report
+end
+
+-- The park's Park/Layout entries (the wake park's MAIN, the beginner line's BEGINNER), if it has them.
+function ParkBuilder.layoutOf(park: any): ({ any }?, boolean)
+	if park.name == Sim.ParkLayout.WAKE_PARK.name then
+		return Layout.MAIN, false
+	elseif park.name == Sim.ParkLayout.BEGINNER_PARK.name then
+		return Layout.BEGINNER, true
+	end
+	return nil, false
+end
+
+-- Print the LayoutValidator table (layout spec 1.5) and the ride-data check
+-- for a built park. Returns true when every row passes.
+function ParkBuilder.layoutReport(park: any): boolean
+	local entries, beginner = ParkBuilder.layoutOf(park)
+	if not entries then
+		return true
+	end
+	local rows = LayoutValidator.validate(park, entries, nil, beginner)
+	for _, r in LayoutValidator.rideData(park, entries, FeatureModel.featuresFolder()) do
+		table.insert(rows, r)
+	end
+	LayoutValidator.print(rows)
+	for _, r in rows do
+		if not r.pass then
+			warn(`[layout] {r.feature} {r.rule}: {r.value} (limit {r.limit})`)
+		end
+	end
+	for _, r in rows do
+		if not r.pass then
+			return false
+		end
+	end
+	return true
 end
 
 return ParkBuilder
