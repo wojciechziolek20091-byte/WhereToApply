@@ -15,29 +15,28 @@ local FeatureConfig = {
 	ParkFolder = "Park",
 	FeaturesFolder = "Features",
 	Difficulty = {
-		{ name = "Beginner", color = { 46, 160, 67 }, stripes = 1 },
-		{ name = "Intermediate", color = { 33, 110, 210 }, stripes = 1 },
-		{ name = "Advanced", color = { 24, 24, 28 }, stripes = 1 },
-		{ name = "Pro", color = { 24, 24, 28 }, stripes = 2 },
+		{ name = "Beginner", color = { 46, 160, 67 } },
+		{ name = "Intermediate", color = { 33, 110, 210 } },
+		{ name = "Advanced", color = { 24, 24, 28 } },
+		{ name = "Pro", color = { 24, 24, 28 } },
 	},
-	Colors = {
-		TopBlack = { 32, 34, 38 },
-		TopWhite = { 236, 238, 240 },
-		Frame = { 150, 156, 162 },
-		PontoonWhite = { 232, 232, 226 },
-		PontoonYellow = { 240, 196, 40 },
-		Coping = { 196, 200, 204 },
-		Pipe = { 178, 184, 190 },
-		Chain = { 70, 72, 76 },
-		BuoyOrange = { 244, 112, 28 },
-		BuoyWhite = { 244, 244, 240 },
-		Wall = { 236, 238, 240 },
-		Sign = { 250, 250, 246 },
-		Dock = { 150, 112, 74 },
+	Style = {
+		Feature = { color = { 240, 240, 240 }, material = "SmoothPlastic", reflectance = 0.05 },
+		Rail = { color = { 25, 25, 25 }, material = "SmoothPlastic", reflectance = 0 },
+		RailSupport = { color = { 25, 25, 25 }, material = "Metal", reflectance = 0 },
+		RailPontoon = { color = { 25, 25, 25 }, material = "SmoothPlastic", reflectance = 0 },
+		Chain = { color = { 60, 60, 62 }, material = "Metal", reflectance = 0 },
+		Tower = { color = { 150, 150, 150 }, material = "Metal", reflectance = 0 },
+		GuyWire = { color = { 60, 60, 62 }, material = "Metal", reflectance = 0 },
+		Foundation = { color = { 170, 168, 160 }, material = "Concrete", reflectance = 0 },
+		SignPost = { color = { 150, 150, 150 }, material = "Metal", reflectance = 0 },
+		SignBoard = { color = { 240, 240, 240 }, material = "SmoothPlastic", reflectance = 0 },
+		BuoyBoundary = { color = { 255, 120, 20 }, material = "SmoothPlastic", reflectance = 0.1 },
+		BuoyLane = { color = { 244, 244, 244 }, material = "SmoothPlastic", reflectance = 0.1 },
+		BuoyBand = { color = { 30, 30, 32 }, material = "SmoothPlastic", reflectance = 0 },
+		AnchorLine = { color = { 40, 40, 42 }, material = "SmoothPlastic", reflectance = 0 },
 	},
 	Accents = { Orange = { 244, 120, 32 }, Teal = { 20, 160, 160 }, Yellow = { 246, 200, 30 }, Magenta = { 210, 40, 140 } },
-	Materials = { HDPE = "SmoothPlastic", Frame = "DiamondPlate", Pipe = "Metal", Pontoon = "Plastic", Chain = "Metal", Skatelite = "SmoothPlastic", Dock = "Wood" },
-	HDPEReflectance = 0.07,
 	CopingRadius = 0.04,
 	TopSheet = 0.05,
 	VisualDrop = 0.03,
@@ -98,9 +97,10 @@ function FeatureConfig.difficultyColor(d: number): Color3
 	return Color3.fromRGB(c[1], c[2], c[3])
 end
 
--- A named colour from Colors or Accents.
+-- A named colour: a Style role's colour, or an accent.
 function FeatureConfig.color(name: string): Color3
-	local c = (FeatureConfig.Colors :: any)[name] or (FeatureConfig.Accents :: any)[name]
+	local style = (FeatureConfig.Style :: any)[name]
+	local c = if style then style.color else (FeatureConfig.Accents :: any)[name]
 	assert(c, "unknown colour " .. name)
 	return Color3.fromRGB(c[1], c[2], c[3])
 end

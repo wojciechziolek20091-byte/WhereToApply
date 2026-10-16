@@ -45,30 +45,47 @@ export const FEATURE_CONFIG = {
   Common: CATALOG_COMMON,
   Catalog: FEATURE_CATALOG,
 
-  /** Difficulty 1-4: sign colour, name, stripes on the leading edge (spec 1, 7). */
+  /** Difficulty 1-4: name and colour. Shown on the sign posts only (layout spec 4: no stripes on features). */
   Difficulty: [
-    { name: 'Beginner', color: [46, 160, 67] as RGB, stripes: 1 },
-    { name: 'Intermediate', color: [33, 110, 210] as RGB, stripes: 1 },
-    { name: 'Advanced', color: [24, 24, 28] as RGB, stripes: 1 },
-    { name: 'Pro', color: [24, 24, 28] as RGB, stripes: 2 },
+    { name: 'Beginner', color: [46, 160, 67] as RGB },
+    { name: 'Intermediate', color: [33, 110, 210] as RGB },
+    { name: 'Advanced', color: [24, 24, 28] as RGB },
+    { name: 'Pro', color: [24, 24, 28] as RGB },
   ],
 
-  /** Colours (spec section 7). One accent per line. */
-  Colors: {
-    TopBlack: [32, 34, 38] as RGB,
-    TopWhite: [236, 238, 240] as RGB,
-    Frame: [150, 156, 162] as RGB,
-    PontoonWhite: [232, 232, 226] as RGB,
-    PontoonYellow: [240, 196, 40] as RGB,
-    Coping: [196, 200, 204] as RGB,
-    Pipe: [178, 184, 190] as RGB,
-    Chain: [70, 72, 76] as RGB,
-    BuoyOrange: [244, 112, 28] as RGB,
-    BuoyWhite: [244, 244, 240] as RGB,
-    Wall: [236, 238, 240] as RGB,
-    Sign: [250, 250, 246] as RGB,
-    Dock: [150, 112, 74] as RGB,
-  },
+  /**
+   * FeatureStyle (layout spec section 4): every visible park part's colour,
+   * material and reflectance, by role. FeatureStyle.luau applies them; the
+   * web renderer reads the same table. One palette, no tints, no decals.
+   */
+  Style: {
+    /** Kickers, boxes, the wall ride, pyramid, spine: white HDPE, frames and floats included. */
+    Feature: { color: [240, 240, 240] as RGB, material: 'SmoothPlastic', reflectance: 0.05 },
+    /** A rail's slide surface (pipe, flat rail top). */
+    Rail: { color: [25, 25, 25] as RGB, material: 'SmoothPlastic', reflectance: 0 },
+    /** A rail's posts, feet, web. */
+    RailSupport: { color: [25, 25, 25] as RGB, material: 'Metal', reflectance: 0 },
+    /** The pontoons under a rail. */
+    RailPontoon: { color: [25, 25, 25] as RGB, material: 'SmoothPlastic', reflectance: 0 },
+    /** Anchor chains. */
+    Chain: { color: [60, 60, 62] as RGB, material: 'Metal', reflectance: 0 },
+    /** Cable towers: mast, arm, carrier wheel. */
+    Tower: { color: [150, 150, 150] as RGB, material: 'Metal', reflectance: 0 },
+    /** Guy wires. */
+    GuyWire: { color: [60, 60, 62] as RGB, material: 'Metal', reflectance: 0 },
+    /** Tower foundations. */
+    Foundation: { color: [170, 168, 160] as RGB, material: 'Concrete', reflectance: 0 },
+    /** Sign posts (grey steel) and boards (white); the difficulty band is the difficulty colour. */
+    SignPost: { color: [150, 150, 150] as RGB, material: 'Metal', reflectance: 0 },
+    SignBoard: { color: [240, 240, 240] as RGB, material: 'SmoothPlastic', reflectance: 0 },
+    /** Buoys (section 5): orange boundaries, white for the dock-exit lane, a dark band round the middle. */
+    BuoyBoundary: { color: [255, 120, 20] as RGB, material: 'SmoothPlastic', reflectance: 0.1 },
+    BuoyLane: { color: [244, 244, 244] as RGB, material: 'SmoothPlastic', reflectance: 0.1 },
+    BuoyBand: { color: [30, 30, 32] as RGB, material: 'SmoothPlastic', reflectance: 0 },
+    AnchorLine: { color: [40, 40, 42] as RGB, material: 'SmoothPlastic', reflectance: 0 },
+  } as Record<string, { color: RGB; material: string; reflectance: number }>,
+
+  /** Line accent colour names: kept as the model's `Accent` attribute (map, HUD); features are not painted with them. */
   Accents: {
     Orange: [244, 120, 32] as RGB,
     Teal: [20, 160, 160] as RGB,
@@ -76,18 +93,6 @@ export const FEATURE_CONFIG = {
     Magenta: [210, 40, 140] as RGB,
   } as Record<string, RGB>,
 
-  /** Roblox materials (spec section 7). Wood only for docks. */
-  Materials: {
-    HDPE: 'SmoothPlastic',
-    Frame: 'DiamondPlate',
-    Pipe: 'Metal',
-    Pontoon: 'Plastic',
-    Chain: 'Metal',
-    Skatelite: 'SmoothPlastic',
-    Dock: 'Wood',
-  },
-  /** HDPE sheen (spec 7: 0.05-0.1). */
-  HDPEReflectance: 0.07,
   /** Coping radius on box edges (m, validator: at least 0.03). */
   CopingRadius: 0.04,
   /** Visual top sheet thickness (m): the ride surface is its top face. */

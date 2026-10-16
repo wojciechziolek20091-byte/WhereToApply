@@ -150,3 +150,30 @@ feature ridden with the Luau sim) and the validator pass unchanged: the ride
 data was not touched.
 
 ![after the clean-up](layout/m2-features.jpg)
+
+## Milestone 3: colours (FeatureStyle)
+
+One palette, `FeatureConfig.Style` (in `src/park/featureConfig.ts`, generated
+to Luau; the web renderer reads the same table), applied by role through
+`roblox/src/shared/Park/FeatureStyle.luau` (`apply(part, role)`, `color`,
+`material`, `difficulty`, `allowed`). Every visible part records its role in a
+`StyleRole` attribute.
+
+| Role | Colour | Material | Reflectance | Used for |
+|---|---|---|---|---|
+| Feature | 240,240,240 | SmoothPlastic | 0.05 | kickers, boxes (slider, funbox, gap box, rooftop, transfer), wall ride, pyramid, spine: tops, sides, skirts, frames, coping, pontoons; the safety ramps in front of rails |
+| Rail | 25,25,25 | SmoothPlastic | 0 | pipe rail, flat rail, flat-down rail, step-up rail slide surfaces |
+| RailSupport | 25,25,25 | Metal | 0 | rail posts, feet, web |
+| RailPontoon | 25,25,25 | SmoothPlastic | 0 | pontoons under rails |
+| Chain | 60,60,62 | Metal | 0 | anchor chains |
+| Tower | 150,150,150 | Metal | 0 | towers (milestone 4) |
+| GuyWire / Foundation | 60,60,62 Metal / 170,168,160 Concrete | | 0 | towers (milestone 4) |
+| SignPost / SignBoard | 150,150,150 Metal / 240,240,240 SmoothPlastic | | 0 | signs; the band shows the difficulty colour |
+| BuoyBoundary / BuoyLane / BuoyBand / AnchorLine | 255,120,20 / 244,244,244 / 30,30,32 / 40,40,42 | SmoothPlastic | 0.1 / 0.1 / 0 / 0 | buoys (milestone 6) |
+
+No underwater tint, no difficulty stripes, no line accent colours on the
+features (the `Accent` attribute stays for the map), no decals or logos.
+VisualAudit's `material` check now runs with `FeatureStyle.allowed()`: every
+visible part of both parks uses a palette pair (0 findings).
+
+![colours](layout/m3-features.jpg)

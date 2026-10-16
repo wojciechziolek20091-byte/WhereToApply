@@ -175,9 +175,10 @@ function FeatureConfig.difficultyColor(d: number): Color3
 \treturn Color3.fromRGB(c[1], c[2], c[3])
 end
 
--- A named colour from Colors or Accents.
+-- A named colour: a Style role's colour, or an accent.
 function FeatureConfig.color(name: string): Color3
-\tlocal c = (FeatureConfig.Colors :: any)[name] or (FeatureConfig.Accents :: any)[name]
+\tlocal style = (FeatureConfig.Style :: any)[name]
+\tlocal c = if style then style.color else (FeatureConfig.Accents :: any)[name]
 \tassert(c, "unknown colour " .. name)
 \treturn Color3.fromRGB(c[1], c[2], c[3])
 end

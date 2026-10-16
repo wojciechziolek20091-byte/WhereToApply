@@ -7,7 +7,7 @@ local Sim = require(__root.Sim)
 for _, park in { Sim.ParkLayout.WAKE_PARK, Sim.ParkLayout.BEGINNER_PARK } do
 	ParkBuilder.buildPark(park, true)
 	print(park.name)
-	local r = VisualAudit.scan(FeatureModel.featuresFolder())
+	local r = VisualAudit.scan(FeatureModel.featuresFolder(), { allowed = require(__root.Park.FeatureStyle).allowed() })
 	VisualAudit.print(r, LIMIT or 4)
 	local line = {}
 	for k, v in r.counts do table.insert(line, k .. "=" .. v) end

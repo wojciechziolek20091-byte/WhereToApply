@@ -16,11 +16,19 @@ local CollectionService = game:GetService("CollectionService")
 local FeatureConfig = require(script.Parent.FeatureConfig)
 local FeatureModel = require(script.Parent.FeatureModel)
 local FeatureShapes = require(script.Parent.Parent.Sim.FeatureShapes)
+local FeatureStyle = require(script.Parent.FeatureStyle)
 
 local FeatureBuilder = {}
 
 local S = FeatureConfig.StudsPerMetre
-local C = FeatureConfig.Colors
+
+-- Colour and material of a FeatureStyle role, for the part helpers below.
+local function col(role: string): Color3
+	return FeatureStyle.color(role)
+end
+local function mat(role: string): string
+	return (FeatureConfig.Style :: any)[role].material
+end
 
 export type BuildSpec = {
 	id: string,
@@ -46,9 +54,6 @@ local function p3(u: number, v: number, h: number): P3
 	return { u = u, v = v, h = h }
 end
 
-local function rgb(c: { number }): Color3
-	return Color3.fromRGB(c[1], c[2], c[3])
-end
 
 local function material(name: string): Enum.Material
 	return (Enum.Material :: any)[name]
@@ -57,8 +62,9 @@ end
 -- Builder state for one model.
 type Ctx = {
 	model: Model,
-	accent: Color3,
-	top: Color3,
+	-- FeatureStyle role of the slide tops being built: "Feature" (white HDPE)
+	-- or "Rail" (black) for pipes and rails.
+	topRole: string,
 	rideIndex: number,
 	shape: any,
 	-- Stretches built so far: every other one is 5 mm narrower each side, so
@@ -134,9 +140,9 @@ local function ridePart(ctx: Ctx, piece: any, role: string, a: P3, b: P3, width:
 	local round = piece.profile == "Round" and role ~= "Safety"
 	local part: BasePart
 	if round then
-		part = cyl(ctx, "Ride", role .. ctx.rideIndex, a, b, piece.radius, rgb(C.Pipe), "Metal", true)
+		part = cyl(ctx, "Ride", role .. ctx.rideIndex, a, b, piece.radius, col("Rail"), mat("Rail"), true)
 	else
-		part = slab(ctx, "Ride", role .. ctx.rideIndex, a, b, width, 0.1, rgb(C.TopWhite), "SmoothPlastic", upHint)
+		part = slab(ctx, "Ride", role .. ctx.rideIndex, a, b, width, 0.1, col("Feature"), mat("Feature"), upHint)
 	end
 	local cf, len = segFrame(a, b, upHint)
 	local root = (ctx.model.PrimaryPart :: BasePart).CFrame
@@ -199,17 +205,17 @@ local function rideAlong(ctx: Ctx, piece: any): { P3 }
 	return pts
 end
 
--- Pontoon floats under a stretch of a feature, half under the water.
-local function pontoons(ctx: Ctx, u0: number, u1: number, vc: number, halfWidth: number, radius: number)
-	local color = rgb(C.PontoonWhite)
+-- Pontoon floats under a stretch of a feature, half under the water: white,
+-- black under a rail (role "RailPontoon").
+local function pontoons(ctx: Ctx, u0: number, u1: number, vc: number, halfWidth: number, radius: number, role: string?)
+	local r = role or "Feature"
 	for _, side in { -1, 1 } do
-		cyl(ctx, "Visual", "Pontoon", p3(u0, vc + side * halfWidth, 0), p3(u1, vc + side * halfWidth, 0), radius, color, "Plastic", false)
+		FeatureStyle.apply(cyl(ctx, "Visual", "Pontoon", p3(u0, vc + side * halfWidth, 0), p3(u1, vc + side * halfWidth, 0), radius, col(r), mat(r), false), r)
 	end
 end
 
 -- Frame legs from a line down to the pontoon deck, with an X brace between pairs.
 local function frameUnder(ctx: Ctx, pts: { P3 }, halfWidth: number, deck: number)
-	local grey = rgb(C.Frame)
 	local first, last = pts[1], pts[#pts]
 	local len = last.u - first.u
 	local n = math.max(1, math.floor(len / 2.2))
@@ -226,11 +232,11 @@ local function frameUnder(ctx: Ctx, pts: { P3 }, halfWidth: number, deck: number
 		local vc = first.v + (last.v - first.v) * (i / n)
 		if h - 0.06 > deck then
 			for _, side in { -1, 1 } do
-				post(ctx, "Visual", "Leg", u, vc + side * (halfWidth - 0.15), deck, h - 0.06, 0.08, 0.08, grey, "DiamondPlate")
+				FeatureStyle.apply(post(ctx, "Visual", "Leg", u, vc + side * (halfWidth - 0.15), deck, h - 0.06, 0.08, 0.08, col("Feature"), mat("Feature")), "Feature")
 			end
 			if i < n and h - deck > 0.3 then
 				local u2 = first.u + len * (i + 1) / n
-				slab(ctx, "Visual", "Brace", p3(u, vc - halfWidth + 0.15, deck + 0.05), p3(u2, vc - halfWidth + 0.15, h - 0.1), 0.05, 0.05, grey, "DiamondPlate")
+				FeatureStyle.apply(slab(ctx, "Visual", "Brace", p3(u, vc - halfWidth + 0.15, deck + 0.05), p3(u2, vc - halfWidth + 0.15, h - 0.1), 0.05, 0.05, col("Feature"), mat("Feature")), "Feature")
 			end
 		end
 	end
@@ -240,12 +246,12 @@ end
 local function coping(ctx: Ctx, a: P3, b: P3, width: number)
 	local r = FeatureConfig.CopingRadius
 	for _, side in { -1, 1 } do
-		sink(cyl(ctx, "Visual", "Coping", p3(a.u, a.v + side * (width / 2 - r), a.h), p3(b.u, b.v + side * (width / 2 - r), b.h), r, rgb(C.Coping), "Metal", true))
+		FeatureStyle.apply(sink(cyl(ctx, "Visual", "Coping", p3(a.u, a.v + side * (width / 2 - r), a.h), p3(b.u, b.v + side * (width / 2 - r), b.h), r, col("Feature"), mat("Feature"), true)), "Feature")
 	end
 end
 
 -- Side panel under a top-sheet stretch, down to `bottom`.
-local function sidePanels(ctx: Ctx, a: P3, b: P3, width: number, bottom: number, color: Color3)
+local function sidePanels(ctx: Ctx, a: P3, b: P3, width: number, bottom: number)
 	for _, side in { -1, 1 } do
 		local hTop = math.min(a.h, b.h) - FeatureConfig.TopSheet
 		local hBot = bottom
@@ -255,18 +261,19 @@ local function sidePanels(ctx: Ctx, a: P3, b: P3, width: number, bottom: number,
 			-- stretches): no face shared with a sheet, a leg or the next side.
 			local depth = math.max(a.h, b.h) - FeatureConfig.TopSheet - hBot
 			local inset = width / 2 - 0.045 - (if ctx.stretch % 2 == 0 then 0.01 else 0)
-			slab(ctx, "Visual", "Side", p3(a.u, a.v + side * inset, a.h - FeatureConfig.TopSheet - 0.01), p3(b.u, b.v + side * inset, b.h - FeatureConfig.TopSheet - 0.01), 0.04, depth, color, "SmoothPlastic")
+			FeatureStyle.apply(slab(ctx, "Visual", "Side", p3(a.u, a.v + side * inset, a.h - FeatureConfig.TopSheet - 0.01), p3(b.u, b.v + side * inset, b.h - FeatureConfig.TopSheet - 0.01), 0.04, depth, col("Feature"), mat("Feature")), "Feature")
 		end
 	end
 end
 
--- HDPE top sheet just under the ride surface (sunk by VisualDrop), one piece
--- and one colour above and below the water (layout spec: no underwater tint).
-local function topSheet(ctx: Ctx, a: P3, b: P3, width: number): BasePart
+-- Top sheet just under the ride surface (sunk by VisualDrop), one piece and
+-- one colour above and below the water (layout spec: no underwater tint).
+local function topSheet(ctx: Ctx, a: P3, b: P3, width: number, role: string?): BasePart
 	ctx.stretch += 1
+	local r = role or ctx.topRole
 	local w = if ctx.stretch % 2 == 0 then width - 0.01 else width
-	local p = slab(ctx, "Visual", "TopSheet", a, b, w, FeatureConfig.TopSheet, ctx.top, "SmoothPlastic")
-	p.Reflectance = FeatureConfig.HDPEReflectance
+	local p = slab(ctx, "Visual", "TopSheet", a, b, w, FeatureConfig.TopSheet, col(r), mat(r))
+	FeatureStyle.apply(p, r)
 	return sink(p)
 end
 
@@ -274,8 +281,9 @@ end
 local function buildSafety(ctx: Ctx, piece: any)
 	local pts = rideAlong(ctx, piece)
 	local a, b = pts[1], pts[#pts]
-	topSheet(ctx, a, b, piece.width)
-	sidePanels(ctx, a, b, piece.width, -0.3, ctx.accent)
+	-- The safety ramp is white HDPE, even in front of a black rail.
+	topSheet(ctx, a, b, piece.width, "Feature")
+	sidePanels(ctx, a, b, piece.width, -0.3)
 	coping(ctx, a, b, piece.width)
 end
 
@@ -284,7 +292,7 @@ local function buildBoxStretch(ctx: Ctx, piece: any)
 	local pts = rideAlong(ctx, piece)
 	local a, b = pts[1], pts[#pts]
 	topSheet(ctx, a, b, piece.width)
-	sidePanels(ctx, a, b, piece.width, 0.05, ctx.accent)
+	sidePanels(ctx, a, b, piece.width, 0.05)
 	coping(ctx, a, b, piece.width)
 	return pts
 end
@@ -298,7 +306,7 @@ local function buildRailStretch(ctx: Ctx, piece: any)
 	local function at(x: number): P3
 		return p3(a.u + (b.u - a.u) * x, a.v + (b.v - a.v) * x, a.h + (b.h - a.h) * x - FeatureConfig.TopSheet - 0.01)
 	end
-	slab(ctx, "Visual", "RailWeb", at(t), at(1 - t), if ctx.stretch % 2 == 0 then 0.05 else 0.06, 0.12, rgb(C.Frame), "DiamondPlate")
+	FeatureStyle.apply(slab(ctx, "Visual", "RailWeb", at(t), at(1 - t), if ctx.stretch % 2 == 0 then 0.05 else 0.06, 0.12, col("RailSupport"), mat("RailSupport")), "RailSupport")
 	return pts
 end
 
@@ -306,13 +314,12 @@ end
 local function buildPipeStretch(ctx: Ctx, piece: any)
 	local pts = rideAlong(ctx, piece)
 	local a, b = pts[1], pts[#pts]
-	sink(cyl(ctx, "Visual", "Pipe", a, b, piece.radius, rgb(C.Pipe), "Metal", true))
+	FeatureStyle.apply(sink(cyl(ctx, "Visual", "Pipe", a, b, piece.radius, col("Rail"), mat("Rail"), true)), "Rail")
 	return pts
 end
 
 -- Supports from a rail or pipe down to a pontoon pair under it.
 local function railSupports(ctx: Ctx, pts: { P3 }, below: number)
-	local grey = rgb(C.Frame)
 	local first, last = pts[1], pts[#pts]
 	local len = last.u - first.u
 	local n = math.max(1, math.floor(len / 2.5))
@@ -327,8 +334,8 @@ local function railSupports(ctx: Ctx, pts: { P3 }, below: number)
 		end
 		local vc = first.v + (last.v - first.v) * (i / n)
 		if h - below > 0.08 then
-			post(ctx, "Visual", "Post", u, vc, 0.1, h - below, 0.08, 0.08, grey, "DiamondPlate")
-			post(ctx, "Visual", "Foot", u, vc, 0.08, 0.14, 0.5, 0.12, grey, "DiamondPlate")
+			FeatureStyle.apply(post(ctx, "Visual", "Post", u, vc, 0.1, h - below, 0.08, 0.08, col("RailSupport"), mat("RailSupport")), "RailSupport")
+			FeatureStyle.apply(post(ctx, "Visual", "Foot", u, vc, 0.08, 0.14, 0.5, 0.12, col("RailSupport"), mat("RailSupport")), "RailSupport")
 		end
 	end
 end
@@ -352,11 +359,11 @@ local function buildCurvedRamp(ctx: Ctx, piece: any, noBackWall: boolean?)
 				local v = (a.v + b.v) / 2 + side * (piece.width / 2 - 0.04)
 				local plane = (a.v + b.v) / 2 + side * (piece.width / 2 - 0.02)
 				if low > -0.2 then
-					post(ctx, "Visual", "Skirt", (a.u + b.u) / 2, v, -0.25, low, 0.04, math.abs(b.u - a.u), ctx.accent, "SmoothPlastic")
+					FeatureStyle.apply(post(ctx, "Visual", "Skirt", (a.u + b.u) / 2, v, -0.25, low, 0.04, math.abs(b.u - a.u), col("Feature"), mat("Feature")), "Feature")
 				end
 				if top - math.max(low, -0.25) > 0.01 then
 					local base = math.max(low, -0.25)
-					tri(ctx, "Visual", "Skirt", p3(hi.u, plane, base), p3(hi.u, plane, top), p3(lo.u, plane, base), 0.04, ctx.accent, "SmoothPlastic", Vector3.new(side, 0, 0))
+					FeatureStyle.apply(tri(ctx, "Visual", "Skirt", p3(hi.u, plane, base), p3(hi.u, plane, top), p3(lo.u, plane, base), 0.04, col("Feature"), mat("Feature"), Vector3.new(side, 0, 0)), "Feature")
 				end
 			end
 		end
@@ -364,19 +371,19 @@ local function buildCurvedRamp(ctx: Ctx, piece: any, noBackWall: boolean?)
 	local hi = if piece.h1 > piece.h0 then pts[#pts] else pts[1]
 	-- Back wall under the high edge.
 	if not noBackWall then
-		post(ctx, "Visual", "BackWall", hi.u + (if piece.h1 > piece.h0 then 0.06 else -0.06), hi.v, -0.25, hi.h - FeatureConfig.TopSheet, 0.1, piece.width, rgb(C.Frame), "DiamondPlate")
+		FeatureStyle.apply(post(ctx, "Visual", "BackWall", hi.u + (if piece.h1 > piece.h0 then 0.06 else -0.06), hi.v, -0.25, hi.h - FeatureConfig.TopSheet, 0.1, piece.width, col("Feature"), mat("Feature")), "Feature")
 	end
 	return pts
 end
 
 -- A sign post beside the feature with its difficulty colour.
 local function sign(ctx: Ctx, u: number, v: number, label: string, difficulty: number)
-	local d = FeatureConfig.Difficulty[difficulty]
-	post(ctx, "Signage", "SignPost", u, v, 0, 1.6, 0.08, 0.08, rgb(C.Frame), "Metal")
-	local board = post(ctx, "Signage", "SignBoard", u, v, 1.3, 1.9, 0.06, 0.9, rgb(C.Sign), "SmoothPlastic")
+	FeatureStyle.apply(post(ctx, "Signage", "SignPost", u, v, 0, 1.6, 0.08, 0.08, col("SignPost"), mat("SignPost")), "SignPost")
+	local board = FeatureStyle.apply(post(ctx, "Signage", "SignBoard", u, v, 1.3, 1.9, 0.06, 0.9, col("SignBoard"), mat("SignBoard")), "SignBoard")
 	board:SetAttribute("Label", label)
-	-- The difficulty band: inset from the board's edges, standing proud of its face.
-	post(ctx, "Signage", "SignBand", u + 0.035, v, 1.32, 1.44, 0.02, 0.86, rgb(d.color), "SmoothPlastic")
+	-- The difficulty band (the only place difficulty shows): inset from the
+	-- board's edges, standing proud of its face.
+	FeatureStyle.difficulty(post(ctx, "Signage", "SignBand", u + 0.035, v, 1.32, 1.44, 0.02, 0.86, col("SignBoard"), "SmoothPlastic"), difficulty)
 end
 
 -- A crash volume (spec 4.3): a block hanging `drop` below the line a -> b, `depth` deep.
@@ -509,7 +516,7 @@ local function buildBoxLike(ctx: Ctx, entry: any, params: any)
 			else
 				local below = if style == "Pipe" then pieces[1].radius * 2 else FeatureConfig.TopSheet + 0.12
 				railSupports(ctx, above, below)
-				pontoons(ctx, above[1].u, above[#above].u, (above[1].v + above[#above].v) / 2, 0.3, 0.14)
+				pontoons(ctx, above[1].u, above[#above].u, (above[1].v + above[#above].v) / 2, 0.3, 0.14, "RailPontoon")
 			end
 		end
 	end
@@ -526,7 +533,7 @@ end
 -- on the features; the park's buoys come from BuoyLayout, 6 m or more away).
 local function chain(ctx: Ctx, u: number, v: number, du: number, dv: number)
 	local reach = FeatureConfig.Chain.Reach
-	cyl(ctx, "Visual", "Chain", p3(u, v, 0.1), p3(u + du * reach, v + dv * reach, -0.6), FeatureConfig.Chain.Thickness / 2, rgb(C.Chain), "Metal", false)
+	FeatureStyle.apply(cyl(ctx, "Visual", "Chain", p3(u, v, 0.1), p3(u + du * reach, v + dv * reach, -0.6), FeatureConfig.Chain.Thickness / 2, col("Chain"), mat("Chain"), false), "Chain")
 end
 
 -- Anchor chains at the four corners. (The features spec's realism pass also
@@ -596,10 +603,10 @@ function FeatureBuilder.build(spec: BuildSpec): Model
 		heading = spec.heading,
 	})
 	local accentName = spec.accent or "Orange"
+	local isRail = (params.shape == "box" or params.shape == "transfer") and params.style ~= nil and params.style ~= "Box"
 	local ctx: Ctx = {
 		model = model,
-		accent = rgb((FeatureConfig.Accents :: any)[accentName]),
-		top = if params.shape == "kicker" then rgb(C.TopWhite) else rgb(C.TopBlack),
+		topRole = if isRail then "Rail" else "Feature",
 		rideIndex = 0,
 		shape = shape,
 		stretch = 0,
@@ -641,8 +648,6 @@ local function buildWall(ctx: Ctx, entry: any)
 	local shape = ctx.shape
 	local uMid = (shape.uMin + shape.uMax) / 2
 	local len = shape.uMax - shape.uMin
-	local face = rgb(C.Wall)
-	local grey = rgb(C.Frame)
 	local profile: { P3 } = {}
 	for _, piece in shape.pieces do
 		local n = if piece.role == "Transition" then 6 else 1
@@ -651,8 +656,7 @@ local function buildWall(ctx: Ctx, entry: any)
 		local up = Vector3.new(-side, 0.2, 0)
 		for i = 1, n do
 			ridePart(ctx, piece, piece.role, pts[i], pts[i + 1], len, up)
-			local sheet = sink(slab(ctx, "Visual", "Face", pts[i], pts[i + 1], len, FeatureConfig.TopSheet, face, "SmoothPlastic", up))
-			sheet.Reflectance = FeatureConfig.HDPEReflectance
+			FeatureStyle.apply(sink(slab(ctx, "Visual", "Face", pts[i], pts[i + 1], len, FeatureConfig.TopSheet, col("Feature"), mat("Feature"), up)), "Feature")
 		end
 		for k, q in pts do
 			if not (k == 1 and #profile > 0) then
@@ -663,14 +667,14 @@ local function buildWall(ctx: Ctx, entry: any)
 	local w = shape.pieces[1].wall
 	local topPt = profile[#profile]
 	-- Coping bar along the top edge (a crash edge too: over the top is a crash).
-	cyl(ctx, "Visual", "TopCoping", p3(shape.uMin, topPt.v, topPt.h), p3(shape.uMax, topPt.v, topPt.h), 0.06, rgb(C.Coping), "Metal", false)
+	FeatureStyle.apply(cyl(ctx, "Visual", "TopCoping", p3(shape.uMin, topPt.v, topPt.h), p3(shape.uMax, topPt.v, topPt.h), 0.06, col("Feature"), mat("Feature"), false), "Feature")
 	-- Frame: posts behind the wall at each end and the middle, braced to a pontoon deck.
 	local back = topPt.v + w.side * 0.35
 	for _, u in { shape.uMin + 0.15, uMid, shape.uMax - 0.15 } do
-		post(ctx, "Visual", "WallPost", u, back, -0.2, topPt.h, 0.14, 0.14, grey, "DiamondPlate")
-		slab(ctx, "Visual", "WallBrace", p3(u, back, topPt.h - 0.2), p3(u, back + w.side * 1.4, 0.15), 0.08, 0.08, grey, "DiamondPlate")
+		FeatureStyle.apply(post(ctx, "Visual", "WallPost", u, back, -0.2, topPt.h, 0.14, 0.14, col("Feature"), mat("Feature")), "Feature")
+		FeatureStyle.apply(slab(ctx, "Visual", "WallBrace", p3(u, back, topPt.h - 0.2), p3(u, back + w.side * 1.4, 0.15), 0.08, 0.08, col("Feature"), mat("Feature")), "Feature")
 	end
-	slab(ctx, "Visual", "WallRail", p3(shape.uMin, back, topPt.h * 0.6), p3(shape.uMax, back, topPt.h * 0.6), 0.1, 0.1, grey, "DiamondPlate")
+	FeatureStyle.apply(slab(ctx, "Visual", "WallRail", p3(shape.uMin, back, topPt.h * 0.6), p3(shape.uMax, back, topPt.h * 0.6), 0.1, 0.1, col("Feature"), mat("Feature")), "Feature")
 	-- Accent end panels following the profile: a block and a triangle per segment.
 	for _, u in { shape.uMin - 0.03, shape.uMax + 0.03 } do
 		for i = 1, #profile - 1 do
@@ -679,9 +683,9 @@ local function buildWall(ctx: Ctx, entry: any)
 			if hi.h > 0 then
 				local base = math.max(lo.h, -0.2)
 				if base > -0.2 then
-					post(ctx, "Visual", "EndPanel", u, (a.v + b.v) / 2, -0.2, base, math.abs(b.v - a.v), 0.05, ctx.accent, "SmoothPlastic")
+					FeatureStyle.apply(post(ctx, "Visual", "EndPanel", u, (a.v + b.v) / 2, -0.2, base, math.abs(b.v - a.v), 0.05, col("Feature"), mat("Feature")), "Feature")
 				end
-				tri(ctx, "Visual", "EndPanel", p3(u, hi.v, base), p3(u, hi.v, hi.h), p3(u, lo.v, base), 0.05, ctx.accent, "SmoothPlastic", Vector3.new(0, 0, 1))
+				FeatureStyle.apply(tri(ctx, "Visual", "EndPanel", p3(u, hi.v, base), p3(u, hi.v, hi.h), p3(u, lo.v, base), 0.05, col("Feature"), mat("Feature"), Vector3.new(0, 0, 1)), "Feature")
 			end
 		end
 	end
@@ -717,11 +721,11 @@ local function buildPyramid(ctx: Ctx, entry: any, params: any)
 		part:SetAttribute("Axis", "v")
 	end
 	-- Faces: each a centre strip plus two right-triangle wedges, meeting at the hips exactly.
-	local sheetColor = ctx.top
+	local sheetColor = col("Feature")
 	local a = front.u1
 	local uEnd = backPiece.u1
 	local function sheet(p: BasePart)
-		p.Reflectance = FeatureConfig.HDPEReflectance
+		FeatureStyle.apply(p, "Feature")
 		if p.ClassName == "WedgePart" then
 			-- A corner wedge's face normal is its RightVector (up or down): sink along it.
 			local n = p.CFrame.RightVector
@@ -745,14 +749,14 @@ local function buildPyramid(ctx: Ctx, entry: any, params: any)
 	end
 	-- Coping round the top, accent band at the waterline, pontoons under.
 	for _, side in { -1, 1 } do
-		cyl(ctx, "Visual", "Coping", p3(top.u0, side * halfTop, H), p3(top.u1, side * halfTop, H), 0.04, rgb(C.Coping), "Metal", true)
+		FeatureStyle.apply(cyl(ctx, "Visual", "Coping", p3(top.u0, side * halfTop, H), p3(top.u1, side * halfTop, H), 0.04, col("Feature"), mat("Feature"), true), "Feature")
 	end
 	for _, uEdge in { top.u0, top.u1 } do
-		cyl(ctx, "Visual", "Coping", p3(uEdge, -halfTop, H), p3(uEdge, halfTop, H), 0.04, rgb(C.Coping), "Metal", true)
+		FeatureStyle.apply(cyl(ctx, "Visual", "Coping", p3(uEdge, -halfTop, H), p3(uEdge, halfTop, H), 0.04, col("Feature"), mat("Feature"), true), "Feature")
 	end
 	local u0, u1 = shape.uMin, shape.uMax
 	for _, side in { -1, 1 } do
-		post(ctx, "Visual", "Skirt", (u0 + u1) / 2, side * (half - 0.4), -0.2, 0.12, 0.05, (u1 - u0) - 0.8, ctx.accent, "SmoothPlastic")
+		FeatureStyle.apply(post(ctx, "Visual", "Skirt", (u0 + u1) / 2, side * (half - 0.4), -0.2, 0.12, 0.05, (u1 - u0) - 0.8, col("Feature"), mat("Feature")), "Feature")
 	end
 	pontoons(ctx, u0 + 0.8, u1 - 0.8, 0, half - 1.2, 0.22)
 end
