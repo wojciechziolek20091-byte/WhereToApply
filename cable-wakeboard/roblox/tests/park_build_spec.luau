@@ -18,4 +18,12 @@ for _, park in { Sim.ParkLayout.WAKE_PARK, Sim.ParkLayout.BEGINNER_PARK } do
 	check(#FeatureModel.featuresFolder():GetChildren() == n and #r2.placed == #r.placed, park.name .. ": buildPark is idempotent")
 	print(park.name, #r.placed, "placed")
 end
+-- Backup: the built park is cloned into ServerStorage/Backup_<date>, the original stays.
+local before = #FeatureModel.featuresFolder():GetChildren()
+local b = ParkBuilder.backup("2026-10-16")
+check(b ~= nil and b.Name == "Backup_2026-10-16", "backup folder")
+local copy = b:FindFirstChild("Park")
+check(copy ~= nil and #copy:FindFirstChild("Features"):GetChildren() == before, "backup holds every feature")
+check(#FeatureModel.featuresFolder():GetChildren() == before, "backup leaves the park in place")
+check(ParkBuilder.backup("2026-10-16") == b and #b:GetChildren() == 1, "backing up twice the same day replaces the copy")
 print("PARK BUILD OK")

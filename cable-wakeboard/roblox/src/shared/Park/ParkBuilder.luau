@@ -65,6 +65,35 @@ local function specOf(def: any, f: any): FeatureBuilder.BuildSpec
 	}
 end
 
+-- Back up the current park before a rebuild (layout spec, rule 1): clones
+-- Workspace.Park (the features) and Workspace.WakePark (the client's towers,
+-- cable and site) into ServerStorage/Backup_<date>. Run it from the server or
+-- the Studio command bar (ServerStorage is not visible to clients). Returns
+-- the backup folder, or nil when there is nothing to back up.
+function ParkBuilder.backup(date: string?): Folder?
+	local storage = game:GetService("ServerStorage")
+	local name = "Backup_" .. (date or os.date("!%Y-%m-%d"))
+	local found = false
+	local folder = storage:FindFirstChild(name) or Instance.new("Folder")
+	folder.Name = name
+	for _, source in { FeatureConfig.ParkFolder, "WakePark" } do
+		local inst = workspace:FindFirstChild(source)
+		if inst then
+			local old = folder:FindFirstChild(source)
+			if old then
+				old:Destroy()
+			end
+			inst:Clone().Parent = folder
+			found = true
+		end
+	end
+	if not found then
+		return nil
+	end
+	folder.Parent = storage
+	return folder :: Folder
+end
+
 -- Clear Workspace.Park.Features and build `park`'s catalogue features into it.
 function ParkBuilder.buildPark(park: any?, quiet: boolean?): BuildReport
 	local p = park or Sim.Park.DEFAULT_PARK

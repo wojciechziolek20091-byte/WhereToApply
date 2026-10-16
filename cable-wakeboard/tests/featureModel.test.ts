@@ -99,6 +99,15 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     expect(out).toContain('PARK BUILD OK');
   });
 
+  it('VisualAudit: counts the visual bugs of the built parks (layout spec section 3)', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/visual_audit_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('VISUAL AUDIT OK');
+    const counts = out.split('\n').filter((l) => l.startsWith('COUNTS'));
+    expect(counts.length).toBe(2);
+  });
+
   it('FeatureBob: only the Visual folder bobs (+-3 cm), and it rests near a rider', { timeout: 60000 }, () => {
     const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
     const spec = readFileSync(join(ROBLOX, 'tests/feature_bob_spec.luau'), 'utf8');

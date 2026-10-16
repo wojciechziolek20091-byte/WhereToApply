@@ -244,6 +244,15 @@ function Inst:IsDescendantOf(other)
 	end
 	return false
 end
+function Inst:Clone()
+	local props = table.clone(rawget(self, "_props"))
+	props.Parent = nil
+	local c = setmetatable({ _props = props, _children = {} }, Inst)
+	local a = rawget(self, "_attrs")
+	if a then rawset(c, "_attrs", table.clone(a)) end
+	for _, k in rawget(self, "_children") do k:Clone().Parent = c end
+	return c
+end
 function Inst:ScaleTo(_s) rawget(self, "_props").Scaled = _s end
 function Inst:FindFirstChild(name, recursive)
 	for _, c in (if recursive then self:GetDescendants() else rawget(self, "_children")) do
