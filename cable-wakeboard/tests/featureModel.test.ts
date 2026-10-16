@@ -106,6 +106,13 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     expect(out).toContain('FEATURE BOB OK');
   });
 
+  it('FX, map data, name tags, stats, challenges and the preview tool (milestone 10)', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/feature_extras_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('FEATURE EXTRAS OK');
+  });
+
   it('src/art/featureParts.json is the current FeatureBuilder output', { timeout: 60000 }, () => {
     const fresh = JSON.parse(exportFeatureArt(LUAU!));
     const stored = JSON.parse(readFileSync(join(__dirname, '../src/art/featureParts.json'), 'utf8'));

@@ -46,6 +46,11 @@ local ParkBuilder = require(shared:WaitForChild("Park"):WaitForChild("ParkBuilde
 local FeatureRegistry = require(shared:WaitForChild("Park"):WaitForChild("FeatureRegistry"))
 local FeatureConfig = require(shared:WaitForChild("Park"):WaitForChild("FeatureConfig"))
 local FeatureBob = require(shared:WaitForChild("Park"):WaitForChild("FeatureBob"))
+local FeatureFX = require(shared:WaitForChild("Park"):WaitForChild("FeatureFX"))
+local FeatureTags = require(shared:WaitForChild("Park"):WaitForChild("FeatureTags"))
+local FeatureStats = require(shared:WaitForChild("Park"):WaitForChild("FeatureStats"))
+local FeatureChallenges = require(shared:WaitForChild("Park"):WaitForChild("FeatureChallenges"))
+local FeatureMap = require(shared:WaitForChild("Park"):WaitForChild("FeatureMap"))
 
 -- Sim metres -> Roblox studs (1 stud = 0.28 m).
 local S = 1 / 0.28
@@ -291,6 +296,14 @@ buildPark(run.sim)
 -- Index the park's features for queries (surface under a point, nearby features, crash volumes).
 FeatureRegistry.init()
 FeatureBob.attachAll()
+FeatureFX.prepareAll()
+FeatureFX.onShake = function(strength)
+	-- Impact shake: nudge the camera; the chase camera settles it back.
+	local cam = workspace.CurrentCamera
+	if cam then
+		cam.CFrame = cam.CFrame * CFrame.new((math.random() - 0.5) * strength, (math.random() - 0.5) * strength, 0)
+	end
+end
 
 local carrier = part("Carrier", Vector3.new(2, 1, 1), CFrame.new(), Color3.fromRGB(240, 180, 40))
 local AC = Anim.AnimConfig.DEFAULT
@@ -549,6 +562,14 @@ for name, keys in WakeInput.ACTIONS do
 	end
 	ContextActionService:BindAction(name, onAction, false, table.unpack(codes))
 end
+-- Park map (M): features by line, coloured by difficulty.
+local parkMap = FeatureMap.mount(Players.LocalPlayer:WaitForChild("PlayerGui"), PARK.site)
+ContextActionService:BindAction("ParkMap", function(_, state)
+	if state == Enum.UserInputState.Begin then
+		FeatureMap.toggle(parkMap)
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.M)
 ContextActionService:BindAction("SteerStick", function(_, _, inputObject)
 	analogSteer = inputObject.Position.X
 	return Enum.ContextActionResult.Pass
@@ -561,6 +582,7 @@ local stepper = Sim.Stepper.createStepper()
 local prevRider = run.sim.rider.pos
 local prevCarrier = run.sim.carrier.pos
 local lastTrick = ""
+local challengesDone: { [string]: boolean } = {}
 local lastCrash = ""
 local seenCombo = nil
 -- Events of every tick since the last frame, for the animation.
@@ -581,6 +603,23 @@ local function tick()
 		if e.type == "crash" then
 			lastCrash = e.reason
 			Crashed:FireServer(e.reason)
+		end
+	end
+	-- Feature effects, local stats and challenges from the tick's events.
+	FeatureFX.onEvents(run.sim, run.sim.events)
+	local featureTricks = {}
+	for _, rec in run.latest do
+		table.insert(featureTricks, { trick = rec.trick, featureId = rec.featureId })
+	end
+	FeatureStats.record(Players.LocalPlayer.Name, run.sim.events, featureTricks)
+	for _, id in FeatureChallenges.completed(run.sim.events) do
+		if not challengesDone[id] then
+			challengesDone[id] = true
+			for _, c in FeatureChallenges.LIST do
+				if c.id == id then
+					lastTrick = `Challenge: {c.text}!`
+				end
+			end
 		end
 	end
 	local c = run.lastCombo
@@ -710,6 +749,7 @@ RunService.RenderStepped:Connect(function(rawDt)
 	carrier.CFrame = CFrame.new(stud(renderCarrier)) * yaw(sim.carrier.heading)
 	-- Floating features bob, except near the rider.
 	FeatureBob.step(os.clock(), { stud(r.pos) }, dt)
+	FeatureTags.step(stud(r.pos))
 
 	-- Rope: to the handle, sagging when slack, thinner when taut.
 	local handleW = RiderRig.stud(rig, frame.handle.pos)

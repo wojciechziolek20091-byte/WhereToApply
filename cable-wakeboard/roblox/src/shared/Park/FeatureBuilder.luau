@@ -701,6 +701,38 @@ local function realism(ctx: Ctx, spec: BuildSpec, entry: any)
 	end
 end
 
+-- FX attachments (spec 8): SplashEntry where the entry meets the water,
+-- SplashExit near the end, Slide1..n along the slide surfaces, LipSpray on
+-- kicker lips, WallSlap on a wall ride. FeatureFX drives them.
+local function fxAttachments(ctx: Ctx)
+	local shape = ctx.shape
+	local anchor = FeatureModel.anchorFor(ctx.model, "FX")
+	local root = (ctx.model.PrimaryPart :: BasePart).CFrame
+	local function at(name: string, u: number, v: number, h: number, kind: string)
+		local a = FeatureModel.attachment(anchor, name, anchor.CFrame:Inverse() * root * CFrame.new(FeatureModel.offset(u, v, h)))
+		a:SetAttribute("FxKind", kind)
+	end
+	local first = shape.pieces[1]
+	if first.wall then
+		local w = first.wall
+		at("WallSlap", (shape.uMin + shape.uMax) / 2, w.base + w.side * w.d1 * 0.5, 0.8, "WallSlap")
+		at("SplashEntry", shape.uMin + 0.5, w.base + w.side * 0.8, 0, "Splash")
+	else
+		at("SplashEntry", first.u0 + (first.u1 - first.u0) * 0.2, first.v0, 0, "Splash")
+	end
+	at("SplashExit", shape.uMax + 1.5, (shape.vMin + shape.vMax) / 2, 0, "Splash")
+	local k = 0
+	for _, piece in shape.pieces do
+		if piece.axis == "u" and (piece.slide or piece.lip) then
+			k += 1
+			local u = (piece.u0 + piece.u1) / 2
+			local h = FeatureShapes.pieceHeightAt(piece, u).height
+			local kind = if piece.lip and not piece.slide then "LipSpray" elseif piece.profile == "Round" then "Sparks" else "Droplets"
+			at(`Slide{k}`, u, FeatureShapes.pieceCentre(piece, u), h + 0.05, kind)
+		end
+	end
+end
+
 -- Build a feature model (not parented).
 function FeatureBuilder.build(spec: BuildSpec): Model
 	local entry, params = FeatureShapes.catalogParams(spec.catalog, spec.params)
@@ -732,6 +764,9 @@ function FeatureBuilder.build(spec: BuildSpec): Model
 		shape = shape,
 	}
 	model:SetAttribute("Accent", accentName)
+	if spec.line then
+		model:SetAttribute("Line", spec.line)
+	end
 	if params.shape == "kicker" then
 		buildKicker(ctx, entry)
 	elseif params.shape == "box" or params.shape == "transfer" then
@@ -743,6 +778,7 @@ function FeatureBuilder.build(spec: BuildSpec): Model
 	sign(ctx, -1.5, shape.vMax + 2.5, spec.name or meta.label, meta.difficulty)
 	crashVolumes(ctx)
 	approach(ctx, spec, entry)
+	fxAttachments(ctx)
 	return model
 end
 
@@ -897,6 +933,32 @@ function FeatureBuilder.buildSpecial(ctx: Ctx, entry: any, params: any)
 	else
 		buildSpine(ctx, entry)
 	end
+end
+
+-- Editor tool (spec section 11): drop a feature in front of the camera for
+-- layout iteration. From the command bar:
+--   require(game.ReplicatedStorage.WakeShared.Park.FeatureBuilder).preview("Funbox", { exitLength = 3.5 })
+-- It goes into Workspace.Park.Preview (cleared each time), on the water 20 m
+-- ahead, facing away from the camera, and prints its validator report.
+function FeatureBuilder.preview(catalog: string, params: { [string]: any }?, side: number?): Model
+	local cam = workspace.CurrentCamera
+	local cf = if cam then cam.CFrame else CFrame.new()
+	local look = Vector3.new(cf.LookVector.X, 0, cf.LookVector.Z)
+	look = if look.Magnitude > 1e-3 then look.Unit else Vector3.new(0, 0, -1)
+	local at = cf.Position / S + look * 20
+	local heading = math.atan2(look.Z, look.X)
+	local park = workspace:FindFirstChild(FeatureConfig.ParkFolder) or Instance.new("Folder")
+	park.Name = FeatureConfig.ParkFolder
+	park.Parent = workspace
+	local folder = park:FindFirstChild("Preview") or Instance.new("Folder")
+	folder.Name = "Preview"
+	folder.Parent = park
+	folder:ClearAllChildren()
+	local model = FeatureBuilder.build({ id = "Preview_" .. catalog, catalog = catalog, params = params, side = side, origin = Vector3.new(at.X, 0, at.Z), heading = heading })
+	model.Parent = folder
+	local FeatureValidator = require(script.Parent.FeatureValidator) :: any
+	FeatureValidator.print({ FeatureValidator.validate(model) })
+	return model
 end
 
 return FeatureBuilder

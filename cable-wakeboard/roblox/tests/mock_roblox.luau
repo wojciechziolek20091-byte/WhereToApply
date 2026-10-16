@@ -164,6 +164,8 @@ Enum = {
 	NormalId = enumGroup({ "Top", "Bottom", "Front", "Back", "Left", "Right" }),
 	Font = enumGroup({ "GothamBlack", "GothamBold", "Gotham", "SourceSans" }),
 	SurfaceGuiSizingMode = enumGroup({ "FixedSize", "PixelsPerStud" }),
+	TextXAlignment = enumGroup({ "Left", "Center", "Right" }),
+	TextYAlignment = enumGroup({ "Top", "Center", "Bottom" }),
 }
 
 Random = {}
@@ -323,3 +325,8 @@ UDim2 = {
 	fromScale = function(x, y) return { X = { Scale = x, Offset = 0 }, Y = { Scale = y, Offset = 0 } } end,
 	fromOffset = function(x, y) return { X = { Scale = 0, Offset = x }, Y = { Scale = 0, Offset = y } } end,
 }
+ColorSequence = { new = function(c) return { Keypoints = { c } } end }
+NumberRange = { new = function(a, b) return { Min = a, Max = b or a } end }
+Inst.Emit = function(self, n) rawget(self, "_props").Emitted = (rawget(self, "_props").Emitted or 0) + n end
+Inst.Play = function(self) rawget(self, "_props").Playing = true end
+Inst.Stop = function(self) rawget(self, "_props").Playing = false end

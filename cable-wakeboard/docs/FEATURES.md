@@ -405,3 +405,25 @@ wall ride, is about 60 parts):
   pop (the spec wants 1.4-2.0). Now beginner / medium / pro are 0.85 / 1.18 /
   1.47 s.
 - **Feature IDs** follow the spec: `L1_MediumKicker_01`, `B_Slider_01`...
+
+## FX, audio, map, approach tags, stats, challenges, preview (milestone 10)
+
+All of these live in `roblox/src/shared/Park/`.
+
+| Module | What it does |
+|---|---|
+| `FeatureBuilder` (FX/) | Adds FX attachments with an `FxKind` attribute: `SplashEntry` (where the entry meets the water), `SplashExit`, `Slide1..n` along the slide surfaces (`Droplets` on HDPE, `Sparks` on steel pipes, `LipSpray` on kicker lips) and a `WallSlap` on the wall ride. |
+| `FeatureFX` | Puts a ParticleEmitter and a Sound on each FX attachment. Sound ids come from `FeatureConfig.Sounds`, keyed by SurfaceMaterial; they are empty, so effects stay silent until assets exist. `onEvents(sim, events)` turns the sim's events into effects: a splash on `featureEnter`, slide particles from mount to exit, a splash on `featureExit`, and an impact plus `onShake` on a crash. |
+| `FeatureMap` | `entries()` / `byLine()` give each feature's icon, difficulty, line and position. `mount()` draws a simple top-down map with a list by line; it toggles on M in the client. |
+| `FeatureTags` | A name + difficulty BillboardGui over each sign. It shows when the rider is within 25 m before the feature, and `FeatureTags.enabled` is the settings toggle. |
+| `FeatureStats` | Hits, clean landings and the best trick (name and score) per player and FeatureId, recorded from sim events and trick records. `onRecord` is the leaderboard hook. |
+| `FeatureChallenges` | 13 challenges as data, for example "Backboard the full pipe rail", "Pop-on the gap box", "Air over 1.5 s off the pro kicker", "Ride the wall for 0.4 s". `check(challenge, event)` and `completed(events)` test them against the sim's `slideDone` / `landed` events. The client shows "Challenge: ...!" when one is done. |
+| `FeatureBuilder.preview(type, params)` | A command-bar tool: it drops the feature 20 m in front of the camera into `Workspace.Park.Preview` (replacing the last one) and prints its validator report. |
+
+`feature_extras_spec.luau` checks all of this under the mock:
+- It builds the wake park and rides three features with the Luau sim.
+- The name tags show on the approach, and splashes fire.
+- The hit and the clean landing are counted.
+- The medium-kicker-air and gap-box pop-on challenges complete; a 50-50
+  does not count as a backboard.
+- The preview replaces its last feature.
