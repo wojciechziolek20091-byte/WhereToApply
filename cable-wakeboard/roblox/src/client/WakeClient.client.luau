@@ -42,6 +42,8 @@ local SiteGeometry = require(shared:WaitForChild("SiteGeometry"))
 local Anim = require(shared:WaitForChild("Anim"))
 local RiderRig = require(shared:WaitForChild("RiderRig"))
 local WaterSpray = require(shared:WaitForChild("WaterSpray"))
+local FeatureBuilder = require(shared:WaitForChild("Park"):WaitForChild("FeatureBuilder"))
+local FeatureModel = require(shared:WaitForChild("Park"):WaitForChild("FeatureModel"))
 
 -- Sim metres -> Roblox studs (1 stud = 0.28 m).
 local S = 1 / 0.28
@@ -247,8 +249,18 @@ local function buildPark(sim)
 		local h = (path.height + 1) * S
 		part(`Tower{i}`, Vector3.new(2, h, 2), CFrame.new(t.x * S, h / 2, t.z * S), COLORS.tower)
 	end
+	FeatureModel.setupCollisionGroups()
 	for _, f in sim.features do
 		local d = f.def
+		if d.kind == "feature" then
+			-- Wake park catalogue features: built by FeatureBuilder from the sim's own ride pieces.
+			local m = FeatureBuilder.build({
+				id = d.id, catalog = d.catalog, params = d.params, side = d.side, accent = d.accent, name = d.name,
+				origin = Vector3.new(f.origin.x, 0, f.origin.z), heading = f.heading,
+			})
+			m.Parent = FeatureModel.featuresFolder()
+			continue
+		end
 		local length = Sim.Park.featureLength(d)
 		local mid = Sim.Vec.addScaled(f.origin, Sim.Vec.forwardOf(f.heading), length / 2)
 		if d.kind == "kicker" then

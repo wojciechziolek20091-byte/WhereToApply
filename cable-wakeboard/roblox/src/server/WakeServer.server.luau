@@ -15,6 +15,10 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local shared = ReplicatedStorage:WaitForChild("WakeShared")
 local Sim = require(shared:WaitForChild("Sim"))
 local ComboValidator = require(shared:WaitForChild("ComboValidator"))
+local FeatureModel = require(shared:WaitForChild("Park"):WaitForChild("FeatureModel"))
+
+-- Feature collision groups (features spec section 3), registered once on the server.
+FeatureModel.setupCollisionGroups()
 local cfg = Sim.Config.DEFAULT_CONFIG
 
 local remotes = Instance.new("Folder")

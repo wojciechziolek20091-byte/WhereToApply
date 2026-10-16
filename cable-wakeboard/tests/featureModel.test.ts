@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import { FEATURE_CATALOG } from '../src/sim/featureCatalog';
 import { buildShape, shapeSurfaceAt } from '../src/sim/featureShapes';
 import { bundleShared, bundleSim } from './parity/luauBundle';
+import { exportFeatureArt } from '../scripts/featureArtExport';
 
 const LUAU = process.env.LUAU;
 const ROBLOX = join(__dirname, '../roblox');
@@ -59,5 +60,19 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     const spec = readFileSync(join(ROBLOX, 'tests/feature_model_spec.luau'), 'utf8');
     const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
     expect(out).toContain('FEATURE MODEL OK');
+  });
+
+  it('FeatureBuilder: every catalogue feature builds, its Ride/ parts lie on the sim surface', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/feature_builder_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('FEATURE BUILDER OK');
+  });
+
+  it('src/art/featureParts.json is the current FeatureBuilder output', { timeout: 60000 }, () => {
+    const fresh = JSON.parse(exportFeatureArt(LUAU!));
+    const stored = JSON.parse(readFileSync(join(__dirname, '../src/art/featureParts.json'), 'utf8'));
+    expect(Object.keys(stored).sort()).toEqual(Object.keys(fresh).sort());
+    for (const k of Object.keys(fresh)) expect(stored[k], `${k}: rerun scripts/export-feature-art.ts`).toEqual(fresh[k]);
   });
 });

@@ -8,6 +8,7 @@ local Config = require(script.Parent.Config)
 local DetMath = require(script.Parent.DetMath)
 local Edge = require(script.Parent.Edge)
 local Features = require(script.Parent.Features)
+local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
 local Handle = require(script.Parent.Handle)
 local Landing = require(script.Parent.Landing)
@@ -20,6 +21,7 @@ local Vec = require(script.Parent.Vec)
 
 local DT, GRAVITY = Config.DT, Config.GRAVITY
 local OnFeature = {}
+local stepWall, startJib
 
 local function deg(d)
 	return (d * math.pi) / 180
@@ -80,22 +82,24 @@ function OnFeature.tryEnterFeature(s)
 	end
 	local speed = Vec.horizontalLength(r.vel)
 	local along = if speed > 0.1 then Vec.dot(Vec.horizontal(r.vel), Vec.forwardOf(feature.heading)) / speed else 0
-	if
-		r.mode == "ridingBlind"
-		or surface.height > s.cfg.feature.mountHeight
-		or along < DetMath.cos(s.cfg.feature.mountAngle)
-		or surface.piece.wall
-	then
+	if r.mode == "ridingBlind" or surface.height > s.cfg.feature.mountHeight or along < DetMath.cos(s.cfg.feature.mountAngle) then
 		Actions.crash(s, "hitFeature")
 		return true
 	end
 	r.ramp = { featureId = feature.def.id, u = l.u, v = l.v, releaseTick = -1, releaseTimeToLip = -1, sketchy = false }
+	if surface.piece.wall then
+		-- Up a wall ride's transition: a slide on the wall.
+		r.jib = startJib(s, feature, 0, "rideOn", false)
+		Fsm.transition(s, "onFeature", "wallRide")
+		table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
+		return true
+	end
 	Fsm.transition(s, rampMode(surface.piece), "rideOn")
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true
 end
 
-local function startJib(s, feature, boardAngle, entry, sketchy)
+startJib = function(s, feature, boardAngle, entry, sketchy)
 	local rot = Rotation.createRotation(s.cfg.handlePass.featureWindow)
 	return {
 		featureId = feature.def.id,
@@ -104,7 +108,7 @@ local function startJib(s, feature, boardAngle, entry, sketchy)
 		targetAngle = boardAngle,
 		entryAngle = boardAngle,
 		time = 0,
-		slideTimes = { fiftyFifty = 0, switchFiftyFifty = 0, backboard = 0, frontboard = 0 },
+		slideTimes = { fiftyFifty = 0, switchFiftyFifty = 0, backboard = 0, frontboard = 0, wallRide = 0 },
 		slideOrder = {},
 		entry = entry,
 		sketchy = sketchy,
@@ -309,6 +313,86 @@ function OnFeature.stepRamp(s, input, mem)
 	r.heading = f.heading
 end
 
+-- One tick on a wall ride: climb the transition (and the wall) with the speed
+-- the rider cut in with; gravity pulls back down the profile, the rope pulls
+-- along it. Ride back out, run off the end into the air, pop off, or go over
+-- the top (crash).
+stepWall = function(s, input, mem, f)
+	local r, cfg = s.rider, s.cfg
+	local ramp = r.ramp
+	local j = r.jib
+	local m = cfg.rider.mass
+	Posture.updatePosture(r, if input.armsOut then 0 else 1, input.pop, r.ropeTension, cfg.posture, DT)
+	local rope = Actions.applyRope(s)
+	if not rope then
+		return
+	end
+	local piece = f.shape.pieces[1]
+	local w = piece.wall
+	local top = f.shape.pieces[#f.shape.pieces].wall.d1
+	local fwd = Vec.forwardOf(f.heading)
+	local right = Vec.rightOf(f.heading)
+	local x = (ramp.v - w.base) * w.side
+	local prof = FeatureShapes.wallHeightAt(w, x)
+	local cosT = 1 / math.sqrt(1 + prof.slope * prof.slope)
+	local sinT = prof.slope * cosT
+	local vu = Vec.dot(r.vel, fwd)
+	local ws = Vec.dot(r.vel, right) * w.side * cosT + r.vel.y * sinT
+	local speed = math.sqrt(vu * vu + ws * ws)
+	local friction = if f.shape.friction then f.shape.friction else cfg.feature.friction
+	local fr = if speed > 1e-6 then (friction * GRAVITY * cosT) / speed else 0
+	vu += (Vec.dot(rope.force, fwd) / m - fr * vu) * DT
+	ws += (-GRAVITY * sinT + (Vec.dot(rope.force, right) * w.side * cosT) / m - fr * ws) * DT
+	r.edgeLoad = 0
+	if vu < cfg.feature.stallSpeed then
+		endSlide(s)
+		Actions.crash(s, "fellOffFeature")
+		return
+	end
+	j.time += DT
+	j.slideTimes.wallRide += DT
+	if #j.slideOrder == 0 then
+		table.insert(j.slideOrder, "wallRide")
+	end
+	local function along(u, wsNow, c, sn)
+		return Vec.add(Vec.add(Vec.scale(fwd, u), Vec.scale(right, w.side * wsNow * c)), Vec.vec3(0, wsNow * sn, 0))
+	end
+
+	if input.pop then
+		r.popCharge = Pop.ollieCharge(mem.popHeldTime, cfg)
+	end
+	if mem.popReleased then
+		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
+		local out = Pop.ollieSpeed(charge, cfg) * cfg.feature.wallPopOut
+		r.vel = Vec.add(along(vu, ws, cosT, sinT), Vec.add(Vec.scale(right, -w.side * out * sinT), Vec.vec3(0, out * cosT, 0)))
+		leaveFeature(s, f, 0, charge, piece)
+		return
+	end
+
+	x += ws * cosT * DT
+	ramp.u += vu * DT
+	ramp.v = w.base + w.side * x
+	if x >= top then
+		endSlide(s)
+		Actions.crash(s, "fellOffFeature")
+		return
+	end
+	local nextProf = FeatureShapes.wallHeightAt(w, math.max(x, 0))
+	local c2 = 1 / math.sqrt(1 + nextProf.slope * nextProf.slope)
+	local s2 = nextProf.slope * c2
+	if nextProf.height <= 0 and ws < 0 then
+		r.vel = Vec.add(Vec.scale(fwd, vu), Vec.scale(right, w.side * ws * c2))
+		rideOut(s, f)
+		return
+	end
+	r.pos = Features.toWorld(f, ramp.u, ramp.v, nextProf.height)
+	r.vel = along(vu, ws, c2, s2)
+	r.heading = f.heading
+	if ramp.u > piece.u1 or ramp.u < piece.u0 then
+		leaveFeature(s, f, 0, 0, piece)
+	end
+end
+
 -- One tick sliding a main of a box or rail: flat, kinked, or down an exit ramp.
 function OnFeature.stepSlide(s, input, mem)
 	local r, cfg = s.rider, s.cfg
@@ -318,6 +402,10 @@ function OnFeature.stepSlide(s, input, mem)
 		error("onFeature without RampState / JibState")
 	end
 	local f = featureById(s, ramp.featureId)
+	if f.shape.pieces[1].wall then
+		stepWall(s, input, mem, f)
+		return
+	end
 	local m = cfg.rider.mass
 	Posture.updatePosture(r, if input.armsOut then 0 else 1, input.pop, r.ropeTension, cfg.posture, DT)
 	local rope = Actions.applyRope(s)

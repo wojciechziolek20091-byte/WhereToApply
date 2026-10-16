@@ -24,6 +24,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { ParticleSystem } from '@babylonjs/core/Particles/particleSystem';
 import '@babylonjs/core/Particles/particleSystemComponent';
 import { Scene } from '@babylonjs/core/scene';
+import { featureMesh } from '../../art/featureArt';
 import { boxHull, buildHullMesh, extrudeProfile, placeHulls, rockHull, type HullPart, type MeshData, type V3 } from '../../art/mesh';
 import {
   centroid,
@@ -294,6 +295,8 @@ export class BabylonRenderer {
 
   /** Fixed close-up camera for checking the character (`?cam=front|back|side`). */
   debugCam: 'front' | 'back' | 'side' | 'aerial' | 'map' | null = null;
+  /** Feature captures (features spec): look at a feature by id from an angle. */
+  featureCam: { id: string; angle: 'approach' | 'side' | 'rear' | 'top' | 'low'; dist?: number } | null = null;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -600,6 +603,14 @@ export class BabylonRenderer {
       hulls.push(rockHull([t.x, 0, t.z], [2.4, 0.6, 2.4], look.rock(0.4)));
     }
     for (const f of sim.features) hulls.push(...this.featureHulls(f));
+    // Catalogue features: the Roblox FeatureBuilder's parts (src/art/featureArt.ts).
+    for (const f of sim.features) {
+      const data = featureMesh(f);
+      if (!data) continue;
+      const mesh = meshFromData(`feature-${f.def.id}`, data, this.scene, this.flat);
+      mesh.receiveShadows = true;
+      this.shadows.addShadowCaster(mesh);
+    }
 
     // Buoys: white domes with a short mast around the course, wherever there is open water.
     const site = this.site;
@@ -875,7 +886,9 @@ export class BabylonRenderer {
     // Keep the shadow camera on the rider.
     this.sun.position = v3(riderPos).add(new Vector3(...this.look.sunDirection).normalize().scale(40));
 
-    if (this.debugCam === 'aerial' || this.debugCam === 'map') this.aerialCamera(this.debugCam === 'map');
+    if (this.featureCam && this.featureCamera(sim)) {
+      // Feature capture camera.
+    } else if (this.debugCam === 'aerial' || this.debugCam === 'map') this.aerialCamera(this.debugCam === 'map');
     else if (this.debugCam) this.closeUpCamera(this.scrub ? { x: frame.com.x, y: frame.com.y - 0.9, z: frame.com.z } : riderPos, this.scrub ? 0 : r.heading, toes);
     else this.updateCamera(this.scrub ? frame.root.pos : riderPos, carrierPos, frameSeconds, frame);
     this.scene.render();
@@ -897,6 +910,32 @@ export class BabylonRenderer {
     }
     this.camera.position.set(c.x + 40, 200, c.z + 300);
     this.camera.setTarget(new Vector3(c.x, 0, c.z + 10));
+  }
+
+  /** Camera on a feature (`featureCam`): from the approach, the side, behind, above or low at the waterline. */
+  private featureCamera(sim: SimState): boolean {
+    const fc = this.featureCam!;
+    const f = sim.features.find((x) => x.def.id === fc.id);
+    if (!f) return false;
+    const sh = f.shape;
+    const len = sh.uMax - sh.uMin;
+    const midU = (sh.uMin + sh.uMax) / 2;
+    const midV = (sh.vMin + sh.vMax) / 2;
+    const fw = { x: Math.cos(f.heading), z: Math.sin(f.heading) };
+    const rt = { x: -Math.sin(f.heading), z: Math.cos(f.heading) };
+    const at = (u: number, v: number, y: number) => new Vector3(f.origin.x + fw.x * u + rt.x * v, y, f.origin.z + fw.z * u + rt.z * v);
+    const d = fc.dist ?? Math.max(4, len * 0.6);
+    const target = at(midU, midV, 0.5);
+    const cam =
+      fc.angle === 'approach' ? at(sh.uMin - d * 0.6, midV - d * 0.45, 1.8)
+      : fc.angle === 'side' ? at(midU, sh.vMin - d, 1.4)
+      : fc.angle === 'rear' ? at(sh.uMax + d * 0.5, midV + d * 0.55, 2.0)
+      : fc.angle === 'low' ? at(sh.uMin + len * 0.25, sh.vMax + d * 0.5, 0.35)
+      : at(midU - 0.01, midV, d * 1.4);
+    this.scene.fogDensity = this.look.fogDensity * 0.2;
+    this.camera.position = cam;
+    this.camera.setTarget(target);
+    return true;
   }
 
   /** Close-up of the rider: front faces the rider's chest (toe side). */

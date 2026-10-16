@@ -24,7 +24,7 @@ local MODE = {
 	crashed = "Crashed",
 }
 local GRAB = { indy = "Indy", stalefish = "Stalefish", nose = "Nose", tail = "Tail" }
-local SLIDE = { fiftyFifty = "FiftyFifty", backboard = "Backboard", frontboard = "Frontboard", switchFiftyFifty = "SwitchFiftyFifty" }
+local SLIDE = { fiftyFifty = "FiftyFifty", backboard = "Backboard", frontboard = "Frontboard", switchFiftyFifty = "SwitchFiftyFifty", wallRide = "WallRide" }
 local HANDLE = { inFront = "InFront", behind = "Behind", passing = "Passing", dropped = "Dropped" }
 
 -- Board rotation from yaw, an optional invert (board-frame axis, angle) and the edge tilt.
@@ -179,6 +179,7 @@ function Adapter.fromSim(sim, events, prev)
 
 	local feature = nil
 	local rail = false
+	local wallRoll = 0
 	local featureTurn = -1
 	local slope = 0
 	local jib = r.jib
@@ -187,7 +188,23 @@ function Adapter.fromSim(sim, events, prev)
 		if f then
 			local slide = Sim.OnFeature.slideIdAt(jib.boardAngle, f.heading, r.heading, r)
 			feature = { slide = SLIDE[slide], balance = jib.balance }
-			rail = f.def.kind == "slider" and f.def.style ~= "box"
+			-- Narrow mains (rails, pipes) look like rails; the old defs keep their style.
+			if f.def.kind == "slider" then
+				rail = f.def.style ~= "box"
+			elseif f.def.kind == "feature" then
+				for _, p in f.shape.pieces do
+					if p.slide and p.width < 0.6 then
+						rail = true
+					end
+				end
+			end
+			local wall = f.shape.pieces[1].wall
+			if wall and r.ramp then
+				-- On a wall ride: the board lies on the wall, rolled by the profile's angle.
+				local x = (r.ramp.v - wall.base) * wall.side
+				wallRoll = -wall.side * p.toes * math.atan(Sim.FeatureShapes.wallHeightAt(wall, math.max(x, 0)).slope)
+				feature = { slide = "WallRide", balance = 0 }
+			end
 		end
 		if jib.targetAngle ~= jib.boardAngle then
 			featureTurn = 1 - math.min(1, math.abs(jib.targetAngle - jib.boardAngle) / (PI / 2))
@@ -226,7 +243,10 @@ function Adapter.fromSim(sim, events, prev)
 		edge = math.max(-1, math.min(1, r.edgeAngle / cfg.edge.maxEdgeAngle)),
 		tension = r.tensionSmooth,
 		popCharge = r.popCharge,
-		boardCFrame = { pos = table.clone(r.pos), rot = Adapter.boardRotation(r) },
+		boardCFrame = {
+			pos = table.clone(r.pos),
+			rot = if wallRoll == 0 then Adapter.boardRotation(r) else Adapter.composeBoardRotation(p.yaw, nil, 0, p.lean + wallRoll),
+		},
 		handlePosition = handlePosition,
 		trick = {
 			id = trickId(r),

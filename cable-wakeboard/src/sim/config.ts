@@ -281,6 +281,8 @@ export interface FeatureConfig {
   ropeTip: number;
   /** Sideways damping on a slide (1/s). */
   lateralDamping: number;
+  /** Popping off a wall ride pushes away from its face with this fraction of the ollie's speed. */
+  wallPopOut: number;
 }
 
 export interface ComboConfig {
@@ -497,6 +499,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     tapStrength: 0.35,
     ropeTip: 1400,
     lateralDamping: 6,
+    wallPopOut: 0.6,
   },
   combo: { linkWindow: 2.0, repeatPenalty: 0.5, perTrick: 0.25, maxMultiplier: 4 },
   crash: { respawnDelay: 2.5 },

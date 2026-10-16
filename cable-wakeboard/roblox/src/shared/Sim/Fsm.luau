@@ -2,9 +2,9 @@
 local Fsm = {}
 
 Fsm.TRANSITIONS = {
-	riding = { "waterTrickLoad", "airborne", "onKicker", "onSafety", "crashed" },
+	riding = { "waterTrickLoad", "airborne", "onKicker", "onSafety", "onFeature", "crashed" },
 	ridingBlind = { "riding", "airborne", "crashed" },
-	waterTrickLoad = { "riding", "waterTrickAir", "airborne", "onKicker", "onSafety", "crashed" },
+	waterTrickLoad = { "riding", "waterTrickAir", "airborne", "onKicker", "onSafety", "onFeature", "crashed" },
 	waterTrickAir = { "landing", "onFeature", "crashed" },
 	airborne = { "landing", "onFeature", "onKicker", "crashed" },
 	onKicker = { "airborne", "onFeature", "riding", "crashed" },

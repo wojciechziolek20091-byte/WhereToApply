@@ -6,9 +6,9 @@ import type { SimState } from './world';
  * a bug: with `debug.enabled` it throws, so tests catch it.
  */
 export const TRANSITIONS: Record<RiderMode, readonly RiderMode[]> = {
-  riding: ['waterTrickLoad', 'airborne', 'onKicker', 'onSafety', 'crashed'],
+  riding: ['waterTrickLoad', 'airborne', 'onKicker', 'onSafety', 'onFeature', 'crashed'],
   ridingBlind: ['riding', 'airborne', 'crashed'],
-  waterTrickLoad: ['riding', 'waterTrickAir', 'airborne', 'onKicker', 'onSafety', 'crashed'],
+  waterTrickLoad: ['riding', 'waterTrickAir', 'airborne', 'onKicker', 'onSafety', 'onFeature', 'crashed'],
   waterTrickAir: ['landing', 'onFeature', 'crashed'],
   airborne: ['landing', 'onFeature', 'onKicker', 'crashed'],
   onKicker: ['airborne', 'onFeature', 'riding', 'crashed'],

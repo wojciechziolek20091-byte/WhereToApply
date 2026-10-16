@@ -90,6 +90,7 @@ Config.DEFAULT_CONFIG = {
 		tapStrength = 0.35,
 		ropeTip = 1400,
 		lateralDamping = 6,
+		wallPopOut = 0.6,
 	},
 	combo = { linkWindow = 2, repeatPenalty = 0.5, perTrick = 0.25, maxMultiplier = 4 },
 	crash = { respawnDelay = 2.5 },

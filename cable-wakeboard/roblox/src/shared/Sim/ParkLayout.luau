@@ -333,7 +333,7 @@ ParkLayout.CATALOG_TEST_PARK = {
 		{ kind = "feature", id = "cat_Pyramid", name = "Pyramid", catalog = "Pyramid", s = 358, offset = 0 },
 		{ kind = "feature", id = "cat_ProKicker", name = "ProKicker", catalog = "ProKicker", s = 410, offset = 0 },
 		{ kind = "feature", id = "cat_Spine", name = "Spine", catalog = "Spine", s = 440, offset = 0 },
-		{ kind = "feature", id = "cat_WallRide", name = "WallRide", catalog = "WallRide", s = 478, offset = 0 },
+		{ kind = "feature", id = "cat_WallRide", name = "WallRide", catalog = "WallRide", s = 478, offset = -1, yaw = -0.6 },
 	},
 }
 ParkLayout.CATALOG_TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site

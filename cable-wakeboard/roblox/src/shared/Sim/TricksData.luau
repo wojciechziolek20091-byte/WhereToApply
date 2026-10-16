@@ -22,6 +22,8 @@ TricksData.SLIDES = {
 	switchFiftyFifty = { id = "switchFiftyFifty", name = "Switch 50-50", pointsPerSecond = 80 },
 	backboard = { id = "backboard", name = "Backboard", pointsPerSecond = 120 },
 	frontboard = { id = "frontboard", name = "Frontboard", pointsPerSecond = 120 },
+	-- Riding up a wall ride's transition onto the wall (wake park features).
+	wallRide = { id = "wallRide", name = "Wall Ride", pointsPerSecond = 150 },
 }
 
 TricksData.POINTS = {

@@ -91,3 +91,83 @@ and slopes (`tests/featureShapes.test.ts`).
 - **Tests:** `tests/featureModel.test.ts` checks the Luau shapes against
   TypeScript exactly, and builds every catalogue feature's model under the
   Roblox mock.
+
+## Riding the pieces (sim, milestones 2-5)
+
+`onFeature.ts` / `OnFeature.luau` ride any shape by its pieces' roles. The
+old kicker and slider defs go through the same code with bit-identical
+numbers (the existing parks' parity traces did not change).
+
+| Situation | What happens |
+|---|---|
+| Water reaches an entry piece whose height is 0 or more (the underwater part is ridden over) | `onSafety` (Safety) or `onKicker` (Ramp, Transition...) |
+| Safety, pop in the window, main flush | mount the main (`popOn` / `pop`), as before |
+| Safety, pop in the window, water gap (gap box) | a real hop: ollie speed x `safety.gapPopScale` (0.25); landing on the main is the `popOn` / `pop` entry |
+| Gap safety, no pop | `missedSafetyPop` |
+| Up a piece with `lip` | take off at its end (a kicker, or the pyramid's and spine's ramps) |
+| Mains with kinks | slide on: gravity along the slope, friction from the feature's material |
+| Exit ramp, or a down rail into the water | ride out into the water (`rodeOut`) |
+| Off the end of a high main (rooftop, step-up low rail) | roll off into the air; a higher main after a gap is a `shortOllie` unless popped onto |
+| Splayed boxes (transfer) | slide along the piece's own heading |
+| Over the pyramid's top onto its far face | roll down it |
+| Landing on a landing ramp (spine, pyramid back) | an ordinary landing, then ride down and out |
+| Wall ride | its own step: climb the transition and the wall with the speed cut in with, against gravity and friction, with the rope's pull. Ends by riding back down into the water, running off the end into the air, popping off (`feature.wallPopOut`), or going over the top (`fellOffFeature`). Scores as the new `Wall Ride` slide (150 points/s). |
+
+Air-time probe (`npx vite-node scripts/probe-catalog.ts <name> [popAt]`), at
+cable speed, no steering. The ride test (milestone 7) measures this properly.
+
+| Kicker | Plain | With the ideal lip pop | Spec |
+|---|---|---|---|
+| Beginner | 0.75 s | 0.82 s | 0.6-0.9 |
+| Medium | 1.02 s | 1.13 s | 1.0-1.4 |
+| Pro | 1.28 s | 1.40 s | 1.4-2.0 |
+
+### Changes from the spec's numbers, and why
+
+- **Spine:**
+  - **Spec:** 2 x 5 m, peak 1.4 m.
+  - **Here:** a 5 m launch ramp (15 deg lip), then a straight 12 m landing slope.
+  - **Why:** at cable speed a rider flies 8-9 m off a 1.4 m peak. A 5 m
+    landing ramp, or a curved one, drops away under the flight, and every
+    try landed in the flat water.
+- **Wall ride:**
+  - **Spec:** sizes as given; the angle into the line isn't specified.
+  - **Here:** the sizes are kept, and the wall is turned about 34 deg
+    (`yaw -0.6`) into the riders' line.
+  - **Why:** the face is only 4 m long. Parallel to the line, riders are on it
+    for 0.25 s and climb 0.3 m. Turned in, the pull carries them up about
+    1.1 m for 0.5 s.
+- **Gap box:**
+  - **Spec:** pop across the gap.
+  - **Here:** the pop across the gap is a small hop.
+  - **Why:** a full ollie over a 1.2 m gap overshoots the 6 m box.
+
+## FeatureBuilder (milestones 2-5)
+
+`roblox/src/shared/Park/FeatureBuilder.luau` builds a model from a
+catalogue name and a parameter table:
+- **Ride/ parts:** one per straight piece. Curves are split into
+  `KickerSubsegments` (10) chords, the last of which is the `Lip`, carrying
+  `LipPoint`. The wall transition is split into 6. Each Ride part has Start
+  and End attachments and the attributes SurfaceRole, SegmentIndex,
+  PieceIndex, Part, Width, Profile, Radius and Slide. A safety's last Ride
+  part has `PopZoneStart` and `PopZoneLength`.
+- **Art:** HDPE top sheets whose top face is the ride surface, coping, side
+  panels in the line's accent colour, a steel frame with legs and braces,
+  pontoons, a difficulty stripe on the leading edge, and a sign. Kickers get
+  curved skirts and a back wall.
+  - **Wall ride:** a Skatelite face, a steel frame, a top coping bar, and end
+    panels following the curve.
+  - **Pyramid:** each face is a centre strip plus right-triangle wedges, so
+    the faces meet at the hips.
+- **Tests:** `tests/featureModel.test.ts` builds every catalogue feature
+  (both sides) under the mock. It checks that every Ride part's Start and End
+  lie on the sim's surface within 1 cm, and that each model is under 120
+  parts.
+- **Web game:** the web game draws the same parts.
+  `scripts/export-feature-art.ts` builds them in Luau into
+  `src/art/featureParts.json`, and a test fails if that file is stale. So
+  the web captures show the Roblox models.
+- **Previews:** `?park=catalog` opens a map with every catalogue feature on
+  the line. `renderer.featureCam = { id, angle }` aims a camera at one
+  feature (approach / side / rear / top / low) for captures.

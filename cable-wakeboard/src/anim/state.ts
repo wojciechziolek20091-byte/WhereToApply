@@ -4,6 +4,7 @@ import type { LandingResult } from '../sim/landing';
 import { GRAVITY } from '../sim/config';
 import type { SimEvent } from '../sim/events';
 import { slideIdAt } from '../sim/onFeature';
+import { wallHeightAt } from '../sim/featureShapes';
 import type { RiderState } from '../sim/rider';
 import type { SimState } from '../sim/world';
 import { type Quat, type V3, DEG, qaxis, qmul, qnorm, vlen, vnorm, vsub } from './quat';
@@ -27,7 +28,7 @@ export type AnimRiderMode =
   | 'Crashed';
 export type TrickId = 'Ollie' | 'Spin' | 'FrontFlip' | 'Tantrum' | 'Raley' | 'Backroll' | 'Frontroll' | 'SBendL' | 'SBendR' | 'Mobe';
 export type GrabName = 'Indy' | 'Stalefish' | 'Nose' | 'Tail';
-export type SlideName = 'FiftyFifty' | 'Backboard' | 'Frontboard' | 'SwitchFiftyFifty';
+export type SlideName = 'FiftyFifty' | 'Backboard' | 'Frontboard' | 'SwitchFiftyFifty' | 'WallRide';
 
 export interface RiderAnimState {
   state: AnimRiderMode;
@@ -114,6 +115,7 @@ const SLIDE: Record<string, SlideName> = {
   backboard: 'Backboard',
   frontboard: 'Frontboard',
   switchFiftyFifty: 'SwitchFiftyFifty',
+  wallRide: 'WallRide',
 };
 const HANDLE: Record<RiderState['handle'], RiderAnimState['handle']> = {
   inFront: 'InFront',
@@ -230,6 +232,7 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
 
   let feature: RiderAnimState['feature'] = null;
   let rail = false;
+  let wallRoll = 0;
   let featureTurn = -1;
   let slope = 0;
   const jib = r.jib;
@@ -238,7 +241,15 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
     if (f) {
       const slide = slideIdAt(jib.boardAngle, f.heading, r.heading, r);
       feature = { slide: SLIDE[slide] ?? null, balance: jib.balance };
-      rail = f.def.kind === 'slider' && (f.def as { style?: string }).style !== 'box';
+      // Narrow mains (rails, pipes) look like rails; the old defs keep their style.
+      rail = f.def.kind === 'slider' ? f.def.style !== 'box' : f.def.kind === 'feature' && f.shape.pieces.some((p) => p.slide && p.width < 0.6);
+      const wall = f.shape.pieces[0]!.wall;
+      if (wall && r.ramp) {
+        // On a wall ride: the board lies on the wall, rolled by the profile's angle.
+        const x = (r.ramp.v - wall.base) * wall.side;
+        wallRoll = -wall.side * p.toes * Math.atan(wallHeightAt(wall, Math.max(x, 0)).slope);
+        feature = { slide: 'WallRide', balance: 0 };
+      }
     }
     if (jib.targetAngle !== jib.boardAngle) {
       const step = PI / 2;
@@ -271,7 +282,10 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
     edge: Math.max(-1, Math.min(1, r.edgeAngle / cfg.edge.maxEdgeAngle)),
     tension: r.tensionSmooth,
     popCharge: r.popCharge,
-    boardCFrame: { pos: { ...r.pos }, rot: boardRotation(r) },
+    boardCFrame: {
+      pos: { ...r.pos },
+      rot: wallRoll === 0 ? boardRotation(r) : composeBoardRotation(p.yaw, null, 0, p.lean + wallRoll),
+    },
     handlePosition,
     trick: {
       id: trickId(r),

@@ -4,7 +4,7 @@ import { LOOKS } from '../render/babylon/looks';
 import { GrayboxRenderer, snapshotOf, type RenderSnapshot } from '../render/graybox';
 import { DEFAULT_CONFIG } from '../sim/config';
 import { DEFAULT_PARK } from '../sim/park';
-import { TEST_PARK } from '../sim/parkLayout';
+import { CATALOG_TEST_PARK, TEST_PARK } from '../sim/parkLayout';
 import { createRun, stepRun, type RunState } from '../sim/session';
 import { advanceStepper, createStepper } from '../sim/stepper';
 import type { SimEvent } from '../sim/events';
@@ -31,8 +31,8 @@ document.head.appendChild(style);
 const view = document.getElementById('view')!;
 const hudEl = document.getElementById('hud')!;
 const params = new URLSearchParams(location.search);
-/** `?park=test`: the spec's test map (kicker, flush funbox, gap box, 8 m rail on the line). */
-const PARK = params.get('park') === 'test' ? TEST_PARK : DEFAULT_PARK;
+/** `?park=test`: the spec's test map (kicker, flush funbox, gap box, 8 m rail on the line). `?park=catalog`: every wake park catalogue feature. */
+const PARK = params.get('park') === 'test' ? TEST_PARK : params.get('park') === 'catalog' ? CATALOG_TEST_PARK : DEFAULT_PARK;
 
 /** `?physics=old`: section 11 of the animation spec off (no tuck-driven rotation, pre-wind, shoulder rope, landing cost, COM pivot). */
 const OLD_PHYSICS = params.get('physics') === 'old';

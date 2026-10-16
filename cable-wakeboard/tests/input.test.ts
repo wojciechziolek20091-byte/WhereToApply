@@ -54,7 +54,7 @@ describe('state machine', () => {
 
   it('asserts on an illegal transition and logs legal ones in debug mode', () => {
     const s = flatSim();
-    expect(() => transition(s, 'onFeature', 'test')).toThrow(/illegal transition riding -> onFeature/);
+    expect(() => transition(s, 'landing', 'test')).toThrow(/illegal transition riding -> landing/);
     transition(s, 'airborne', 'test');
     expect(s.events.at(-1)).toMatchObject({ type: 'transition', from: 'riding', to: 'airborne', reason: 'test' });
   });

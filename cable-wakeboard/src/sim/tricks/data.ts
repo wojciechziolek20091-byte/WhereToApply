@@ -34,13 +34,15 @@ export const INVERTS: Record<InvertId, InvertDef> = {
 };
 
 /** Slides on a box or rail, named by the board's angle to the feature (the game's own naming). */
-export type SlideId = 'fiftyFifty' | 'switchFiftyFifty' | 'backboard' | 'frontboard';
+export type SlideId = 'fiftyFifty' | 'switchFiftyFifty' | 'backboard' | 'frontboard' | 'wallRide';
 
 export const SLIDES: Record<SlideId, { id: SlideId; name: string; pointsPerSecond: number }> = {
   fiftyFifty: { id: 'fiftyFifty', name: '50-50', pointsPerSecond: 80 },
   switchFiftyFifty: { id: 'switchFiftyFifty', name: 'Switch 50-50', pointsPerSecond: 80 },
   backboard: { id: 'backboard', name: 'Backboard', pointsPerSecond: 120 },
   frontboard: { id: 'frontboard', name: 'Frontboard', pointsPerSecond: 120 },
+  /** Riding up a wall ride's transition onto the wall (wake park features). */
+  wallRide: { id: 'wallRide', name: 'Wall Ride', pointsPerSecond: 150 },
 };
 
 /** Base points (spec section 11.4). */

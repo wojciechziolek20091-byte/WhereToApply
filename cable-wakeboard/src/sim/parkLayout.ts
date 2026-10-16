@@ -210,6 +210,10 @@ export const CATALOG_TEST_PARK: ParkDef = {
       ['KinkRail', 204], ['Transfer', 226], ['FlatRail', 262], ['Rooftop', 284], ['StepUp', 332], ['Pyramid', 358],
       ['ProKicker', 410], ['Spine', 440], ['WallRide', 478],
     ] as const
-  ).map(([catalog, s]) => ({ kind: 'feature' as const, id: `cat_${catalog}`, name: catalog, catalog, s, offset: 0 })),
+  ).map(([catalog, s]) => ({
+    kind: 'feature' as const, id: `cat_${catalog}`, name: catalog, catalog, s,
+    // The wall ride is turned into the riders' line so the pull carries them up it.
+    ...(catalog === 'WallRide' ? { offset: -1, yaw: -0.6 } : { offset: 0 }),
+  })),
   site: LAKESIDE_PARK.site,
 };

@@ -3,7 +3,7 @@ import type { SimConfig } from './config';
 import { deg, DT, GRAVITY } from './config';
 import { edgeNorm, toeSign, updateEdge } from './edge';
 import { type FeatureSurface, featureUnder, offCentre, pieceHeading, surfaceAt, toWorld } from './features';
-import type { RidePiece } from './featureShapes';
+import { type RidePiece, wallHeightAt } from './featureShapes';
 import { transition } from './fsm';
 import { updateHandle } from './handle';
 import type { InputFrame, InputMemory } from './input';
@@ -68,11 +68,18 @@ export function tryEnterFeature(s: SimState): boolean {
   if (surface.height < 0) return false;
   const speed = horizontalLength(r.vel);
   const along = speed > 0.1 ? dot(horizontal(r.vel), forwardOf(feature.heading)) / speed : 0;
-  if (r.mode === 'ridingBlind' || surface.height > s.cfg.feature.mountHeight || along < cos(s.cfg.feature.mountAngle) || surface.piece.wall) {
+  if (r.mode === 'ridingBlind' || surface.height > s.cfg.feature.mountHeight || along < cos(s.cfg.feature.mountAngle)) {
     crash(s, 'hitFeature');
     return true;
   }
   r.ramp = { featureId: feature.def.id, u: local.u, v: local.v, releaseTick: -1, releaseTimeToLip: -1, sketchy: false };
+  if (surface.piece.wall) {
+    // Up a wall ride's transition: a slide on the wall.
+    r.jib = startJib(s, feature, 0, 'rideOn', false);
+    transition(s, 'onFeature', 'wallRide');
+    s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
+    return true;
+  }
   transition(s, rampMode(surface.piece), 'rideOn');
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
   return true;
@@ -87,7 +94,7 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     targetAngle: boardAngle,
     entryAngle: boardAngle,
     time: 0,
-    slideTimes: { fiftyFifty: 0, switchFiftyFifty: 0, backboard: 0, frontboard: 0 },
+    slideTimes: { fiftyFifty: 0, switchFiftyFifty: 0, backboard: 0, frontboard: 0, wallRide: 0 },
     slideOrder: [],
     entry,
     sketchy,
@@ -293,6 +300,10 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   const j = r.jib;
   if (!ramp || !j) throw new Error('onFeature without RampState / JibState');
   const f = featureById(s, ramp.featureId);
+  if (f.shape.pieces[0]!.wall) {
+    stepWall(s, input, mem, f);
+    return;
+  }
   const m = cfg.rider.mass;
   updatePosture(r, input.armsOut ? 0 : 1, input.pop, r.ropeTension, cfg.posture, DT);
   const rope = applyRope(s);
@@ -414,6 +425,82 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   r.pos = toWorld(f, ramp.u, ramp.v, next.height);
   r.vel = add(scale(next.tangent, vt), scale(right, vl));
   r.heading = f.shape.legacy ? f.heading : pieceHeading(f, next.piece);
+}
+
+/**
+ * One tick on a wall ride: the rider climbs the transition (and the wall)
+ * with the speed they cut in with, gravity pulls them back down the profile,
+ * the rope pulls them along it. They ride back out into the water, run off
+ * the end of the wall into the air, pop off it, or go over the top (crash).
+ */
+function stepWall(s: SimState, input: InputFrame, mem: InputMemory, f: ResolvedFeature): void {
+  const { rider: r, cfg } = s;
+  const ramp = r.ramp!;
+  const j = r.jib!;
+  const m = cfg.rider.mass;
+  updatePosture(r, input.armsOut ? 0 : 1, input.pop, r.ropeTension, cfg.posture, DT);
+  const rope = applyRope(s);
+  if (!rope) return;
+  const piece = f.shape.pieces[0]!;
+  const w = piece.wall!;
+  const top = f.shape.pieces[f.shape.pieces.length - 1]!.wall!.d1;
+  const fwd = forwardOf(f.heading);
+  const right = rightOf(f.heading);
+  let x = (ramp.v - w.base) * w.side;
+  const prof = wallHeightAt(w, x);
+  const cosT = 1 / Math.sqrt(1 + prof.slope * prof.slope);
+  const sinT = prof.slope * cosT;
+  // Speeds along the wall (u) and up its profile (ws).
+  let vu = dot(r.vel, fwd);
+  let ws = dot(r.vel, right) * w.side * cosT + r.vel.y * sinT;
+  const speed = Math.sqrt(vu * vu + ws * ws);
+  const fr = speed > 1e-6 ? ((f.shape.friction ?? cfg.feature.friction) * GRAVITY * cosT) / speed : 0;
+  vu += (dot(rope.force, fwd) / m - fr * vu) * DT;
+  ws += (-GRAVITY * sinT + (dot(rope.force, right) * w.side * cosT) / m - fr * ws) * DT;
+  r.edgeLoad = 0;
+  if (vu < cfg.feature.stallSpeed) {
+    endSlide(s);
+    crash(s, 'fellOffFeature');
+    return;
+  }
+  j.time += DT;
+  j.slideTimes.wallRide += DT;
+  if (j.slideOrder.length === 0) j.slideOrder.push('wallRide');
+  const along = (u: number, wsNow: number, c: number, sn: number) => add(add(scale(fwd, u), scale(right, w.side * wsNow * c)), vec3(0, wsNow * sn, 0));
+
+  if (input.pop) r.popCharge = ollieCharge(mem.popHeldTime, cfg);
+  if (mem.popReleased) {
+    // Pop off the wall: away from its face.
+    const charge = ollieCharge(mem.popHeldTime, cfg);
+    const out = ollieSpeed(charge, cfg) * cfg.feature.wallPopOut;
+    r.vel = add(along(vu, ws, cosT, sinT), add(scale(right, -w.side * out * sinT), vec3(0, out * cosT, 0)));
+    leaveFeature(s, f, 0, charge, piece);
+    return;
+  }
+
+  x += ws * cosT * DT;
+  ramp.u += vu * DT;
+  ramp.v = w.base + w.side * x;
+  if (x >= top) {
+    endSlide(s);
+    crash(s, 'fellOffFeature');
+    return;
+  }
+  const next = wallHeightAt(w, Math.max(x, 0));
+  const c2 = 1 / Math.sqrt(1 + next.slope * next.slope);
+  const s2 = next.slope * c2;
+  if (next.height <= 0 && ws < 0) {
+    r.vel = add(scale(fwd, vu), scale(right, w.side * ws * c2));
+    rideOut(s, f);
+    return;
+  }
+  r.pos = toWorld(f, ramp.u, ramp.v, next.height);
+  r.vel = along(vu, ws, c2, s2);
+  r.heading = f.heading;
+  if (ramp.u > piece.u1 || ramp.u < piece.u0) {
+    // Off the end of the wall: into the air with this speed.
+    leaveFeature(s, f, 0, 0, piece);
+  }
 }
 
 /** Land on a landing ramp: an ordinary landing, then ride down it. */
