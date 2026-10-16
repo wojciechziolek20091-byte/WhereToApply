@@ -283,6 +283,12 @@ export interface FeatureConfig {
   lateralDamping: number;
   /** Popping off a wall ride pushes away from its face with this fraction of the ollie's speed. */
   wallPopOut: number;
+  /**
+   * Popping off a slide with A/D pressed hops sideways at this speed (m/s),
+   * for transfers between boxes. Wake park catalogue features only; the old
+   * kicker / slider defs are unchanged.
+   */
+  sideHop: number;
 }
 
 export interface ComboConfig {
@@ -500,6 +506,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     ropeTip: 1400,
     lateralDamping: 6,
     wallPopOut: 0.6,
+    sideHop: 2.8,
   },
   combo: { linkWindow: 2.0, repeatPenalty: 0.5, perTrick: 0.25, maxMultiplier: 4 },
   crash: { respawnDelay: 2.5 },

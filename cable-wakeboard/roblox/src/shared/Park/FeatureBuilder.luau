@@ -167,8 +167,10 @@ local function rideAlong(ctx: Ctx, piece: any): { P3 }
 		local part = ridePart(ctx, piece, role, pts[i], pts[i + 1], piece.width)
 		if role == "Lip" then
 			-- LipPoint: the takeoff edge, LookVector along the launch direction.
-			local a, b = pts[i], pts[i + 1]
-			local cf = FeatureModel.localFrame(b.u, b.v, b.h, b.u - a.u, b.v - a.v, b.h - a.h)
+			-- The launch direction is the curve's tangent at the lip, not the last chord.
+			local b = pts[i + 1]
+			local slope = FeatureShapes.pieceHeightAt(piece, piece.u1).slope
+			local cf = FeatureModel.localFrame(b.u, b.v, b.h, 1, 0, slope)
 			local root = (ctx.model.PrimaryPart :: BasePart).CFrame
 			FeatureModel.attachment(part, "LipPoint", part.CFrame:Inverse() * root * cf)
 		end

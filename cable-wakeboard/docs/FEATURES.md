@@ -207,3 +207,110 @@ catalogue name and a parameter table:
     (Toeside / Heelside / Either, from the offset to the cable),
     `EntryDistance`, and `IdealPopOffset` on kickers (the middle of the
     sim's lip-pop window, 0.06 s).
+
+## FeatureValidator and FeatureRideTest (milestone 7)
+
+**`Park/FeatureValidator.luau`** checks a built model against section 5 and
+returns a report (`FeatureValidator.print` prints it):
+
+| Rule | What it measures |
+|---|---|
+| Safety slope | 12-22 deg, from the first Safety Ride part's Start and End |
+| Safety starts under water | 0.15-0.35 m under, at the Start attachment |
+| Kicker transition | at least 6 sub-segments |
+| Kicker lip angle | within 0.5 deg of the spec (`LipPoint` faces the curve's tangent) |
+| Kicker lip height | within 2 cm of the spec |
+| Kicker width | at least 2.5 m |
+| Box top width | at least 0.8 m (slider 1.0 m) |
+| Rail height | 0.4-1.4 m, and under the sim's ollie height |
+| Top reachable by ollie | boxes may be low (the slider is 0.3 m): only a maximum |
+| Kink joints | meet within 1 cm |
+| Kink angle | at most 20 deg (the funbox's flat-to-exit change counts: 18.4 deg) |
+| Visual matches ride surface | top sheets within 2 cm of every Ride part (they sit exactly on it: 0.0 mm) |
+| Edges have coping | coping radius at least 3 cm |
+| Part count | at most 120 |
+| Placement (given the cable and the other footprints) | within the rope's 18 m of the cable line, at least 2 m off it, and clear by 8 m along the approach and 12 m after the exit |
+
+- All 15 catalogue features pass.
+- A test also breaks parameters and checks that the right rule fails: a 30
+  deg safety, a 2 m kicker, a 1.8 m rail, a 25 deg kink, a 0.9 m slider.
+
+**`Park/FeatureRideTest.luau`** rides every feature with the Luau sim, the
+game's own rider (the same code as the server, identical to the web game).
+For each feature it:
+- lines up on the approach, aiming for the right line against the rope's
+  pull;
+- runs the section 10 tests;
+- checks every tick on the feature that `FeatureRegistry.getSurfaceAt`
+  finds the role the sim is riding.
+
+The ollie-on, step-up and transfer tests are seeded random searches (at most
+600 tries) over the line, the cut and the pop. The balance meter is off
+(that's the player's job). `tests/featureModel.test.ts` fails on any FAIL.
+
+Results on the catalogue test map:
+
+| Feature | Test | Result | Numbers |
+|---|---|---|---|
+| BeginnerKicker | Launch (ideal pop) | PASS | lip 7.9 m/s at 21 deg, peak 0.99 m, air 0.82 s (plain 0.75), 6.9 m [want 0.6-0.9 s] |
+| BeginnerKicker | Registry along the ramp | PASS | 18/18 ticks, 2.0 cm |
+| Slider | Up the safety | PASS | rideOn, slid 0.97 s, clean exit |
+| Slider | Registry along the feature | PASS | 65/65 ticks, 3.5 cm |
+| Slider | Ollie on from the water | PASS | from v=2.5 m, pop -1.2 m along the main (33 tries) |
+| Spine | Launch, land on the down slope | PASS | lip 7.9 m/s at 22 deg, peak 1.79 m, air 0.90 s (plain 0.82), 7.5 m, on the landing ramp |
+| Spine | Registry along the ramp | PASS | 50/50 ticks, 1.3 cm |
+| Funbox | Up the safety | PASS | rideOn, slid 1.03 s, clean exit |
+| Funbox | Kink joints | PASS | largest speed change in a tick 0.16 m/s |
+| Funbox | Registry along the feature | PASS | 87/87 ticks, 1.6 cm |
+| Funbox | Ollie on from the water | PASS | from v=-1.9 m, pop -1.7 m along the main (42 tries) |
+| MediumKicker | Launch (ideal pop) | PASS | lip 7.9 m/s at 29 deg, peak 1.94 m, air 1.12 s (plain 1.02), 9.7 m [want 1.0-1.4 s] |
+| MediumKicker | Registry along the ramp | PASS | 30/30 ticks, 1.8 cm |
+| PipeRail | Up the safety | PASS | rideOn, slid 1.20 s, clean exit |
+| PipeRail | Registry along the feature | PASS | 87/87 ticks, 3.5 cm |
+| PipeRail | Ollie on from the water | PASS | from v=2.0 m, pop -0.2 m along the main (15 tries) |
+| GapBox | Up the safety, pop in the window | PASS | popOn, slid 0.18 s, clean exit |
+| GapBox | Registry along the feature | PASS | 32/32 ticks, 3.0 cm |
+| GapBox | Ollie on from the water | PASS | from v=-2.0 m, pop -1.9 m along the main (116 tries) |
+| FlatRail | Up the safety | PASS | rideOn, slid 1.20 s, clean exit |
+| FlatRail | Registry along the feature | PASS | 90/90 ticks, 3.5 cm |
+| FlatRail | Ollie on from the water | PASS | from v=2.1 m, pop -1.2 m along the main (14 tries) |
+| WallRide | Up the wall and out | PASS | wallRide 0.30 s, 0.83 m up |
+| WallRide | Registry on the wall | PASS | 18/18 ticks, 4.3 cm |
+| KinkRail | Up the safety | PASS | rideOn, slid 1.12 s, clean exit |
+| KinkRail | Kink joints | PASS | largest speed change in a tick 0.12 m/s |
+| KinkRail | Registry along the feature | PASS | 93/93 ticks, 3.5 cm |
+| KinkRail | Ollie on from the water | PASS | from v=-2.0 m, pop 0.3 m along the main (50 tries) |
+| Transfer | Up the safety | PASS | rideOn, slid 0.70 s, clean exit |
+| Transfer | Registry along the feature | PASS | 58/58 ticks, 2.7 cm |
+| Transfer | Transfer A to B | PASS | pop at u=3.3 m, charge 0.35 s (3 tries) |
+| Transfer | Ollie on from the water | PASS | from v=2.8 m, pop -1.8 m along the main (59 tries) |
+| Rooftop | Up the safety | PASS | rideOn, slid 1.17 s, clean exit |
+| Rooftop | Kink joints | PASS | largest speed change in a tick 0.17 m/s |
+| Rooftop | Registry along the feature | PASS | 74/74 ticks, 3.5 cm |
+| Rooftop | Ollie on from the water | PASS | from v=-1.4 m, pop 0.0 m along the main (9 tries) |
+| StepUp | Up the safety | PASS | rideOn, slid 0.47 s, shortOllie into the high rail (expected) |
+| StepUp | Registry along the feature | PASS | 41/41 ticks, 3.5 cm |
+| StepUp | Pop up to the second rail | PASS | pop at u=5.2 m, charge 0.13 s (1 tries) |
+| StepUp | Ollie on from the water | PASS | from v=2.0 m, pop -0.2 m along the main (15 tries) |
+| Pyramid | Launch and land | PASS | lip 8.2 m/s at 27 deg, peak 2.00 m, air 1.12 s (plain 1.02), 9.8 m |
+| Pyramid | Registry along the ramp | PASS | 25/25 ticks, 3.4 cm |
+| ProKicker | Launch (ideal pop) | PASS | lip 8.1 m/s at 37 deg, peak 3.17 m, air 1.40 s (plain 1.28), 12.3 m [want 1.4-2.0 s] |
+| ProKicker | Registry along the ramp | PASS | 42/42 ticks, 1.1 cm |
+
+### Fixes the ride test drove
+
+- **Transfer box:**
+  - **Problem:** a rider could not get from box A to box B. Sliding damps
+    out sideways motion, and the rope only pulls about 0.4 m in the air.
+  - **New:** `feature.sideHop` (2.8 m/s, catalogue features only). Tap A/D
+    as the pop releases on a slide to hop sideways.
+  - **Placement:** box B goes on the cable side of a feature 3 m or more off
+    the cable, so the rope helps the hop.
+- **Corners:** features right after a corner left the rider swinging, so the
+  catalogue map now keeps 20 m or more of straight cable before every
+  feature, as the spec asks.
+- **`LipPoint`:** now faces the curve's tangent (the launch direction), not
+  the last chord.
+- **Registry:** a ray down the joint between two chords missed both, so a
+  1e-4 tolerance on the segment ends was added.
+- **Crash volumes under sloped mains:** these now hang the full height.

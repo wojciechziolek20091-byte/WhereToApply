@@ -484,6 +484,10 @@ function OnFeature.stepSlide(s, input, mem)
 	end
 	if mem.popReleased then
 		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
+		-- A/D pressed as the pop goes: hop sideways (transfers).
+		if not f.shape.legacy and mem.steerDir ~= 0 then
+			r.vel = Vec.add(r.vel, Vec.scale(right, mem.steerDir * cfg.feature.sideHop))
+		end
 		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg), charge, piece)
 		return
 	end

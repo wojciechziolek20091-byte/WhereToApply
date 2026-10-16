@@ -203,17 +203,22 @@ export const TEST_PARK: ParkDef = {
  */
 export const CATALOG_TEST_PARK: ParkDef = {
   name: 'Catalogue test map',
-  startS: 30,
+  startS: 12,
   features: (
     [
-      ['BeginnerKicker', 45], ['Slider', 66], ['Funbox', 112], ['MediumKicker', 135], ['PipeRail', 158], ['GapBox', 180],
-      ['KinkRail', 204], ['Transfer', 226], ['FlatRail', 262], ['Rooftop', 284], ['StepUp', 332], ['Pyramid', 358],
-      ['ProKicker', 410], ['Spine', 440], ['WallRide', 478],
+      // Straights (s): south 0-88, east 107-249, north-east 257-310, north-west 327-391, west 404-566.
+      // Every feature has 20 m or more of straight cable before it and room to land after.
+      ['BeginnerKicker', 26], ['Slider', 48], ['Spine', 66],
+      ['Funbox', 132], ['MediumKicker', 160], ['PipeRail', 185], ['GapBox', 212],
+      ['FlatRail', 288],
+      ['WallRide', 342], ['KinkRail', 366],
+      ['Transfer', 428], ['Rooftop', 452], ['StepUp', 478], ['Pyramid', 505], ['ProKicker', 530],
     ] as const
   ).map(([catalog, s]) => ({
     kind: 'feature' as const, id: `cat_${catalog}`, name: catalog, catalog, s,
-    // The wall ride is turned into the riders' line so the pull carries them up it.
-    ...(catalog === 'WallRide' ? { offset: -1, yaw: -0.6 } : { offset: 0 }),
+    // The wall ride is turned into the riders' line so the pull carries them up it;
+    // the transfer box sits off the line with its second box toward the cable, so the pull helps the hop across.
+    ...(catalog === 'WallRide' ? { offset: -1, yaw: -0.6 } : catalog === 'Transfer' ? { offset: 3, side: -1 } : { offset: 0 }),
   })),
   site: LAKESIDE_PARK.site,
 };

@@ -376,6 +376,8 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   if (input.pop) r.popCharge = ollieCharge(mem.popHeldTime, cfg);
   if (mem.popReleased) {
     const charge = ollieCharge(mem.popHeldTime, cfg);
+    // A/D pressed as the pop goes: hop sideways (transfers).
+    if (!f.shape.legacy && mem.steerDir !== 0) r.vel = add(r.vel, scale(right, mem.steerDir * cfg.feature.sideHop));
     leaveFeature(s, f, ollieSpeed(charge, cfg), charge, piece);
     return;
   }

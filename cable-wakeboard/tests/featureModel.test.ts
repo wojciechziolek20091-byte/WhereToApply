@@ -76,6 +76,22 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     expect(out).toContain('FEATURE REGISTRY OK');
   });
 
+  it('FeatureValidator: every catalogue feature passes section 5; broken parameters fail the right rule', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/feature_validator_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('FEATURE VALIDATOR OK');
+  });
+
+  it('FeatureRideTest: every catalogue feature is rideable with the Luau sim (spec section 10)', { timeout: 180000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/feature_ridetest_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    const fails = out.split('\n').filter((l) => l.startsWith('FAIL'));
+    expect(fails).toEqual([]);
+    expect(out).toContain('RIDE TEST OK');
+  });
+
   it('src/art/featureParts.json is the current FeatureBuilder output', { timeout: 60000 }, () => {
     const fresh = JSON.parse(exportFeatureArt(LUAU!));
     const stored = JSON.parse(readFileSync(join(__dirname, '../src/art/featureParts.json'), 'utf8'));

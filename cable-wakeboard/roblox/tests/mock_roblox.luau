@@ -25,8 +25,30 @@ V.__index = function(self, k)
 end
 function V.Cross(a, b) return vec(a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X) end
 function V.Dot(a, b) return a.X * b.X + a.Y * b.Y + a.Z * b.Z end
+function V.Lerp(a, b, t) return vec(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t) end
 Vector3 = { new = vec }
-Vector2 = { new = function(x, y) return { X = x, Y = y } end }
+local V2 = {}
+local function vec2(x, y) return setmetatable({ X = x or 0, Y = y or 0 }, V2) end
+V2.__add = function(a, b) return vec2(a.X + b.X, a.Y + b.Y) end
+V2.__sub = function(a, b) return vec2(a.X - b.X, a.Y - b.Y) end
+V2.__unm = function(a) return vec2(-a.X, -a.Y) end
+V2.__mul = function(a, b)
+	if type(a) == "number" then return vec2(a * b.X, a * b.Y) end
+	if type(b) == "number" then return vec2(a.X * b, a.Y * b) end
+	return vec2(a.X * b.X, a.Y * b.Y)
+end
+V2.__div = function(a, b) return vec2(a.X / b, a.Y / b) end
+V2.__index = function(self, k)
+	if k == "Magnitude" then return math.sqrt(self.X ^ 2 + self.Y ^ 2) end
+	if k == "Unit" then
+		local m = math.sqrt(self.X ^ 2 + self.Y ^ 2)
+		return vec2(self.X / m, self.Y / m)
+	end
+	return rawget(V2, k)
+end
+function V2.Dot(a, b) return a.X * b.X + a.Y * b.Y end
+function V2.Lerp(a, b, t) return vec2(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t) end
+Vector2 = { new = vec2 }
 
 -- CFrame: rotation stored as columns (right, up, back) plus position.
 local C = {}
@@ -47,6 +69,7 @@ C.__index = function(self, k)
 	if k == "RightVector" then return self.r end
 	if k == "PointToWorldSpace" then return function(c, v) return c.p + rotate(c, v) end end
 	if k == "VectorToWorldSpace" then return function(c, v) return rotate(c, v) end end
+	if k == "VectorToObjectSpace" then return function(c, v) return vec(v:Dot(c.r), v:Dot(c.u), v:Dot(c.b)) end end
 	if k == "PointToObjectSpace" then
 		return function(c, v)
 			local d = v - c.p
