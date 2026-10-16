@@ -427,3 +427,74 @@ All of these live in `roblox/src/shared/Park/`.
 - The medium-kicker-air and gap-box pop-on challenges complete; a 50-50
   does not count as a backboard.
 - The preview replaces its last feature.
+
+## Final report (milestone 11)
+
+Every feature placed in the wake park and on the beginner line:
+- **Validator:** all section 5 rules, with placement (cable reach and
+  clearance).
+- **Parts:** the model's BasePart count.
+- **Ride test:** Luau sim; "registry" is the ticks where
+  `FeatureRegistry.getSurfaceAt` found the role the sim was riding.
+
+`tests/featureModel.test.ts` reproduces it. All 15 pass.
+
+| Feature | Line | Difficulty | Dimensions | Placement | Validator | Parts | Ride test |
+|---|---|---|---|---|---|---|---|
+| L1_MediumKicker_01 (Medium kicker) | Line 1 | 2 blue | 7 x 3 m, lip 1.2 m at 25 deg | s 125, +4 m | PASS (9 rules) | 65 | PASS: Launch (ideal pop): lip 7.9 m/s at 31 deg, peak 2.02 m, air 1.15 s (plain 1.02), 9.8 m [want 1.0-1.4 s]; registry 31/31 ticks |
+| L1_PipeRail_01 (Pipe rail) | Line 1 | 2 blue | 10 m from 0.60 m; pipe 0.25 m | s 155, +3 m | PASS (10 rules) | 57 | PASS: Up the safety: rideOn, slid 1.18 s, clean exit; Ollie on from the water: from v=-1.3 m, pop 0.9 m along the main (151 tries); registry 87/87 ticks |
+| L1_Funbox_01 (Funbox) | Line 1 | 2 blue | 6 m from 1.00 m; 1.5 m wide; exit 3 m | s 190, +3 m | PASS (12 rules) | 99 | PASS: Up the safety: rideOn, slid 1.03 s, clean exit; Kink joints: largest speed change in a tick 0.17 m/s; Ollie on from the water: from v=3.3 m, pop -1.3 m along the main (62 tries); registry 87/87 ticks |
+| L4_Pyramid_01 (Pyramid) | Line 4 | 2 blue | base 8 x 8 m, top 2 x 2 m at 1.3 m | s 271, +4 m | PASS (8 rules) | 59 | PASS: Launch and land: lip 8.3 m/s at 29 deg, peak 2.11 m, air 1.17 s (plain 1.02), 10.1 m; registry 24/24 ticks |
+| L4_WallRide_01 (Wall ride) | Line 4 | 3 black | 4 m face, 3 m tall, 78 deg, R 2 m | s 298, +2 m, yaw -0.6 | PASS (5 rules) | 61 | PASS: Up the wall and out: wallRide 0.55 s, 1.09 m up (aimed 0.0 m along, 0.6 m in); registry 33/33 ticks |
+| L4_Spine_01 (Spine) | Line 4 | 3 black | 5 m ramp to 1.4 m (15 deg), 12 m landing | s 341, +3 m | PASS (5 rules) | 81 | PASS: Launch, land on the down slope: lip 8.1 m/s at 23 deg, peak 1.88 m, air 0.98 s (plain 0.85), 8.5 m, on the landing ramp; registry 42/42 ticks |
+| L2_GapBox_01 (Gap box) | Line 2 | 3 black | 6 m from 0.80 m; 1 m wide; 1.2 m water gap | s 420, +3 m | PASS (12 rules) | 85 | PASS: Up the safety, pop in the window: popOn, slid 0.20 s, clean exit; Ollie on from the water: from v=2.4 m, pop -1.4 m along the main (87 tries); registry 33/33 ticks |
+| L2_KinkRail_01 (Flat-down rail) | Line 2 | 3 black | 5 m + 5 m at -12 deg from 1.00 m; 0.3 m wide | s 453, +3 m | PASS (10 rules) | 65 | PASS: Up the safety: rideOn, slid 1.12 s, clean exit; Kink joints: largest speed change in a tick 0.11 m/s; Ollie on from the water: from v=1.2 m, pop -0.5 m along the main (58 tries); registry 93/93 ticks |
+| L2_Transfer_01 (Transfer box) | Line 2 | 3 black | 2 x 6 m at 0.6 m, 0.8 m apart, 10 deg splay | s 489, +4 m | PASS (12 rules) | 116 | PASS: Up the safety: rideOn, slid 0.72 s, clean exit; Transfer A to B: pop at u=3.3 m, charge 0.35 s (3 tries); Ollie on from the water: from v=-3.5 m, pop -0.7 m along the main (80 tries); registry 59/59 ticks |
+| L3_ProKicker_01 (Pro kicker) | Line 3 | 4 double black | 9 x 3.5 m, lip 1.9 m at 32 deg | s 520, +4 m | PASS (9 rules) | 68 | PASS: Launch (ideal pop): lip 8.2 m/s at 39 deg, peak 3.33 m, air 1.45 s (plain 1.28), 12.6 m [want 1.4-2.0 s]; registry 43/43 ticks |
+| L3_Rooftop_01 (Rooftop) | Line 3 | 3 black | 4 m at 15 deg + 2 m + 4 m at -15 deg from 0.16 m; 0.8 m wide | s 552, +3 m | PASS (12 rules) | 93 | PASS: Up the safety: rideOn, slid 1.17 s, clean exit; Kink joints: largest speed change in a tick 0.16 m/s; Ollie on from the water: from v=-2.3 m, pop -1.3 m along the main (39 tries); registry 74/74 ticks |
+| L3_StepUp_01 (Step-up rail) | Line 3 | 4 double black | 4 m from 0.50 m, gap, 5 m from 1.00 m; 0.3 m wide | s 15, +3 m | PASS (10 rules) | 66 | PASS: Up the safety: rideOn, slid 0.48 s, shortOllie into the high rail (expected); Pop up to the second rail: pop at u=5.2 m, charge 0.13 s (1 tries); Ollie on from the water: from v=-1.4 m, pop -1.3 m along the main (322 tries); registry 42/42 ticks |
+| B_Slider_01 (Slider) | Beginner | 1 green | 8 m from 0.30 m; 1.2 m wide | s 28, +3 m | PASS (12 rules) | 69 | PASS: Up the safety: rideOn, slid 0.95 s, clean exit; Ollie on from the water: from v=-1.5 m, pop 1.1 m along the main (68 tries); registry 65/65 ticks |
+| B_BeginnerKicker_01 (Beginner kicker) | Beginner | 1 green | 5 x 3 m, lip 0.6 m at 18 deg | s 62, +3 m | PASS (9 rules) | 63 | PASS: Launch (ideal pop): lip 8.0 m/s at 23 deg, peak 1.04 m, air 0.85 s (plain 0.73), 7.2 m [want 0.6-0.9 s]; registry 18/18 ticks |
+| B_Funbox_01 (Funbox) | Beginner | 2 blue | 6 m from 0.60 m; 1.5 m wide; exit 2.2 m | s 96, +3 m | PASS (12 rules) | 95 | PASS: Up the safety: rideOn, slid 0.97 s, clean exit; Kink joints: largest speed change in a tick 0.15 m/s; Ollie on from the water: from v=3.0 m, pop -1.8 m along the main (59 tries); registry 75/75 ticks |
+
+Screenshots (web game, which draws the FeatureBuilder's own parts):
+
+- `docs/features/final-wake.jpg`: the 12 wake park features in place.
+- `docs/features/final-beginner.jpg`: the beginner line.
+- `docs/features/final-aerial.jpg`: the park from the air.
+- `docs/features/maps.jpg`: top-down, the wake park and the beginner system.
+- `docs/features/m5c.jpg` (wall ride and pyramid close up) and
+  `docs/features/m8.jpg` (the realism details).
+
+### Not done, or only checked indirectly
+
+- **Not built or looked at in Roblox Studio.** No Studio connection here. The
+  Luau runs under the plain `luau` CLI with a Roblox mock: models, tags,
+  attributes, collision groups, registry, validator, ride test, bobbing, FX
+  hooks, map, tags, stats, challenges and preview are all exercised there.
+  The `--!strict` Park modules compile but were not type-checked against
+  Roblox's API definitions. What needs a look in Studio:
+  - lighting and shadows;
+  - SurfaceGui decals;
+  - particle looks;
+  - BillboardGui sizes;
+  - streaming.
+- **No sound or image assets:** the sound ids are empty, and the decals are
+  text and shape GUIs, not images.
+- **Bidirectional features (pyramid, slider) are ridden one way only.** The
+  loop never runs back past them. The attribute is set for gameplay code to
+  read.
+- **AllowedSlides is metadata.** The sim scores the four slide names on any
+  box or rail, and the wall ride scores only `wallRide`.
+- **The web game draws features static:** no bobbing, no foam (it is
+  see-through).
+- **Changes from the spec's numbers:**
+  - spine landing slope 12 m;
+  - wall ride turned 34 deg;
+  - funbox and other safeties measured from the waterline;
+  - lip-pop bonus 0.3;
+  - transfer hop (A/D on the pop);
+  - PopZoneLength 1.0 m;
+  - lines fitted to the straights.
+
+  The reasons are in the sections above.
