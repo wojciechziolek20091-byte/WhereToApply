@@ -44,6 +44,8 @@ local RiderRig = require(shared:WaitForChild("RiderRig"))
 local WaterSpray = require(shared:WaitForChild("WaterSpray"))
 local FeatureBuilder = require(shared:WaitForChild("Park"):WaitForChild("FeatureBuilder"))
 local FeatureModel = require(shared:WaitForChild("Park"):WaitForChild("FeatureModel"))
+local FeatureRegistry = require(shared:WaitForChild("Park"):WaitForChild("FeatureRegistry"))
+local FeatureConfig = require(shared:WaitForChild("Park"):WaitForChild("FeatureConfig"))
 
 -- Sim metres -> Roblox studs (1 stud = 0.28 m).
 local S = 1 / 0.28
@@ -257,6 +259,7 @@ local function buildPark(sim)
 			local m = FeatureBuilder.build({
 				id = d.id, catalog = d.catalog, params = d.params, side = d.side, accent = d.accent, name = d.name,
 				origin = Vector3.new(f.origin.x, 0, f.origin.z), heading = f.heading,
+				offsetFromCable = d.offset, yaw = d.yaw,
 			})
 			m.Parent = FeatureModel.featuresFolder()
 			continue
@@ -283,6 +286,8 @@ local function buildPark(sim)
 	end
 end
 buildPark(run.sim)
+-- Index the park's features for queries (surface under a point, nearby features, crash volumes).
+FeatureRegistry.init()
 
 local carrier = part("Carrier", Vector3.new(2, 1, 1), CFrame.new(), Color3.fromRGB(240, 180, 40))
 local AC = Anim.AnimConfig.DEFAULT
@@ -772,7 +777,9 @@ RunService.RenderStepped:Connect(function(rawDt)
 	if run.combo and live then
 		feed.Text = `{Sim.ScoringCombo.comboName(run.combo.entries)}   x{string.format("%.2f", live.multiplier)} = {live.total}`
 	elseif lastCrash ~= "" and r.mode == "crashed" then
-		feed.Text = `Crash: {lastCrash}`
+		-- Feature crash volumes carry a message per reason (FeatureConfig.CrashMessages).
+		local message = (FeatureConfig.CrashMessages :: any)[lastCrash]
+		feed.Text = if message then `Crash: {message}` else `Crash: {lastCrash}`
 	else
 		feed.Text = lastTrick
 	end

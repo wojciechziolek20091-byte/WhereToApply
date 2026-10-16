@@ -67,6 +67,13 @@ local FeatureConfig = {
 		KickerMinSubsegments = 6,
 		MaxParts = 120,
 	},
+	CrashMessages = {
+		shortOllie = "Clipped the edge: ollie higher",
+		missedSafetyPop = "Into the gap: pop at the end of the safety",
+		hitFeature = "Hit the frame",
+		fellOffFeature = "Over the top",
+	},
+	CrashBelowTop = 0.06,
 	Sounds = {
 		HDPE = { Slide = "", Enter = "" },
 		Pipe = { Slide = "", Enter = "" },

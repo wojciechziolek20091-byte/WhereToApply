@@ -69,6 +69,13 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     expect(out).toContain('FEATURE BUILDER OK');
   });
 
+  it('FeatureRegistry: getSurfaceAt agrees with the sim on every piece; gaps, edges and walls', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/feature_registry_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('FEATURE REGISTRY OK');
+  });
+
   it('src/art/featureParts.json is the current FeatureBuilder output', { timeout: 60000 }, () => {
     const fresh = JSON.parse(exportFeatureArt(LUAU!));
     const stored = JSON.parse(readFileSync(join(__dirname, '../src/art/featureParts.json'), 'utf8'));

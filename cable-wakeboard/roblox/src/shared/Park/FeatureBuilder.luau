@@ -11,6 +11,8 @@
 --
 -- Units: metres in, studs out (FeatureConfig.StudsPerMetre). Feature frame:
 -- u along the axis, v to its right, h above the water (FeatureModel).
+local CollectionService = game:GetService("CollectionService")
+
 local FeatureConfig = require(script.Parent.FeatureConfig)
 local FeatureModel = require(script.Parent.FeatureModel)
 local FeatureShapes = require(script.Parent.Parent.Sim.FeatureShapes)
@@ -30,6 +32,10 @@ export type BuildSpec = {
 	accent: string?,
 	origin: Vector3,
 	heading: number,
+	-- Where the feature sits relative to the cable (for approach data): its
+	-- offset from the cable line (m, + right of travel) and yaw off the cable.
+	offsetFromCable: number?,
+	yaw: number?,
 }
 
 type P3 = { u: number, v: number, h: number }
@@ -352,6 +358,78 @@ local function sign(ctx: Ctx, u: number, v: number, label: string, difficulty: n
 	post(ctx, "Signage", "SignBand", u + 0.035, v, 1.3, 1.42, 0.02, 0.9, rgb(d.color), "SmoothPlastic")
 end
 
+-- A crash volume (spec 4.3): a block hanging `drop` below the line a -> b, `depth` deep.
+local function crashVolume(ctx: Ctx, name: string, a: P3, b: P3, width: number, drop: number, depth: number, reason: string, upHint: Vector3?): BasePart
+	local cf, len = segFrame(a, b, upHint)
+	local p = FeatureModel.part(ctx.model, "Crash", name, Vector3.new(width * S, depth * S, math.max(len, 0.05) * S), cf * CFrame.new(0, -(drop + depth / 2) * S, 0))
+	p:SetAttribute("CrashReason", reason)
+	p:SetAttribute("CrashMessage", FeatureConfig.CrashMessages[reason])
+	CollectionService:AddTag(p, FeatureConfig.Tags.CrashVolume)
+	return p
+end
+
+-- Crash volumes for a shape: under every slide top (clipping it from below is a
+-- short ollie), the water gaps between parts, the sides of ramps, a wall's top edge.
+local function crashVolumes(ctx: Ctx)
+	local shape = ctx.shape
+	local below = FeatureConfig.CrashBelowTop
+	local prev: any = nil
+	for _, piece in shape.pieces do
+		if piece.wall then
+			if piece.role == "Wall" then
+				local w = piece.wall
+				local v = w.base + w.side * w.d1
+				crashVolume(ctx, "WallTop", p3(piece.u0, v, w.top + 0.3), p3(piece.u1, v, w.top + 0.3), 0.6, 0, 0.6, "fellOffFeature")
+			end
+		elseif piece.cap == false or piece.cap == nil then
+			local a = p3(piece.u0, FeatureShapes.pieceCentre(piece, piece.u0), piece.h0)
+			local b = p3(piece.u1, FeatureShapes.pieceCentre(piece, piece.u1), piece.h1)
+			if piece.slide then
+				local depth = math.max(math.max(piece.h0, piece.h1) - below, 0.05)
+				crashVolume(ctx, "Under" .. piece.index, a, b, piece.width + 0.1, below, depth, "shortOllie")
+			elseif piece.power == 0 and math.max(piece.h0, piece.h1) > 0.3 then
+				-- Sides of a safety: riding into them is hitting the frame.
+				for _, side in { -1, 1 } do
+					local o = side * (piece.width / 2 + 0.15)
+					crashVolume(ctx, "Side" .. piece.index, p3(a.u, a.v + o, a.h), p3(b.u, b.v + o, b.h), 0.3, 0.05, math.max(math.max(a.h, b.h) - 0.05, 0.1), "hitFeature")
+				end
+			end
+			if prev and prev.axis == "u" and prev.part ~= piece.part and piece.u0 - prev.u1 > 0.05 then
+				local reason = if prev.role == "Safety" then "missedSafetyPop" else "shortOllie"
+				local h = math.max(piece.h0, 0.2)
+				local g = crashVolume(ctx, "Gap", p3(prev.u1, prev.v1, h), p3(piece.u0, piece.v0, h), math.min(prev.width, piece.width), 0, h + 0.3, reason)
+				g.Name = "Gap"
+			end
+			prev = piece
+		end
+	end
+end
+
+-- Approach data (spec 6): where an ideal approach starts, at what speed, on which edge.
+local function approach(ctx: Ctx, spec: BuildSpec, entry: any)
+	local shape = ctx.shape
+	local folder = FeatureModel.folder(ctx.model, "Approach")
+	local anchor = FeatureModel.anchorFor(ctx.model, "Approach")
+	local first = shape.pieces[1]
+	local yaw = spec.yaw or 0
+	-- The rider comes in along the cable: in the feature's frame that is turned by -yaw.
+	local du, dv = math.cos(-yaw), math.sin(-yaw)
+	local tv = if first.wall then first.wall.base else (first.v0 or 0)
+	local dist = FeatureConfig.Approach.EntryDistance
+	local cf = FeatureModel.localFrame(-du * dist, tv - dv * dist, 0, du, dv, 0)
+	FeatureModel.attachment(anchor, "Entry", cf)
+	local off = spec.offsetFromCable or 0
+	local side = if math.abs(off) <= 1 then "Either" elseif off > 0 then "Toeside" else "Heelside"
+	local goofy = if side == "Toeside" then "Heelside" elseif side == "Heelside" then "Toeside" else "Either"
+	folder:SetAttribute("IdealSpeed", FeatureConfig.Approach.IdealSpeed)
+	folder:SetAttribute("Side", side)
+	folder:SetAttribute("SideGoofy", goofy)
+	folder:SetAttribute("EntryDistance", dist)
+	if entry.meta.tag == "Kicker" then
+		folder:SetAttribute("IdealPopOffset", FeatureConfig.Approach.IdealPopOffset)
+	end
+end
+
 -- The ride pieces of a part (one main with its kinks), in order.
 local function partPieces(shape: any, part: number): { any }
 	local out = {}
@@ -472,6 +550,8 @@ function FeatureBuilder.build(spec: BuildSpec): Model
 		FeatureBuilder.buildSpecial(ctx, entry, params)
 	end
 	sign(ctx, -1.5, shape.vMax + 2.5, spec.name or meta.label, meta.difficulty)
+	crashVolumes(ctx)
+	approach(ctx, spec, entry)
 	return model
 end
 

@@ -171,3 +171,39 @@ catalogue name and a parameter table:
 - **Previews:** `?park=catalog` opens a map with every catalogue feature on
   the line. `renderer.featureCam = { id, angle }` aims a camera at one
   feature (approach / side / rear / top / low) for captures.
+
+## FeatureRegistry, crash volumes, approach data (milestone 6)
+
+- **`Park/FeatureRegistry.luau`** works on the client and the server. It
+  indexes every `ParkFeature` model, keeping up with streaming and rebuilds
+  through the tag signals. It offers:
+  - `getSurfaceAt(position, down)`: projects onto each Ride part's Start to
+    End segment, with no raycasts. It returns the role, segment, progress
+    (0-1), normal, tangent, distance to centre, profile, the point and its
+    distance. On round pipes the normal points from the axis to the contact.
+  - `getNearby(position, radius)`, `getCrashAt(position)`, `byId(id)`,
+    `all()` and `refresh(model)`.
+  - **Test** (`feature_registry_spec.luau`):
+    - On every piece of every feature, `getSurfaceAt` finds the sim's role,
+      and the sim's height within 2 cm (219/219 samples).
+    - Gaps have no surface.
+    - Under a box top is a `shortOllie` volume; the gap is
+      `missedSafetyPop`; over the wall's top edge is `fellOffFeature`.
+  - It is wired into the client. The rider's physics stays the sim's: the
+    registry answers the same question from the parts, for tools, tutorials,
+    AI riders, effects and the crash UI.
+- **Crash volumes (`Crash/`):** each has a `CrashReason` attribute (the
+  sim's own reason) and a `CrashMessage` (from `FeatureConfig.CrashMessages`,
+  shown in the client's crash text), and is tagged `FeatureCrashVolume`.
+  - Under every slide top, from 6 cm below it to the water: `shortOllie`.
+  - The water gap between parts: `missedSafetyPop` after a safety,
+    `shortOllie` between step-up rails.
+  - The sides of tall safeties: `hitFeature`.
+  - A wall ride's top edge: `fellOffFeature`.
+- **Approach data (`Approach/`):**
+  - An `Entry` attachment 12 m before the feature, along the cable's
+    direction (so a turned wall ride's approach comes in at its angle).
+  - Attributes `IdealSpeed` (cable speed, 8.3 m/s), `Side` and `SideGoofy`
+    (Toeside / Heelside / Either, from the offset to the cable),
+    `EntryDistance`, and `IdealPopOffset` on kickers (the middle of the
+    sim's lip-pop window, 0.06 s).

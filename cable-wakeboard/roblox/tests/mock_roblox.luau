@@ -250,6 +250,11 @@ function CollectionService:GetTagged(tag)
 	end
 	return out
 end
+local function signal()
+	return { Connect = function() return { Disconnect = function() end } end }
+end
+function CollectionService:GetInstanceAddedSignal(_tag) return signal() end
+function CollectionService:GetInstanceRemovedSignal(_tag) return signal() end
 function CollectionService:GetTags(inst)
 	local out = {}
 	for tag, set in tags do if set[inst] then table.insert(out, tag) end end
@@ -283,3 +288,6 @@ game = {
 	end,
 	Workspace = workspace,
 }
+task = task or {}
+task.defer = task.defer or function(f, ...) f(...) end
+task.spawn = task.spawn or function(f, ...) f(...) end

@@ -138,6 +138,19 @@ export const FEATURE_CONFIG = {
     MaxParts: 120,
   },
 
+  /**
+   * Crash volumes (spec 4.3): CrashReason is the sim's crash reason; the
+   * message is what the crash UI shows.
+   */
+  CrashMessages: {
+    shortOllie: 'Clipped the edge: ollie higher',
+    missedSafetyPop: 'Into the gap: pop at the end of the safety',
+    hitFeature: 'Hit the frame',
+    fellOffFeature: 'Over the top',
+  } as Record<string, string>,
+  /** Clear space kept below a slide top before its crash volume starts (m). */
+  CrashBelowTop: 0.06,
+
   /** Sounds by SurfaceMaterial and event (spec 8). Empty: no assets yet. */
   Sounds: {
     HDPE: { Slide: '', Enter: '' },
