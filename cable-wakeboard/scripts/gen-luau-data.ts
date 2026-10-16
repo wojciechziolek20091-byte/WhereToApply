@@ -5,16 +5,20 @@
  *   roblox/src/shared/Sim/ParkLayout.luau  from src/sim/parkLayout.ts
  *   roblox/src/shared/Anim/AnimConfig.luau from src/anim/config.ts (DEFAULT_ANIM_CONFIG)
  *   roblox/src/shared/Anim/RiderPoses.luau from src/anim/poses.ts (all clips)
+ *   roblox/src/shared/Sim/FeatureCatalog.luau from src/sim/featureCatalog.ts
+ *   roblox/src/shared/Park/FeatureConfig.luau from src/park/featureConfig.ts
  * Run after editing either:
  *   npx vite-node scripts/gen-luau-data.ts
  * tests/parity.test.ts fails if the two drift apart.
  */
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG, DT, GRAVITY } from '../src/sim/config';
 import { LAKESIDE_PARK, TEST_PARK } from '../src/sim/parkLayout';
 import { DEFAULT_ANIM_CONFIG } from '../src/anim/config';
 import { ALL_CLIPS, CRASH_LEAD_IN } from '../src/anim/poses';
+import { CATALOG_COMMON, FEATURE_CATALOG } from '../src/sim/featureCatalog';
+import { FEATURE_CONFIG } from '../src/park/featureConfig';
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const LUAU_KEYWORDS = new Set(['local', 'end', 'function', 'then', 'repeat', 'until', 'nil', 'not', 'and', 'or']);
@@ -119,4 +123,56 @@ RiderPoses.CRASH_LEAD_IN = ${lua(CRASH_LEAD_IN, '')}
 return RiderPoses
 `;
 writeFileSync(join(__dirname, '../roblox/src/shared/Anim/RiderPoses.luau'), poses);
-console.log('wrote ParkLayout.luau, Config.luau, AnimConfig.luau and RiderPoses.luau');
+const catalog = `-- GENERATED from src/sim/featureCatalog.ts by scripts/gen-luau-data.ts. Do not edit:
+-- edit the TypeScript file (it documents every entry) and rerun the script.
+-- The 15 wake park features: default dimensions (metres, degrees) and
+-- gameplay metadata. FeatureShapes.luau turns an entry into ride pieces.
+local FeatureCatalog = {}
+
+FeatureCatalog.CATALOG_COMMON = ${lua(CATALOG_COMMON, '')}
+
+FeatureCatalog.FEATURE_CATALOG = ${lua(FEATURE_CATALOG, '')}
+
+return FeatureCatalog
+`;
+writeFileSync(join(__dirname, '../roblox/src/shared/Sim/FeatureCatalog.luau'), catalog);
+
+const { Common: _c, Catalog: _k, ...featureConfig } = FEATURE_CONFIG;
+const featureConfigLuau = `--!strict
+-- GENERATED from src/park/featureConfig.ts by scripts/gen-luau-data.ts. Do not edit:
+-- edit the TypeScript file (it documents every entry) and rerun the script.
+-- FeatureConfig: units, collision groups, tags, colours, materials, validator
+-- thresholds, approach, bobbing and sounds for the wake park features. The
+-- ride dimensions are the sim's catalogue, included as Catalog / Common.
+local FeatureCatalog = require(script.Parent.Parent.Sim.FeatureCatalog)
+
+local FeatureConfig = ${lua(featureConfig, '')}
+
+FeatureConfig.Common = FeatureCatalog.CATALOG_COMMON
+FeatureConfig.Catalog = FeatureCatalog.FEATURE_CATALOG
+
+-- Metres to studs.
+function FeatureConfig.studs(m: number): number
+\treturn m * FeatureConfig.StudsPerMetre
+end
+
+-- Difficulty colour (1-4).
+function FeatureConfig.difficultyColor(d: number): Color3
+\tlocal c = FeatureConfig.Difficulty[d].color
+\treturn Color3.fromRGB(c[1], c[2], c[3])
+end
+
+-- A named colour from Colors or Accents.
+function FeatureConfig.color(name: string): Color3
+\tlocal c = (FeatureConfig.Colors :: any)[name] or (FeatureConfig.Accents :: any)[name]
+\tassert(c, "unknown colour " .. name)
+\treturn Color3.fromRGB(c[1], c[2], c[3])
+end
+
+export type FeatureConfig = typeof(FeatureConfig)
+
+return FeatureConfig
+`;
+mkdirSync(join(__dirname, '../roblox/src/shared/Park'), { recursive: true });
+writeFileSync(join(__dirname, '../roblox/src/shared/Park/FeatureConfig.luau'), featureConfigLuau);
+console.log('wrote ParkLayout.luau, Config.luau, AnimConfig.luau, RiderPoses.luau, FeatureCatalog.luau and FeatureConfig.luau');

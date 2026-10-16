@@ -44,6 +44,15 @@ C.__index = function(self, k)
 	if k == "Position" then return self.p end
 	if k == "LookVector" then return -self.b end
 	if k == "UpVector" then return self.u end
+	if k == "RightVector" then return self.r end
+	if k == "PointToWorldSpace" then return function(c, v) return c.p + rotate(c, v) end end
+	if k == "VectorToWorldSpace" then return function(c, v) return rotate(c, v) end end
+	if k == "PointToObjectSpace" then
+		return function(c, v)
+			local d = v - c.p
+			return vec(d:Dot(c.r), d:Dot(c.u), d:Dot(c.b))
+		end
+	end
 	if k == "Inverse" then
 		return function(c)
 			-- Transpose the rotation, rotate the negated position.
@@ -75,6 +84,9 @@ function CFrame.Angles(rx, ry, rz)
 	local function rotY(t) local c, s = math.cos(t), math.sin(t) return cf(vec(), vec(c, 0, -s), vec(0, 1, 0), vec(s, 0, c)) end
 	local function rotZ(t) local c, s = math.cos(t), math.sin(t) return cf(vec(), vec(c, s, 0), vec(-s, c, 0), vec(0, 0, 1)) end
 	return rotX(rx) * rotY(ry) * rotZ(rz)
+end
+function CFrame.fromMatrix(pos, x, y, z)
+	return cf(pos, x, y, z or x:Cross(y))
 end
 function CFrame.lookAt(at, target, up)
 	up = up or vec(0, 1, 0)
@@ -119,9 +131,12 @@ local function enumGroup(names)
 	return g
 end
 Enum = {
-	Material = enumGroup({ "SmoothPlastic", "Plastic" }),
+	Material = enumGroup({ "SmoothPlastic", "Plastic", "DiamondPlate", "Metal", "Wood", "Neon", "Concrete", "Grass", "Sand", "Slate", "Foil", "Glass" }),
+	ModelStreamingMode = enumGroup({ "Default", "Atomic", "Persistent", "PersistentPerPlayer", "Nonatomic" }),
+	ModelLevelOfDetail = enumGroup({ "Automatic", "StreamingMesh", "Disabled" }),
 	PartType = enumGroup({ "Block", "Ball", "Cylinder" }),
 	SurfaceType = enumGroup({ "Smooth" }),
+	NormalId = enumGroup({ "Top", "Bottom", "Front", "Back", "Left", "Right" }),
 }
 
 Random = {}
@@ -167,9 +182,38 @@ function Inst:GetDescendants()
 end
 function Inst:IsA(cls)
 	local c = rawget(self, "_props").ClassName
-	if cls == "BasePart" then return c == "Part" or c == "WedgePart" or c == "CornerWedgePart" end
+	if cls == "BasePart" then return c == "Part" or c == "WedgePart" or c == "CornerWedgePart" or c == "TrussPart" end
 	if cls == "Motor6D" then return c == "Motor6D" end
 	return c == cls
+end
+function Inst:SetAttribute(k, v)
+	local a = rawget(self, "_attrs")
+	if not a then a = {} rawset(self, "_attrs", a) end
+	a[k] = v
+end
+function Inst:GetAttribute(k)
+	local a = rawget(self, "_attrs")
+	return a and a[k]
+end
+function Inst:GetAttributes() return table.clone(rawget(self, "_attrs") or {}) end
+function Inst:Destroy()
+	self.Parent = nil
+	for _, c in rawget(self, "_children") do c:Destroy() end
+end
+function Inst:ClearAllChildren()
+	for _, c in table.clone(rawget(self, "_children")) do c:Destroy() end
+end
+function Inst:FindFirstChildOfClass(cls)
+	for _, c in rawget(self, "_children") do if c.ClassName == cls then return c end end
+	return nil
+end
+function Inst:IsDescendantOf(other)
+	local p = self.Parent
+	while p do
+		if p == other then return true end
+		p = p.Parent
+	end
+	return false
 end
 function Inst:ScaleTo(_s) rawget(self, "_props").Scaled = _s end
 function Inst:FindFirstChild(name, recursive)
@@ -187,4 +231,55 @@ Instance = {
 		if className == "Part" then i.Shape = Enum.PartType.Block end
 		return i
 	end,
+}
+
+-- Services: CollectionService tags, PhysicsService collision groups, a Workspace.
+local tags = {}
+local CollectionService = {}
+function CollectionService:AddTag(inst, tag)
+	tags[tag] = tags[tag] or {}
+	tags[tag][inst] = true
+end
+function CollectionService:HasTag(inst, tag) return tags[tag] ~= nil and tags[tag][inst] == true end
+function CollectionService:RemoveTag(inst, tag) if tags[tag] then tags[tag][inst] = nil end end
+function CollectionService:GetTagged(tag)
+	local out = {}
+	for inst in tags[tag] or {} do
+		-- Destroyed instances drop out, like the engine.
+		if inst.Parent ~= nil then table.insert(out, inst) end
+	end
+	return out
+end
+function CollectionService:GetTags(inst)
+	local out = {}
+	for tag, set in tags do if set[inst] then table.insert(out, tag) end end
+	return out
+end
+local groups, collidable = {}, {}
+local PhysicsService = {}
+function PhysicsService:RegisterCollisionGroup(name) groups[name] = true end
+function PhysicsService:IsCollisionGroupRegistered(name) return name == "Default" or groups[name] == true end
+local function pairKey(a, b) if a < b then return a .. "|" .. b end return b .. "|" .. a end
+function PhysicsService:CollisionGroupSetCollidable(a, b, on)
+	assert(self:IsCollisionGroupRegistered(a) and self:IsCollisionGroupRegistered(b), "unregistered collision group")
+	collidable[pairKey(a, b)] = on
+end
+function PhysicsService:CollisionGroupsAreCollidable(a, b)
+	local v = collidable[pairKey(a, b)]
+	if v == nil then return true end
+	return v
+end
+workspace = Instance.new("Workspace")
+workspace.Name = "Workspace"
+local services = { CollectionService = CollectionService, PhysicsService = PhysicsService, Workspace = workspace }
+game = {
+	GetService = function(_, name)
+		local s = services[name]
+		if not s then
+			s = Instance.new(name)
+			services[name] = s
+		end
+		return s
+	end,
+	Workspace = workspace,
 }

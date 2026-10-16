@@ -48,8 +48,9 @@ local function __folder(name)
 	__folders[name] = f
 	return f
 end
+local __isFolder = {}
 setmetatable(__root, { __index = function(_, name)
-	if __src[name .. "/init"] then return __folder(name) end
+	if __src[name .. "/init"] or __isFolder[name] then return __folder(name) end
 	return { __path = name, Parent = __root }
 end })
 local function require(inst)
@@ -67,9 +68,10 @@ end
  * Luau source with the shared folders as a module tree (Sim/, Anim/ and the
  * given shared modules), defining locals `Sim` and `Anim`.
  */
-export function bundleShared(modules: string[] = ['RiderPose']): string {
+export function bundleShared(modules: string[] = ['RiderPose'], folders: string[] = ['Sim', 'Anim']): string {
   const parts = [SHARED_PRELUDE];
-  for (const folder of ['Sim', 'Anim']) {
+  for (const folder of folders) {
+    parts.push(`__isFolder[${JSON.stringify(folder)}] = true`);
     const dir = join(SHARED_DIR, folder);
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.luau')).sort()) {
       const body = readFileSync(join(dir, file), 'utf8').replace(/^--!.*$/gm, '');
@@ -80,6 +82,6 @@ export function bundleShared(modules: string[] = ['RiderPose']): string {
     const body = readFileSync(join(SHARED_DIR, `${m}.luau`), 'utf8').replace(/^--!.*$/gm, '');
     parts.push(`__src[${JSON.stringify(m)}] = function(script)\n${body}\nend`);
   }
-  parts.push('local Sim = require(__root.Sim)\nlocal Anim = require(__root.Anim)');
+  parts.push(`local Sim = require(__root.Sim)${folders.includes('Anim') ? '\nlocal Anim = require(__root.Anim)' : ''}`);
   return parts.join('\n');
 }

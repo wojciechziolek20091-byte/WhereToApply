@@ -39,6 +39,11 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
               Luau copies of parkLayout.ts AND config.ts are GENERATED:
               `npx vite-node scripts/gen-luau-data.ts` -> Sim/ParkLayout.luau, Sim/Config.luau.
   features.ts Feature geometry queries.
+  featureCatalog.ts The wake park feature catalogue (docs/FEATURES.md): 15 features'
+              default dimensions + metadata. GENERATED to Sim/FeatureCatalog.luau.
+  featureShapes.ts Catalogue entry (or a legacy kicker/slider def) -> ride pieces
+              (role, part, u/h ends, power curve, splay, wall profile, pyramid cap)
+              and shapeSurfaceAt. Hand-ported to Sim/FeatureShapes.luau (exact parity).
   rope.ts     Rope tension (one-sided spring-damper).
   edge.ts     Edge angle build/release, heading, toeSign.
   hydro.ts    Water forces, edge load.
@@ -64,6 +69,9 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   scoring/    combo.ts (combo score, shared with the Roblox server), judges.ts (panel), metrics.ts.
   session.ts  createRun/stepRun: passes, crashes, respawn, trick log, combos, judges.
   index.ts    Public exports.
+src/park/     featureConfig.ts: FeatureConfig (studs, collision groups, tags, colours,
+              materials, validator thresholds, bob, sounds). GENERATED to
+              roblox/src/shared/Park/FeatureConfig.luau (--!strict).
 src/art/      Engine-free art: site.ts (polygon helpers, ear clipping, triangle builder
               for the park site), mesh.ts (primitives and hulls -> flat-shaded triangle
               arrays), riders.ts + riderParts.json (rider art exported from the Luau
