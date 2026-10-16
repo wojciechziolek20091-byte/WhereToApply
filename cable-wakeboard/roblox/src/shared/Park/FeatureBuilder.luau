@@ -36,6 +36,8 @@ export type BuildSpec = {
 	-- offset from the cable line (m, + right of travel) and yaw off the cable.
 	offsetFromCable: number?,
 	yaw: number?,
+	-- Line name for the line tag decal ("Line 2").
+	line: string?,
 }
 
 type P3 = { u: number, v: number, h: number }
@@ -227,8 +229,19 @@ end
 -- Coping: round edges along both top edges of a box stretch.
 local function coping(ctx: Ctx, a: P3, b: P3, width: number)
 	local r = FeatureConfig.CopingRadius
+	local du, dv, dh = b.u - a.u, b.v - a.v, b.h - a.h
+	local len = math.sqrt(du * du + dv * dv + dh * dh)
+	local n = math.min(math.floor(len / FeatureConfig.BoltSpacing), FeatureConfig.MaxBoltsPerSide)
 	for _, side in { -1, 1 } do
 		cyl(ctx, "Visual", "Coping", p3(a.u, a.v + side * (width / 2 - r), a.h), p3(b.u, b.v + side * (width / 2 - r), b.h), r, rgb(C.Coping), "Metal", true)
+		-- Bolt heads in a row on the side, just under the coping.
+		for k = 1, n do
+			local t = (k - 0.5) / n
+			local pt = p3(a.u + du * t, a.v + dv * t + side * (width / 2 + 0.012), a.h + dh * t - 2.2 * r)
+			if pt.h > 0.03 then
+				post(ctx, "Visual", "Bolt", pt.u, pt.v, pt.h - 0.02, pt.h + 0.02, 0.025, 0.04, rgb(C.Coping), "Metal")
+			end
+		end
 	end
 end
 
@@ -248,9 +261,21 @@ local function sidePanels(ctx: Ctx, a: P3, b: P3, width: number, bottom: number,
 end
 
 -- HDPE top sheet whose top face is the ride surface.
+-- (A part of it under the water gets the algae tint: split at the waterline.)
 local function topSheet(ctx: Ctx, a: P3, b: P3, width: number): BasePart
-	local p = slab(ctx, "Visual", "TopSheet", a, b, width, FeatureConfig.TopSheet, ctx.top, "SmoothPlastic")
-	p.Reflectance = FeatureConfig.HDPEReflectance
+	if (a.h < 0) ~= (b.h < 0) then
+		local t = a.h / (a.h - b.h)
+		local c = p3(a.u + (b.u - a.u) * t, a.v + (b.v - a.v) * t, 0)
+		local wetEnd, dryEnd = if a.h < 0 then a else b, if a.h < 0 then b else a
+		local wet = slab(ctx, "Visual", "TopSheet", if a.h < 0 then wetEnd else c, if a.h < 0 then c else wetEnd, width, FeatureConfig.TopSheet, rgb(C.Algae), "SmoothPlastic")
+		local _ = wet
+		local p = slab(ctx, "Visual", "TopSheet", if a.h < 0 then c else dryEnd, if a.h < 0 then dryEnd else c, width, FeatureConfig.TopSheet, ctx.top, "SmoothPlastic")
+		p.Reflectance = FeatureConfig.HDPEReflectance
+		return p
+	end
+	local under = a.h < 0 and b.h < 0
+	local p = slab(ctx, "Visual", "TopSheet", a, b, width, FeatureConfig.TopSheet, if under then rgb(C.Algae) else ctx.top, "SmoothPlastic")
+	p.Reflectance = if under then 0 else FeatureConfig.HDPEReflectance
 	return p
 end
 
@@ -513,6 +538,169 @@ local function buildKicker(ctx: Ctx, entry: any)
 	end
 end
 
+-- Anchor chains from a corner down into the water, and a small buoy at their end.
+local function chainAndBuoy(ctx: Ctx, u: number, v: number, du: number, dv: number, buoyColor: Color3)
+	local reach = FeatureConfig.Chain.Reach
+	local a = p3(u, v, 0.1)
+	local b = p3(u + du * reach, v + dv * reach, -0.6)
+	cyl(ctx, "Visual", "Chain", a, b, FeatureConfig.Chain.Thickness / 2, rgb(C.Chain), "Metal", false)
+	local r = FeatureConfig.BuoyRadius
+	local buoy = post(ctx, "Visual", "Buoy", u + du * (reach + 0.4), v + dv * (reach + 0.4), -r, r, 2 * r, 2 * r, buoyColor, "Plastic")
+	buoy.Shape = Enum.PartType.Ball
+end
+
+-- A foam strip on the water (flat, white, part see-through).
+local function foam(ctx: Ctx, a: P3, b: P3, width: number)
+	local p = slab(ctx, "Visual", "Foam", p3(a.u, a.v, 0.012), p3(b.u, b.v, 0.012), width, 0.01, rgb(C.Foam), "SmoothPlastic")
+	p.Transparency = 0.35
+	p.CastShadow = false
+end
+
+-- A darker wet band where a side meets the water.
+local function wetBand(ctx: Ctx, a: P3, b: P3, v: number)
+	local h = FeatureConfig.WetBand
+	local p = slab(ctx, "Visual", "WetBand", p3(a.u, v, h), p3(b.u, v, h), 0.06, h + 0.02, rgb(C.WetBand), "SmoothPlastic")
+	p.CastShadow = false
+end
+
+-- Wordmark / line tag decal: a SurfaceGui on one face of a part (Roblox only; no image assets).
+local function textDecal(part: BasePart, face: Enum.NormalId, title: string, subtitle: string, accent: Color3)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Decal"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 1
+	gui.Parent = part
+	local label = Instance.new("TextLabel")
+	label.Name = "Title"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 0.62)
+	label.Text = title
+	label.TextScaled = true
+	label.Font = (Enum.Font :: any)[FeatureConfig.Decals.Font]
+	label.TextColor3 = Color3.new(1, 1, 1)
+	label.Parent = gui
+	local sub = Instance.new("TextLabel")
+	sub.Name = "Subtitle"
+	sub.BackgroundColor3 = accent
+	sub.BackgroundTransparency = 0
+	sub.Position = UDim2.fromScale(0.25, 0.66)
+	sub.Size = UDim2.fromScale(0.5, 0.3)
+	sub.Text = subtitle
+	sub.TextScaled = true
+	sub.Font = (Enum.Font :: any)[FeatureConfig.Decals.Font]
+	sub.TextColor3 = Color3.new(1, 1, 1)
+	sub.Parent = gui
+end
+
+-- Chevrons (design 3): two short slanted bars per arrow on a side, pointing along the feature.
+local function chevrons(ctx: Ctx, u: number, v: number, h: number, side: number, color: Color3)
+	for k = 0, 1 do
+		local uc = u + k * 0.35
+		for _, sgn in { -1, 1 } do
+			local a = p3(uc - 0.12, v + side * 0.01, h + sgn * 0.12)
+			local b = p3(uc + 0.06, v + side * 0.01, h)
+			slab(ctx, "Visual", "Chevron", a, b, 0.012, 0.05, color, "SmoothPlastic", Vector3.new(side, 0, 0))
+		end
+	end
+end
+
+-- Dot row (design 4): three accent dots on a side.
+local function dots(ctx: Ctx, u: number, v: number, h: number, color: Color3)
+	for k = 0, 2 do
+		local d = post(ctx, "Visual", "Dot", u + k * 0.28, v, h - 0.08, h + 0.08, 0.02, 0.16, color, "SmoothPlastic")
+		d.Shape = Enum.PartType.Cylinder
+		d.Size = Vector3.new(0.02 * S, 0.16 * S, 0.16 * S)
+	end
+end
+
+-- The realism pass (spec 7): chains and buoys at the corners, foam where
+-- things pierce the water, wet bands, a wear strip along the slide line, decals.
+local function realism(ctx: Ctx, spec: BuildSpec, entry: any)
+	local shape = ctx.shape
+	local first = shape.pieces[1]
+	local u0, u1, v0, v1 = shape.uMin, shape.uMax, shape.vMin, shape.vMax
+	-- Chains and buoys: orange at the front, white at the back.
+	local front, back = math.max(u0 + 0.8, 0.8), u1 - 0.4
+	chainAndBuoy(ctx, front, v0, -0.4, -0.9, rgb(C.BuoyOrange))
+	chainAndBuoy(ctx, front, v1, -0.4, 0.9, rgb(C.BuoyOrange))
+	chainAndBuoy(ctx, back, v0, 0.4, -0.9, rgb(C.BuoyWhite))
+	chainAndBuoy(ctx, back, v1, 0.4, 0.9, rgb(C.BuoyWhite))
+	-- Foam across the entry where it pierces the water, and along the sides.
+	if not first.wall then
+		local water = first.u0
+		if first.h0 < 0 and first.h1 > 0 then
+			local hh = FeatureShapes.pieceHeightAt(first, first.u0)
+			local lo, hi = first.u0, first.u1
+			for _ = 1, 30 do
+				local mid = (lo + hi) / 2
+				if FeatureShapes.pieceHeightAt(first, mid).height < 0 then
+					lo = mid
+				else
+					hi = mid
+				end
+			end
+			water = (lo + hi) / 2
+			local _ = hh
+		end
+		foam(ctx, p3(water - 0.1, first.v0, 0), p3(water + 0.2, first.v0, 0), first.width + 0.5)
+		for _, sd in { -1, 1 } do
+			local v = if sd < 0 then v0 - 0.15 else v1 + 0.15
+			foam(ctx, p3(water, v, 0), p3(u1, v, 0), FeatureConfig.Foam)
+			wetBand(ctx, p3(water, 0, 0), p3(u1, 0, 0), if sd < 0 then v0 + 0.03 else v1 - 0.03)
+		end
+	else
+		local w = first.wall
+		local vWater = w.base + w.side * math.sqrt(math.max(w.radius * w.radius - (w.radius - w.depth) ^ 2, 0))
+		foam(ctx, p3(u0, vWater, 0), p3(u1, vWater, 0), FeatureConfig.Foam)
+	end
+	-- Wear strip: a scuffed line along the middle of every box top.
+	for _, piece in shape.pieces do
+		if piece.slide and piece.axis == "u" and piece.width >= 0.6 and not piece.cap then
+			local a = p3(piece.u0, piece.v0, piece.h0 + 0.003)
+			local b = p3(piece.u1, piece.v1, piece.h1 + 0.003)
+			if a.h > 0 or b.h > 0 then
+				local wear = slab(ctx, "Visual", "Wear", a, b, piece.width * 0.35, 0.004, ctx.top:Lerp(Color3.new(0.6, 0.62, 0.64), 0.35), "SmoothPlastic")
+				wear.CastShadow = false
+			end
+		end
+	end
+	-- Decals: the park wordmark on the right side panel, the line tag on the left,
+	-- chevrons by the entry, a dot row toward the back.
+	local panels = {}
+	for _, d in FeatureModel.folder(ctx.model, "Visual"):GetChildren() do
+		if d:IsA("BasePart") and (d.Name == "Side" or d.Name == "Skirt" or d.Name == "EndPanel") then
+			table.insert(panels, d :: BasePart)
+		end
+	end
+	table.sort(panels, function(a, b)
+		return a.Size.Z * a.Size.Y > b.Size.Z * b.Size.Y
+	end)
+	local line = spec.line or "LINE"
+	local diff = FeatureConfig.Difficulty[entry.meta.difficulty]
+	if panels[1] then
+		textDecal(panels[1], Enum.NormalId.Right, FeatureConfig.Decals.ParkName, FeatureConfig.Decals.Tagline, ctx.accent)
+		textDecal(panels[1], Enum.NormalId.Left, FeatureConfig.Decals.ParkName, FeatureConfig.Decals.Tagline, ctx.accent)
+	end
+	if panels[2] then
+		textDecal(panels[2], Enum.NormalId.Right, string.upper(line), string.upper(diff.name), rgb(diff.color))
+		textDecal(panels[2], Enum.NormalId.Left, string.upper(line), string.upper(diff.name), rgb(diff.color))
+	end
+	if not first.wall and first.h1 > 0.35 then
+		local u = first.u1 - 0.9
+		local h = FeatureShapes.pieceHeightAt(first, u).height * 0.5
+		chevrons(ctx, u, first.v0 - first.width / 2 - 0.03, h, -1, rgb(C.TopWhite))
+		chevrons(ctx, u, first.v0 + first.width / 2 + 0.03, h, 1, rgb(C.TopWhite))
+	end
+	local lastPiece = shape.pieces[#shape.pieces]
+	if not lastPiece.wall and math.max(lastPiece.h0, lastPiece.h1) > 0.4 then
+		local u = lastPiece.u1 - 1.2
+		local h = math.max(FeatureShapes.pieceHeightAt(lastPiece, u).height * 0.5, 0.2)
+		dots(ctx, u, FeatureShapes.pieceCentre(lastPiece, u) + lastPiece.width / 2 + 0.06, h, ctx.accent)
+	end
+end
+
 -- Build a feature model (not parented).
 function FeatureBuilder.build(spec: BuildSpec): Model
 	local entry, params = FeatureShapes.catalogParams(spec.catalog, spec.params)
@@ -551,6 +739,7 @@ function FeatureBuilder.build(spec: BuildSpec): Model
 	else
 		FeatureBuilder.buildSpecial(ctx, entry, params)
 	end
+	realism(ctx, spec, entry)
 	sign(ctx, -1.5, shape.vMax + 2.5, spec.name or meta.label, meta.difficulty)
 	crashVolumes(ctx)
 	approach(ctx, spec, entry)

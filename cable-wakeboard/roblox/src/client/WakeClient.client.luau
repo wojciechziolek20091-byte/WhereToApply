@@ -46,6 +46,7 @@ local FeatureBuilder = require(shared:WaitForChild("Park"):WaitForChild("Feature
 local FeatureModel = require(shared:WaitForChild("Park"):WaitForChild("FeatureModel"))
 local FeatureRegistry = require(shared:WaitForChild("Park"):WaitForChild("FeatureRegistry"))
 local FeatureConfig = require(shared:WaitForChild("Park"):WaitForChild("FeatureConfig"))
+local FeatureBob = require(shared:WaitForChild("Park"):WaitForChild("FeatureBob"))
 
 -- Sim metres -> Roblox studs (1 stud = 0.28 m).
 local S = 1 / 0.28
@@ -288,6 +289,7 @@ end
 buildPark(run.sim)
 -- Index the park's features for queries (surface under a point, nearby features, crash volumes).
 FeatureRegistry.init()
+FeatureBob.attachAll()
 
 local carrier = part("Carrier", Vector3.new(2, 1, 1), CFrame.new(), Color3.fromRGB(240, 180, 40))
 local AC = Anim.AnimConfig.DEFAULT
@@ -705,6 +707,8 @@ RunService.RenderStepped:Connect(function(rawDt)
 		return
 	end
 	carrier.CFrame = CFrame.new(stud(renderCarrier)) * yaw(sim.carrier.heading)
+	-- Floating features bob, except near the rider.
+	FeatureBob.step(os.clock(), { stud(r.pos) }, dt)
 
 	-- Rope: to the handle, sagging when slack, thinner when taut.
 	local handleW = RiderRig.stud(rig, frame.handle.pos)

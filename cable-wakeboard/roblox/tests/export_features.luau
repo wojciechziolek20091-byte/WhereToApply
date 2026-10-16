@@ -18,7 +18,8 @@ for _, spec in SPECS do
 	local rows = {}
 	for _, folderName in { "Visual", "Signage" } do
 		for _, d in model:FindFirstChild(folderName):GetDescendants() do
-			if d:IsA("BasePart") and (d.Transparency or 0) < 1 then
+			-- See-through parts (foam) are left out: the web mesh has no transparency.
+			if d:IsA("BasePart") and (d.Transparency or 0) < 0.3 then
 				local shape = if d.ClassName == "Part" then SHAPES[d.Shape.Name] else SHAPES[d.ClassName]
 				local c = inv * d.CFrame
 				table.insert(rows, "[" .. table.concat({

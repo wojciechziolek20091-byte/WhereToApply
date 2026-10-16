@@ -56,6 +56,7 @@ local function cf(p, r, u, b)
 	return setmetatable({ p = p, r = r, u = u, b = b }, C)
 end
 local function rotate(c, v) return c.r * v.X + c.u * v.Y + c.b * v.Z end
+C.__add = function(a, v) return cf(a.p + v, a.r, a.u, a.b) end
 C.__mul = function(a, o)
 	if getmetatable(o) == C then
 		return cf(a.p + rotate(a, o.p), rotate(a, o.r), rotate(a, o.u), rotate(a, o.b))
@@ -136,6 +137,7 @@ function Col.ToHSV(c)
 end
 function Col.Lerp(a, b, t) return color(a.R + (b.R - a.R) * t, a.G + (b.G - a.G) * t, a.B + (b.B - a.B) * t) end
 Color3 = {
+	new = function(r, g, b) return color(r, g, b) end,
 	fromRGB = function(r, g, b) return color(r / 255, g / 255, b / 255) end,
 	fromHSV = function(h, s, v)
 		local i = math.floor(h * 6)
@@ -160,6 +162,8 @@ Enum = {
 	PartType = enumGroup({ "Block", "Ball", "Cylinder" }),
 	SurfaceType = enumGroup({ "Smooth" }),
 	NormalId = enumGroup({ "Top", "Bottom", "Front", "Back", "Left", "Right" }),
+	Font = enumGroup({ "GothamBlack", "GothamBold", "Gotham", "SourceSans" }),
+	SurfaceGuiSizingMode = enumGroup({ "FixedSize", "PixelsPerStud" }),
 }
 
 Random = {}
@@ -314,3 +318,8 @@ game = {
 task = task or {}
 task.defer = task.defer or function(f, ...) f(...) end
 task.spawn = task.spawn or function(f, ...) f(...) end
+UDim2 = {
+	new = function(xs, xo, ys, yo) return { X = { Scale = xs, Offset = xo }, Y = { Scale = ys, Offset = yo } } end,
+	fromScale = function(x, y) return { X = { Scale = x, Offset = 0 }, Y = { Scale = y, Offset = 0 } } end,
+	fromOffset = function(x, y) return { X = { Scale = 0, Offset = x }, Y = { Scale = 0, Offset = y } } end,
+}

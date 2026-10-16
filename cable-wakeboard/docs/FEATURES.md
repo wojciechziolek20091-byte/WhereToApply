@@ -314,3 +314,37 @@ Results on the catalogue test map:
 - **Registry:** a ray down the joint between two chords missed both, so a
   1e-4 tolerance on the segment ends was added.
 - **Crash volumes under sloped mains:** these now hang the full height.
+
+## Visual realism (milestone 8)
+
+All in FeatureBuilder, inside the part budget (the largest feature, the
+wall ride, is about 60 parts):
+
+- **HDPE sheets:**
+  - Black tops on boxes and rails, white on kickers.
+  - Reflectance 0.07.
+  - Where a sheet goes under the water it is split at the waterline, and the
+    part under the water gets the algae tint.
+- **Bolt heads** in a row under each coping, every 0.6 m, at most 12 per side.
+- **Anchor chains** run from the four corners down into the water, ending in
+  small buoys: orange at the front, white at the back.
+- **Water details:**
+  - A foam strip across the entry where it pierces the water, and along the
+    sides (see-through, so it is Roblox only: the web mesh leaves it out).
+  - A darker wet band along the sides at the waterline.
+- **A wear strip** runs along the middle of every box top.
+- **Fictional graphics** (`FeatureConfig.Decals`), four designs:
+  - the `LAKESIDE WAKE / CABLE PARK` wordmark and the line tag (line name
+    and difficulty), as SurfaceGuis on the two biggest side panels. Roblox
+    only; no image assets needed;
+  - chevrons by the entry (parts);
+  - a dot row near the exit (parts).
+- **Bobbing** (`Park/FeatureBob.luau`, client):
+  - Only the Visual folder moves, +-3 cm at 0.2 Hz, each feature with its
+    own phase.
+  - It eases to rest within 6 m of a rider, so the art meets the ride
+    surface at contact.
+  - `feature_bob_spec.luau` checks the amplitude, that Ride/ never moves,
+    and the freeze. The web game does not bob.
+- **Shadows:** Visual parts cast shadows; Ride/Crash parts are invisible and
+  cast none.

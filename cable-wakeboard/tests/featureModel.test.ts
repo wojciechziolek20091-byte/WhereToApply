@@ -92,6 +92,13 @@ describe.skipIf(!LUAU)('wake park features in Luau', () => {
     expect(out).toContain('RIDE TEST OK');
   });
 
+  it('FeatureBob: only the Visual folder bobs (+-3 cm), and it rests near a rider', { timeout: 60000 }, () => {
+    const mock = readFileSync(join(ROBLOX, 'tests/mock_roblox.luau'), 'utf8');
+    const spec = readFileSync(join(ROBLOX, 'tests/feature_bob_spec.luau'), 'utf8');
+    const out = runLuau([mock, bundleShared([], ['Sim', 'Park']), spec].join('\n'));
+    expect(out).toContain('FEATURE BOB OK');
+  });
+
   it('src/art/featureParts.json is the current FeatureBuilder output', { timeout: 60000 }, () => {
     const fresh = JSON.parse(exportFeatureArt(LUAU!));
     const stored = JSON.parse(readFileSync(join(__dirname, '../src/art/featureParts.json'), 'utf8'));

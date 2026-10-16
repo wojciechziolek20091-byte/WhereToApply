@@ -100,6 +100,27 @@ export const FEATURE_CONFIG = {
   /** Ride sub-segments per kicker transition (validator: at least 6). */
   KickerSubsegments: 10,
 
+  /**
+   * Original park graphics (spec 7): fictional branding only. Four designs:
+   * the park wordmark and the line tag (text, Roblox SurfaceGuis), chevrons
+   * and a dot row (simple shapes, parts).
+   */
+  Decals: {
+    ParkName: 'LAKESIDE WAKE',
+    Tagline: 'CABLE PARK',
+    Designs: ['Wordmark', 'LineTag', 'Chevrons', 'Dots'],
+    Font: 'GothamBlack',
+  },
+  /** Anchor chains (m): how far out from the corners they reach the water, and their thickness. */
+  Chain: { Reach: 1.4, Thickness: 0.05 },
+  /** Corner buoys (m). */
+  BuoyRadius: 0.22,
+  /** Wet band height at the waterline (m) and foam strip width (m). */
+  WetBand: 0.12,
+  Foam: 0.35,
+  /** Bolt heads per side of a stretch at most (part budget). */
+  MaxBoltsPerSide: 12,
+
   /** Floating features bob (spec 7). Only the Visual folder moves, and never near a rider. */
   Bob: { Amplitude: 0.03, Frequency: 0.2, FreezeRadius: 6 },
 
