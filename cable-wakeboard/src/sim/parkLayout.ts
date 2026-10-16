@@ -25,8 +25,8 @@
  * corner so riders land before the turn.
  *
  * roblox/src/shared/Sim/ParkLayout.luau is generated from this file:
- * `npx vite-node scripts/gen-park-luau.ts`. The towers are in config.ts
- * (`cable.towers`).
+ * `npx vite-node scripts/gen-luau-data.ts`. The sketch park's towers are in config.ts
+ * (`cable.towers`); the wake and beginner parks carry their own `cable`.
  */
 import type { CatalogFeatureDef, ParkDef, SiteDef } from './park';
 import { buildCablePath, cablePointAt } from './cable';
@@ -447,10 +447,15 @@ export const WAKE_LAYOUT: ParkLayoutEntry[] = [
   { featureId: 'S5_WallRide', type: 'WallRide', straight: 5, alongFraction: 0.5648, side: 'R', sideOffset: 7.8, angleIn: 12, partSide: 1, accent: 'Orange' },
 ];
 
-/** The beginner line (layout spec section 1): the beginner kicker, then the slider, 2.5 m off the line. */
+/**
+ * The beginner line (layout spec section 1): the beginner kicker, then the
+ * slider, 2.5 m off the line. The slider is on the left: after the shuttle
+ * turns at the far tower the rider swings 3 m to the right of the line on the
+ * way back (1.7-3.2 m at 100-110 m), right where a right-hand slider would be.
+ */
 export const BEGINNER_LINE: ParkLayoutEntry[] = [
-  { featureId: 'B_BeginnerKicker', type: 'BeginnerKicker', straight: 1, alongFraction: 0.448, side: 'L', sideOffset: 2.5, angleIn: 6, accent: 'Teal' },
-  { featureId: 'B_Slider', type: 'Slider', straight: 1, alongFraction: 0.766, side: 'R', sideOffset: 2.5, angleIn: 6, accent: 'Teal' },
+  { featureId: 'B_BeginnerKicker', type: 'BeginnerKicker', straight: 1, alongFraction: 0.448, side: 'R', sideOffset: 2.5, angleIn: 6, accent: 'Teal' },
+  { featureId: 'B_Slider', type: 'Slider', straight: 1, alongFraction: 0.766, side: 'L', sideOffset: 2.5, angleIn: 6, accent: 'Teal' },
 ];
 
 /**

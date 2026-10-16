@@ -1276,12 +1276,12 @@ ParkLayout.BEGINNER_PARK = {
 			name = "Beginner kicker",
 			catalog = "BeginnerKicker",
 			s = 64.75,
-			offset = -2.76,
-			yaw = 0.1047,
+			offset = 2.76,
+			yaw = -0.1047,
 			accent = "Teal",
 			line = "S1",
 		},
-		{ kind = "feature", id = "B_Slider", name = "Slider", catalog = "Slider", s = 110.09, offset = 3.01, yaw = -0.1047, accent = "Teal", line = "S1" },
+		{ kind = "feature", id = "B_Slider", name = "Slider", catalog = "Slider", s = 110.09, offset = -3.01, yaw = 0.1047, accent = "Teal", line = "S1" },
 	},
 }
 ParkLayout.BEGINNER_PARK.site = table.clone(ParkLayout.WAKE_PARK.site)

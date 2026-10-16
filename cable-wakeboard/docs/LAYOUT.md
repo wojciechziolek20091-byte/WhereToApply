@@ -416,3 +416,92 @@ Lap test (no features): riders come no closer than 5.8 m to a boundary buoy;
 they ride between the lane markers (and through one when weaving: a splash).
 
 ![buoys](layout/m6-buoys.jpg)
+
+## Milestone 7: final checks and report
+
+### Results
+
+| Check | Result |
+|---|---|
+| LayoutValidator | wake park 173 passed, 0 failed; beginner line 24 passed, 0 failed (Luau twin: same table, plus Ride data intact on all 16 features) |
+| Ride test (Luau sim, every feature as placed, FeatureRideTest) | 47 checks, all PASS |
+| Full runs, no input (both passes) | wake park and beginner line: no crashes, no feature met, closest to shore 22.6 m / 16.9 m (`tests/layout.test.ts`) |
+| Lap test (no features, four riders) | closest to any shore 10.4 m; rider to a tower base 21.4 m or more; boundary buoys 5.8 m or more (riders ride between the lane markers) |
+| VisualAudit | 0 findings on both parks (z-fighting, visuals on ride surfaces, decals, transparency, duplicates, strays, broken assets, tiny parts, off-palette materials) |
+| Console | `buildPark` in Luau: 14 + 2 features placed, 0 refused, no warnings; web game: no page errors in any capture |
+| Tests | `npm run check` clean; 458 tests passing (with LUAU) |
+
+One fix came out of the final runs: on the beginner line the rider, after the
+shuttle turns at the far tower, swings 1.7-3.2 m right of the line 100-110 m
+out, where the slider was. The beginner kicker is now on the right and the
+slider on the left (still alternating, 2.5 m off).
+
+### Final layout
+
+| Feature | Type | Straight | Along (centre) | Side | Offset | Angle in | Centre (x, z) |
+|---|---|---|---|---|---|---|---|
+| S1_Slider | Slider | S1 | 23.3 % | L | 3.5 m | 8 deg | 120.8, 78.5 |
+| S1_Funbox | Funbox | S1 | 50.8 % | R | 3.5 m | 8 deg | 158.3, 52.2 |
+| S1_MediumKicker | MediumKicker | S1 | 77.5 % | L | 5.5 m | 8 deg | 183.6, 15.3 |
+| S2_PipeRail | PipeRail | S2 | 24.1 % | R | 3.5 m | 8 deg | 198.4, -58.7 |
+| S2_GapBox | GapBox | S2 | 49.6 % | L | 3.5 m | 8 deg | 170.1, -93.1 |
+| S2_FlatDownRail | KinkRail | S2 | 75.5 % | R | 3.5 m | 8 deg | 153.7, -135.2 |
+| S3_ProKicker | ProKicker | S3 | 22.8 % | L | 6 m | 8 deg | 79.5, -152.9 |
+| S3_Rooftop | Rooftop | S3 | 52.3 % | R | 3.5 m | 8 deg | 27.5, -140.5 |
+| S3_Transfer | Transfer | S3 | 76.8 % | L | 3 m | 5 deg | -9.6, -117.1 |
+| S4_StepUp | StepUp | S4 | 23.5 % | R | 3.5 m | 8 deg | -59.5, -47.5 |
+| S4_Pyramid | Pyramid | S4 | 46.1 % | L | 8 m | 8 deg | -48.0, -4.5 |
+| S4_Spine | Spine | S4 | 75.2 % | R | 7 m | 8 deg | -63.0, 50.9 |
+| S5_FlatRail | FlatRail | S5 | 27.1 % | L | 3.5 m | 8 deg | -8.5, 106.8 |
+| S5_WallRide | WallRide | S5 | 56.5 % | R | 7.8 m | 12 deg | 30.3, 118.3 |
+| B_BeginnerKicker | BeginnerKicker | Beginner | 44.8 % | R | 2.5 m | 6 deg | 58.3, -17.0 |
+| B_Slider | Slider | Beginner | 76.6 % | L | 2.5 m | 6 deg | 77.8, -60.8 |
+
+L is left of travel (inside the counter-clockwise loop), R right (outside).
+Every feature of the target table exists and is where the table puts it; no
+feature was moved to another straight and none was added.
+
+### Deleted and replaced
+
+- Per feature (FeatureBuilder, all 15 types): 4 SurfaceGui decals (wordmark,
+  line tag), chevron arrows, dot rows, difficulty stripes, the wear strip,
+  foam strips (transparent), wet bands, the algae-tinted underwater top
+  sheet, every bolt head (212 on the wake park, 58 on the beginner line), the
+  four corner buoys, the spine's second back wall (a duplicate in the same
+  place). Part counts: 915 to 540 (wake), 227 to 118 (beginner) before the
+  re-layout.
+- Web renderer: 20 random white dome buoys, 10 red / blue domes on the cable
+  line, a rock mound at every tower base, the lattice towers in the water,
+  the site's dome buoys.
+- Site: the sketch lake (replaced by the grown lake), the long island (replaced
+  by the ring island round the beginner lagoon), the features spec's marker
+  buoys, the old start dock position (now near the end of S5) and beginner
+  dock, the old beginner cable inside the loop.
+- Roblox client: the plain tower blocks and the yellow ball buoys.
+- Nothing was deleted from the sim's ride data: features are rebuilt from the
+  same catalogue pieces; every Ride part, attachment, tag and crash volume is
+  checked after the move (Ride data rows).
+
+### Backup
+
+Commit `7e2d804` is the project before this spec (local tag
+`backup/pre-layout-2026-10-16`); in Studio, `ParkBuilder.backup()` copies
+Workspace.Park and Workspace.WakePark into `ServerStorage/Backup_<date>`.
+
+### Notes and limits
+
+- No Studio connection in this session: the Luau code ran under the Roblox
+  mock in tests, and the captures are the web game, which draws the same
+  exported feature parts. The first Studio build should be followed by a
+  look round in play mode.
+- The lake grew from 166 x 280 m to 331 x 347 m (east and north) to fit the
+  target layout under the real-park rules; the masts stand 26-30 m back from
+  the cable corners on headlands, with booms carrying the wheels.
+- The sketch, test and catalogue maps keep the old lake and towers.
+
+![before and after](layout/before-after-map.jpg)
+![after: top-down](layout/final-map.jpg)
+![after: aerial](layout/final-aerial.jpg)
+![after: beginner line](layout/final-map-beginner.jpg)
+![rider's eye at the start](layout/final-ride.jpg)
+![features](layout/final-features.jpg)

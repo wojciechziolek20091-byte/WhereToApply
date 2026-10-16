@@ -50,8 +50,8 @@ Layout.MAIN = {
 }
 
 Layout.BEGINNER = {
-	{ featureId = "B_BeginnerKicker", type = "BeginnerKicker", straight = 1, alongFraction = 0.448, side = "L", sideOffset = 2.5, angleIn = 6, accent = "Teal" },
-	{ featureId = "B_Slider", type = "Slider", straight = 1, alongFraction = 0.766, side = "R", sideOffset = 2.5, angleIn = 6, accent = "Teal" },
+	{ featureId = "B_BeginnerKicker", type = "BeginnerKicker", straight = 1, alongFraction = 0.448, side = "R", sideOffset = 2.5, angleIn = 6, accent = "Teal" },
+	{ featureId = "B_Slider", type = "Slider", straight = 1, alongFraction = 0.766, side = "L", sideOffset = 2.5, angleIn = 6, accent = "Teal" },
 }
 
 Layout.RULES = {

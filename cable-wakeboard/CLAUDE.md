@@ -33,12 +33,18 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   config.ts   SimConfig and DEFAULT_CONFIG. All tunables live here.
   cable.ts    Cable path (towers + filleted corners), carrier kinematics.
   park.ts     Park types (features, site) and resolvePark().
-  parkLayout.ts Parks. WAKE_PARK (DEFAULT_PARK): the features spec's lines placed
-              in the spec's terms (WAKE_PARK_LAYOUT -> placeLayout), on the user's
-              loop and site (+ buoys, operator hut). BEGINNER_PARK: the 2-tower
-              system (its own `cable`). LAKESIDE_PARK: the user's sketch layout
-              (docs/park-sketch.jpg). TEST_PARK: mechanics test map.
-              CATALOG_TEST_PARK: every catalogue feature on the line (parity).
+  parkLayout.ts Parks (docs/LAYOUT.md). WAKE_PARK (DEFAULT_PARK): the layout spec's
+              target layout (WAKE_LAYOUT, spec format) placed by placeFeatures()
+              from its own loop (WAKE_CABLE, towers on shore headlands, arms
+              WAKE_TOWER_ARMS) round the grown lake (shoreFor). BEGINNER_PARK: the
+              2-tower line (BEGINNER_CABLE, BEGINNER_LINE) in a lagoon inside the
+              ring island (lagoonIsland). LAYOUT_RULES: the real-park rules.
+              site.cables: both systems' towers (towerSites); site.buoyLayout:
+              buoyLayout(). LAKESIDE_PARK: the user's sketch layout
+              (docs/park-sketch.jpg) on the old lake and DEFAULT_CONFIG.cable.
+              TEST_PARK: mechanics test map. CATALOG_TEST_PARK: every catalogue
+              feature on the line (parity). WAKE_PARK_LAYOUT / placeLayout: the
+              features spec's earlier lines, kept for reference.
               Luau copies of parkLayout.ts AND config.ts are GENERATED:
               `npx vite-node scripts/gen-luau-data.ts` -> Sim/ParkLayout.luau, Sim/Config.luau.
   features.ts Feature geometry queries.
@@ -75,9 +81,13 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
 src/park/     (Roblox side is roblox/src/shared/Park: FeatureConfig, FeatureModel,
               FeatureBuilder, FeatureRegistry, FeatureValidator, FeatureRideTest,
               FeatureBob, ParkBuilder, Layout; docs/FEATURES.md.)
-              featureConfig.ts: FeatureConfig (studs, collision groups, tags, colours,
-              materials, validator thresholds, bob, sounds). GENERATED to
-              roblox/src/shared/Park/FeatureConfig.luau (--!strict).
+              featureConfig.ts: FeatureConfig (studs, collision groups, tags, the
+              FeatureStyle palette `Style`, validator thresholds, buoys, bob, sounds).
+              GENERATED to roblox/src/shared/Park/FeatureConfig.luau (--!strict).
+              layoutValidator.ts: LayoutValidator (twin Park/LayoutValidator.luau,
+              which adds the ride-data check). Other Park/ modules from the layout
+              spec: FeatureStyle, VisualAudit, TowerBuilder (twin src/art/tower.ts),
+              Buoys, PlaceFeatures (twin of placeFeatures), ParkBuilder.backup().
 src/art/      Engine-free art: site.ts (polygon helpers, ear clipping, triangle builder
               for the park site), mesh.ts (primitives and hulls -> flat-shaded triangle
               arrays), riders.ts + riderParts.json (rider art exported from the Luau
@@ -227,6 +237,13 @@ the line flips sign; its `s` becomes the new centre minus half its length).
 - Ollie: 3.5 to 6.5 m/s (0.6 to 2 m of air) with 0 to 0.5 s of charge.
 - Raley released at the tension peak: about 2.5 m, 1.5 s of air.
 - A 1.2 m kicker straight: about 1.9 m peak; a lip pop adds about 15%.
+
+Layout: `npx vite-node scripts/probe-layout.ts` (validator table),
+`scripts/probe-lap-shore.ts` (lap test: shore, tower, buoy distances).
+Features are white and rails black through FeatureStyle only; visuals sit
+FeatureConfig.VisualDrop studs under ride surfaces (VisualAudit fails a
+test otherwise). After changing parkLayout.ts or FeatureBuilder: regenerate
+(`gen-luau-data.ts`, `export-feature-art.ts` with LUAU set).
 
 Probes: `scripts/probe-tension.ts` (milestone 2 log), `probe-air.ts`,
 `probe-water.ts`, `probe-features.ts`, `probe-tuning.ts` (every trick 5 times).

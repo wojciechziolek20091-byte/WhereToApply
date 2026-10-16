@@ -14,6 +14,8 @@ import { DEFAULT_CONFIG } from '../src/sim/config';
 import { resolvePark } from '../src/sim/park';
 import { BEGINNER_LINE, BEGINNER_PARK, placeFeatures, travelCable, WAKE_CABLE, WAKE_LAYOUT, WAKE_PARK } from '../src/sim/parkLayout';
 import { bundleShared } from './parity/luauBundle';
+import { createRun, stepRun } from '../src/sim/session';
+import { neutralInput } from '../src/sim/input';
 
 const LUAU = process.env.LUAU;
 const wake = { ...DEFAULT_CONFIG.cable, ...WAKE_CABLE };
@@ -49,6 +51,15 @@ describe('layout (real-park rules)', () => {
       expect(b[i]!.origin.x - f.origin.x).toBeCloseTo(6, 6);
       expect(b[i]!.origin.z - f.origin.z).toBeCloseTo(0, 6);
     });
+  });
+
+  it('a full run with no input meets no feature on either park (corners, the start, the shuttle return swing)', { timeout: 60000 }, () => {
+    for (const park of [WAKE_PARK, BEGINNER_PARK]) {
+      const run = createRun(DEFAULT_CONFIG, park);
+      for (let i = 0; i < 60 * 300 && !run.finished; i++) stepRun(run, neutralInput());
+      expect(run.crashes, park.name).toEqual([]);
+      expect(run.endReason).toBe('passes');
+    }
   });
 
   it('a clockwise park reverses the towers after the first and keeps sides relative to travel', () => {
