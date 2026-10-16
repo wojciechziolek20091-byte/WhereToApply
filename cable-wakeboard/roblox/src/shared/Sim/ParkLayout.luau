@@ -314,4 +314,28 @@ ParkLayout.TEST_PARK = {
 }
 ParkLayout.TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 
+-- Every catalogue feature on the cable line (tests, parity).
+ParkLayout.CATALOG_TEST_PARK = {
+	name = "Catalogue test map",
+	startS = 30,
+	features = {
+		{ kind = "feature", id = "cat_BeginnerKicker", name = "BeginnerKicker", catalog = "BeginnerKicker", s = 45, offset = 0 },
+		{ kind = "feature", id = "cat_Slider", name = "Slider", catalog = "Slider", s = 66, offset = 0 },
+		{ kind = "feature", id = "cat_Funbox", name = "Funbox", catalog = "Funbox", s = 112, offset = 0 },
+		{ kind = "feature", id = "cat_MediumKicker", name = "MediumKicker", catalog = "MediumKicker", s = 135, offset = 0 },
+		{ kind = "feature", id = "cat_PipeRail", name = "PipeRail", catalog = "PipeRail", s = 158, offset = 0 },
+		{ kind = "feature", id = "cat_GapBox", name = "GapBox", catalog = "GapBox", s = 180, offset = 0 },
+		{ kind = "feature", id = "cat_KinkRail", name = "KinkRail", catalog = "KinkRail", s = 204, offset = 0 },
+		{ kind = "feature", id = "cat_Transfer", name = "Transfer", catalog = "Transfer", s = 226, offset = 0 },
+		{ kind = "feature", id = "cat_FlatRail", name = "FlatRail", catalog = "FlatRail", s = 262, offset = 0 },
+		{ kind = "feature", id = "cat_Rooftop", name = "Rooftop", catalog = "Rooftop", s = 284, offset = 0 },
+		{ kind = "feature", id = "cat_StepUp", name = "StepUp", catalog = "StepUp", s = 332, offset = 0 },
+		{ kind = "feature", id = "cat_Pyramid", name = "Pyramid", catalog = "Pyramid", s = 358, offset = 0 },
+		{ kind = "feature", id = "cat_ProKicker", name = "ProKicker", catalog = "ProKicker", s = 410, offset = 0 },
+		{ kind = "feature", id = "cat_Spine", name = "Spine", catalog = "Spine", s = 440, offset = 0 },
+		{ kind = "feature", id = "cat_WallRide", name = "WallRide", catalog = "WallRide", s = 478, offset = 0 },
+	},
+}
+ParkLayout.CATALOG_TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
+
 return ParkLayout

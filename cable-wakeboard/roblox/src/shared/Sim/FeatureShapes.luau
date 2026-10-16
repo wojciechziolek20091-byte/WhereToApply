@@ -153,7 +153,10 @@ local function spinePieces(p, d)
 	local power = FeatureShapes.powerFor(rad(p.lipAngle), p.rampLength, p.peak + d)
 	return {
 		piece({ role = "Ramp", u0 = 0, u1 = p.rampLength, h0 = -d, h1 = p.peak, width = p.width, power = power, lip = true }),
-		piece({ role = "LandingRamp", u0 = p.rampLength, u1 = 2 * p.rampLength, h0 = p.peak, h1 = -d, width = p.width, power = power, part = 1 }),
+		piece({
+			-- A straight landing slope: a curve would drop away under the riders' flight.
+			role = "LandingRamp", u0 = p.rampLength, u1 = p.rampLength + p.landingLength, h0 = p.peak, h1 = -d, width = p.width, part = 1,
+		}),
 	}
 end
 

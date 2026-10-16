@@ -1,6 +1,7 @@
--- Kickers and obstacles: kicker ramp and lip pop, the safety and its pop window,
--- sliding the main (90-degree steps, balance, handle passes), landing on a main.
--- Mirrors src/sim/onFeature.ts.
+-- Kickers and obstacles on any feature's ride pieces (FeatureShapes): ramps to
+-- a lip, the safety and its pop window, sliding mains (kinks, exit ramps;
+-- 90-degree steps, balance, handle passes), landing on a main or a landing
+-- ramp, riding back out into the water. Mirrors src/sim/onFeature.ts.
 local Actions = require(script.Parent.Actions)
 local BodyPhysics = require(script.Parent.BodyPhysics)
 local Config = require(script.Parent.Config)
@@ -33,9 +34,38 @@ local function featureById(s, id)
 	error(`unknown feature {id}`)
 end
 
-function OnFeature.safetyWindow(def, cfg)
-	local len = math.max(def.entryLength * cfg.safety.popWindowFraction, cfg.safety.popWindowMinMetres)
-	return { start = math.max(0, def.entryLength - len), ["end"] = def.entryLength }
+-- The safety's pop window: from `start` (m along the feature) to the end of the safety piece.
+function OnFeature.safetyWindow(p, cfg)
+	local len = math.max((p.u1 - p.u0) * cfg.safety.popWindowFraction, cfg.safety.popWindowMinMetres)
+	return { start = math.max(p.u0, p.u1 - len), ["end"] = p.u1 }
+end
+
+-- The first slideable piece starting where p ends (a flush main), if any.
+local function flushNext(f, p)
+	for _, q in f.shape.pieces do
+		if q.slide and q.axis == "u" and q.u0 == p.u1 then
+			return q
+		end
+	end
+	return nil
+end
+
+-- First piece of a part.
+local function partStart(f, part)
+	for _, q in f.shape.pieces do
+		if q.part == part then
+			return q
+		end
+	end
+	error("no piece in part " .. tostring(part))
+end
+
+local function rampMode(p)
+	return if p.role == "Safety" then "onSafety" else "onKicker"
+end
+
+local function descending(p)
+	return p.h1 < p.h0
 end
 
 function OnFeature.tryEnterFeature(s)
@@ -45,14 +75,22 @@ function OnFeature.tryEnterFeature(s)
 		return false
 	end
 	local feature, l, surface = hit.feature, hit["local"], hit.surface
+	if surface.height < 0 then
+		return false
+	end
 	local speed = Vec.horizontalLength(r.vel)
 	local along = if speed > 0.1 then Vec.dot(Vec.horizontal(r.vel), Vec.forwardOf(feature.heading)) / speed else 0
-	if r.mode == "ridingBlind" or surface.height > s.cfg.feature.mountHeight or along < DetMath.cos(s.cfg.feature.mountAngle) then
+	if
+		r.mode == "ridingBlind"
+		or surface.height > s.cfg.feature.mountHeight
+		or along < DetMath.cos(s.cfg.feature.mountAngle)
+		or surface.piece.wall
+	then
 		Actions.crash(s, "hitFeature")
 		return true
 	end
 	r.ramp = { featureId = feature.def.id, u = l.u, v = l.v, releaseTick = -1, releaseTimeToLip = -1, sketchy = false }
-	Fsm.transition(s, if feature.def.kind == "kicker" then "onKicker" else "onSafety", "rideOn")
+	Fsm.transition(s, rampMode(surface.piece), "rideOn")
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true
 end
@@ -96,39 +134,71 @@ local function endSlide(s)
 	table.insert(s.events, { type = "slideDone", tick = s.tick, jib = j })
 end
 
-local function leaveFeature(s, f, popSpeed, popQuality)
+local function leaveFeature(s, f, popSpeed, popQuality, from)
 	local r = s.rider
 	local spinStart = if r.jib then Scalar.wrapAngle(r.jib.boardAngle) else 0
 	local keepHandle = r.handle
 	endSlide(s)
 	table.insert(s.events, { type = "featureExit", tick = s.tick, featureId = f.def.id })
-	local onMain = false
-	if r.ramp then
+	local piece = from
+	if not piece and r.ramp then
 		local surf = Features.surfaceAt(f, { u = r.ramp.u, v = r.ramp.v })
-		onMain = surf ~= nil and surf.onTop
+		piece = if surf then surf.piece else nil
 	end
-	local air = Actions.takeOff(s, if f.def.kind == "kicker" then "kicker" else "feature", f.def.id, popSpeed, popQuality, spinStart)
-	air.overFeature = f.def.id .. ":" .. (if onMain then "main" else "ramp")
+	-- Off a ramp's lip is a kicker takeoff; with no piece under the rider, the feature's entry decides.
+	local src = piece or f.shape.pieces[1]
+	local fromRamp = src.lip and not src.slide
+	local air = Actions.takeOff(s, if fromRamp then "kicker" else "feature", f.def.id, popSpeed, popQuality, spinStart)
+	-- Off a lip straight onto the next part (a pyramid's top), that part counts as left too.
+	local onto = nil
+	if piece and piece.lip then
+		for _, q in f.shape.pieces do
+			if q.axis == "u" and q.u0 == piece.u1 and q.part ~= piece.part then
+				onto = q
+				break
+			end
+		end
+	end
+	air.overFeature = f.def.id .. ":" .. tostring(if onto then onto.part elseif piece then piece.part else 0)
 	r.handle = if keepHandle == "passing" then "inFront" else keepHandle
 	return air
 end
 
--- Get onto the main of a box or rail.
-local function mountMain(s, f, u, v, speed, entry, sketchy, boardAngle)
+-- Ride off a feature's end into the water.
+local function rideOut(s, f)
+	local r = s.rider
+	endSlide(s)
+	table.insert(s.events, { type = "featureExit", tick = s.tick, featureId = f.def.id })
+	r.pos = Vec.vec3(r.pos.x, 0, r.pos.z)
+	r.vel = Vec.horizontal(r.vel)
+	if Vec.horizontalLength(r.vel) > 0.5 then
+		r.heading = Vec.headingOf(r.vel)
+	end
+	r.ramp = nil
+	r.jib = nil
+	r.popCharge = 0
+	Fsm.transition(s, "riding", "rodeOut")
+end
+
+-- Get onto a main (a slideable piece): from the safety, or landing from the air.
+local function mountMain(s, f, main, u, v, speed, entry, sketchy, boardAngle)
 	boardAngle = boardAngle or 0
 	local r = s.rider
-	local top = Features.surfaceAt(f, { u = math.max(u, f.def.entryLength), v = v })
-	local height = if top then top.height else f.def.height
-	r.ramp = { featureId = f.def.id, u = math.max(u, f.def.entryLength), v = v, releaseTick = -1, releaseTimeToLip = -1, sketchy = sketchy }
+	local start = partStart(f, main.part)
+	local mu = math.max(u, start.u0)
+	local top = Features.surfaceAt(f, { u = mu, v = v })
+	local height = if top then top.height else main.h0
+	r.ramp = { featureId = f.def.id, u = mu, v = v, releaseTick = -1, releaseTimeToLip = -1, sketchy = sketchy }
 	r.pos = Features.toWorld(f, r.ramp.u, v, height)
-	r.vel = Vec.scale(Vec.forwardOf(f.heading), math.max(speed, s.cfg.feature.stallSpeed + 0.5))
-	r.heading = f.heading
+	local along = if f.shape.legacy or not top then Vec.forwardOf(f.heading) else top.tangent
+	r.vel = Vec.scale(along, math.max(speed, s.cfg.feature.stallSpeed + 0.5))
+	r.heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, if top then top.piece else main)
 	r.jib = startJib(s, f, boardAngle, entry, sketchy)
 	r.popCharge = 0
 	Fsm.transition(s, "onFeature", entry)
 end
 
--- One tick on a kicker ramp or a safety.
+-- One tick on a ramp-like piece: kicker ramp, safety, landing ramp, pyramid face.
 function OnFeature.stepRamp(s, input, mem)
 	local r, cfg = s.rider, s.cfg
 	local ramp = r.ramp
@@ -146,9 +216,10 @@ function OnFeature.stepRamp(s, input, mem)
 
 	local surface = Features.surfaceAt(f, { u = ramp.u, v = ramp.v })
 	if not surface then
-		leaveFeature(s, f, 0, 0)
+		leaveFeature(s, f, 0, 0, nil)
 		return
 	end
+	local piece = surface.piece
 	local t = surface.tangent
 	local n = surface.normal
 	local right = Vec.rightOf(f.heading)
@@ -172,17 +243,26 @@ function OnFeature.stepRamp(s, input, mem)
 	end
 	if mem.popReleased and ramp.releaseTick < 0 then
 		ramp.releaseTick = s.tick
-		if f.def.kind == "kicker" then
-			ramp.releaseTimeToLip = (f.def.length - ramp.u) / horizontalSpeed
+		if piece.role ~= "Safety" then
+			ramp.releaseTimeToLip = (piece.u1 - ramp.u) / horizontalSpeed
 		else
-			local w = OnFeature.safetyWindow(f.def, cfg)
+			local w = OnFeature.safetyWindow(piece, cfg)
 			if ramp.u >= w.start then
 				local centre = (w.start + w["end"]) / 2
 				local perfect = math.abs(ramp.u - centre) <= (cfg.safety.perfectFraction * (w["end"] - w.start)) / 2
-				mountMain(s, f, ramp.u, ramp.v, vt, if perfect then "popOn" else "pop", ramp.sketchy)
+				local main = flushNext(f, piece)
+				if main then
+					mountMain(s, f, main, ramp.u, ramp.v, vt, if perfect then "popOn" else "pop", ramp.sketchy)
+					return
+				end
+				-- A water gap before the main: pop across it.
+				r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+				local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
+				local air = leaveFeature(s, f, Pop.ollieSpeed(charge, cfg) * cfg.safety.gapPopScale, charge, piece)
+				air.pendingEntry = if perfect then "popOn" else "pop"
 				return
 			end
-			if f.def.safety == "gap" then
+			if f.shape.safetyMode == "Gap" then
 				Actions.crash(s, "missedSafetyPop")
 				return
 			end
@@ -193,25 +273,34 @@ function OnFeature.stepRamp(s, input, mem)
 	ramp.u += vt * Vec.dot(t, Vec.forwardOf(f.heading)) * DT
 	ramp.v += vl * DT
 	local nextSurface = Features.surfaceAt(f, { u = ramp.u, v = ramp.v })
-	if f.def.kind == "slider" and nextSurface and nextSurface.onTop then
-		if f.def.safety == "gap" then
+	if nextSurface and nextSurface.onTop and not piece.slide and not piece.lip then
+		if f.shape.safetyMode == "Gap" then
 			Actions.crash(s, "missedSafetyPop")
 			return
 		end
-		mountMain(s, f, ramp.u, ramp.v, vt, "rideOn", ramp.sketchy)
+		mountMain(s, f, nextSurface.piece, ramp.u, ramp.v, vt, "rideOn", ramp.sketchy)
 		return
 	end
-	if not nextSurface then
+	if piece.role == "Safety" and f.shape.safetyMode == "Gap" and not nextSurface and ramp.u >= piece.u1 and not flushNext(f, piece) then
+		Actions.crash(s, "missedSafetyPop")
+		return
+	end
+	if descending(piece) and (not nextSurface or nextSurface.height < 0) then
+		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+		rideOut(s, f)
+		return
+	end
+	if not nextSurface or (piece.lip and nextSurface.piece.part ~= piece.part) then
 		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
 		r.pos = Features.toWorld(f, ramp.u, ramp.v, surface.height)
 		local popSpeed = 0
 		local quality = 0
-		local lipPop = f.def.kind == "kicker" and ramp.releaseTimeToLip >= 0 and ramp.releaseTimeToLip <= cfg.kicker.lipPopWindow
+		local lipPop = piece.lip and ramp.releaseTimeToLip >= 0 and ramp.releaseTimeToLip <= cfg.kicker.lipPopWindow
 		if lipPop and r.vel.y > 0 then
 			popSpeed = r.vel.y * cfg.kicker.lipPopBonus
 			quality = 1 - ramp.releaseTimeToLip / cfg.kicker.lipPopWindow
 		end
-		local air = leaveFeature(s, f, popSpeed, quality)
+		local air = leaveFeature(s, f, popSpeed, quality, piece)
 		air.lipPop = lipPop
 		return
 	end
@@ -220,7 +309,7 @@ function OnFeature.stepRamp(s, input, mem)
 	r.heading = f.heading
 end
 
--- One tick sliding the main of a box or rail.
+-- One tick sliding a main of a box or rail: flat, kinked, or down an exit ramp.
 function OnFeature.stepSlide(s, input, mem)
 	local r, cfg = s.rider, s.cfg
 	local ramp = r.ramp
@@ -229,7 +318,6 @@ function OnFeature.stepSlide(s, input, mem)
 		error("onFeature without RampState / JibState")
 	end
 	local f = featureById(s, ramp.featureId)
-	local def = f.def
 	local m = cfg.rider.mass
 	Posture.updatePosture(r, if input.armsOut then 0 else 1, input.pop, r.ropeTension, cfg.posture, DT)
 	local rope = Actions.applyRope(s)
@@ -238,14 +326,17 @@ function OnFeature.stepSlide(s, input, mem)
 	end
 	local surface = Features.surfaceAt(f, { u = ramp.u, v = ramp.v })
 	if not surface or not surface.onTop then
-		leaveFeature(s, f, 0, 0)
+		leaveFeature(s, f, 0, 0, nil)
 		return
 	end
+	local piece = surface.piece
+	local heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, piece)
 	local t = surface.tangent
-	local right = Vec.rightOf(f.heading)
+	local right = Vec.rightOf(heading)
+	local friction = if f.shape.friction then f.shape.friction else cfg.feature.friction
 	local vt = Vec.dot(r.vel, t)
 	local vl = Vec.dot(r.vel, right)
-	local at = (Vec.dot(rope.force, t) - cfg.feature.friction * m * GRAVITY * Scalar.sign(vt)) / m
+	local at = (Vec.dot(rope.force, t) - m * GRAVITY * t.y - friction * m * GRAVITY * surface.normal.y * Scalar.sign(vt)) / m
 	vt += at * DT
 	local ropeLat = Vec.dot(rope.force, right)
 	vl += (ropeLat / m - cfg.feature.lateralDamping * vl) * DT
@@ -260,7 +351,7 @@ function OnFeature.stepSlide(s, input, mem)
 	if j.boardAngle == j.targetAngle and mem.steerDir ~= 0 and mem.steerHeldTime >= cfg.feature.tapTime then
 		local dir = mem.steerDir
 		if j.rot.spinSide == nil then
-			j.rot.spinSide = Rotation.rotationSide(dir, f.heading + j.boardAngle, Edge.toeSign(r), r.ropeHeading)
+			j.rot.spinSide = Rotation.rotationSide(dir, heading + j.boardAngle, Edge.toeSign(r), r.ropeHeading)
 			j.rot.startDir = dir
 		end
 		j.rot.spinDir = dir
@@ -281,7 +372,7 @@ function OnFeature.stepSlide(s, input, mem)
 	end
 
 	if cfg.feature.balanceEnabled then
-		local drift = if def.style == "box" then cfg.feature.balanceDriftBox else cfg.feature.balanceDriftRail
+		local drift = if piece.width >= 0.6 then cfg.feature.balanceDriftBox else cfg.feature.balanceDriftRail
 		local noise = Noise.valueNoise(j.time * cfg.feature.balanceNoiseRate, j.noiseSeed)
 		j.balance += (noise * drift + ropeLat / cfg.feature.ropeTip) * DT + mem.steerTap * cfg.feature.tapStrength
 		if math.abs(j.balance) > 1 then
@@ -293,7 +384,7 @@ function OnFeature.stepSlide(s, input, mem)
 	j.time += DT
 	local nearest = Scalar.round(j.boardAngle / (math.pi / 2)) * (math.pi / 2)
 	if math.abs(j.boardAngle - nearest) < deg(20) then
-		local id = OnFeature.slideIdAt(j.boardAngle, f.heading, f.heading, r)
+		local id = OnFeature.slideIdAt(j.boardAngle, heading, heading, r)
 		j.slideTimes[id] += DT
 		if #j.slideOrder == 0 or j.slideOrder[#j.slideOrder] ~= id then
 			table.insert(j.slideOrder, id)
@@ -305,30 +396,78 @@ function OnFeature.stepSlide(s, input, mem)
 	end
 	if mem.popReleased then
 		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
-		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg), charge)
+		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg), charge, piece)
 		return
 	end
 
-	ramp.u += vt * Vec.dot(t, Vec.forwardOf(f.heading)) * DT
-	ramp.v += vl * DT
+	local fwd = Vec.forwardOf(f.heading)
+	if piece.v1 == piece.v0 then
+		ramp.u += vt * Vec.dot(t, fwd) * DT
+		ramp.v += vl * DT
+	else
+		local vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+		ramp.u += Vec.dot(vel, fwd) * DT
+		ramp.v += Vec.dot(vel, Vec.rightOf(f.heading)) * DT
+	end
 	local nextSurface = Features.surfaceAt(f, { u = ramp.u, v = ramp.v })
+	if nextSurface and nextSurface.height < 0 then
+		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+		rideOut(s, f)
+		return
+	end
 	if not nextSurface or not nextSurface.onTop then
-		if math.abs(ramp.v) > def.width / 2 + 0.3 then
+		if math.abs(Features.offCentre(piece, ramp)) > piece.width / 2 + 0.3 then
 			endSlide(s)
 			Actions.crash(s, "fellOffFeature")
 			return
 		end
 		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+		if nextSurface and nextSurface.piece.role == "LandingRamp" and nextSurface.piece.u0 == piece.u1 then
+			endSlide(s)
+			r.jib = nil
+			r.pos = Features.toWorld(f, ramp.u, ramp.v, nextSurface.height)
+			r.heading = f.heading
+			Fsm.transition(s, "onKicker", "rollDown")
+			return
+		end
+		if descending(piece) and piece.h1 <= 0.05 then
+			rideOut(s, f)
+			return
+		end
 		r.pos = Features.toWorld(f, ramp.u, ramp.v, surface.height)
-		leaveFeature(s, f, 0, 0)
+		leaveFeature(s, f, 0, 0, piece)
 		return
 	end
 	r.pos = Features.toWorld(f, ramp.u, ramp.v, nextSurface.height)
 	r.vel = Vec.add(Vec.scale(nextSurface.tangent, vt), Vec.scale(right, vl))
-	r.heading = f.heading
+	r.heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, nextSurface.piece)
 end
 
--- In the air over a feature: clearance check, crashes, landing on a main.
+-- Land on a landing ramp: an ordinary landing, then ride down it.
+local function landOnRamp(s, f, air, surface, u, v)
+	local r = s.rider
+	local landing = Landing.evaluateLanding(r, air, surface.normal, s.cfg)
+	r.pos = Features.toWorld(f, u, v, surface.height)
+	if landing.crash then
+		Actions.crash(s, landing.crash, landing)
+		return
+	end
+	if math.abs(Scalar.round(air.rot.spinAngle / math.pi)) % 2 == 1 then
+		r.switchStance = not r.switchStance
+	end
+	if r.handle == "passing" then
+		r.handle = "inFront"
+	end
+	local keep = BodyPhysics.landingSpeedKeep(s.cfg, landing.impact, landing.clean)
+	r.vel = Vec.scale(surface.tangent, math.max(Vec.dot(r.vel, surface.tangent) * keep, s.cfg.feature.stallSpeed + 0.5))
+	r.heading = f.heading
+	r.air = nil
+	r.ramp = { featureId = f.def.id, u = u, v = v, releaseTick = -1, releaseTimeToLip = -1, sketchy = false }
+	Fsm.transition(s, "onKicker", "landedOnRamp")
+	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = false })
+end
+
+-- In the air over a feature: clearance check, crashes, landing on a main or a landing ramp.
 function OnFeature.airOverFeature(s, air)
 	local r = s.rider
 	local hit = Features.featureUnder(s.features, r.pos)
@@ -337,8 +476,9 @@ function OnFeature.airOverFeature(s, air)
 		return false
 	end
 	local feature, l, surface = hit.feature, hit["local"], hit.surface
-	local part = feature.def.id .. ":" .. (if surface.onTop then "main" else "ramp")
-	local isMain = feature.def.kind == "slider" and surface.onTop
+	local piece = surface.piece
+	local part = feature.def.id .. ":" .. tostring(piece.part)
+	local isMain = surface.onTop and not piece.wall
 	local clearance = if isMain then s.cfg.ollie.clearance else 0
 	if air.overFeature ~= part then
 		if r.pos.y < surface.height + clearance then
@@ -350,11 +490,16 @@ function OnFeature.airOverFeature(s, air)
 	if r.pos.y > surface.height or r.vel.y >= 0 then
 		return false
 	end
+	if piece.role == "LandingRamp" then
+		landOnRamp(s, feature, air, surface, l.u, l.v)
+		return true
+	end
 	if not isMain then
 		Actions.crash(s, "hitFeature")
 		return true
 	end
-	local yaw = Scalar.wrapAngle(r.heading + air.rot.spinAngle - feature.heading)
+	local heading = if feature.shape.legacy then feature.heading else Features.pieceHeading(feature, piece)
+	local yaw = Scalar.wrapAngle(r.heading + air.rot.spinAngle - heading)
 	local quarter = Scalar.round(yaw / (math.pi / 2))
 	local boardAngle = quarter * (math.pi / 2)
 	local offQuarter = math.abs(yaw - boardAngle)
@@ -374,7 +519,7 @@ function OnFeature.airOverFeature(s, air)
 		s.cfg.feature.stallSpeed + 0.5
 	)
 	r.air = nil
-	mountMain(s, feature, l.u, l.v, speed, "ollieOn", false, boardAngle)
+	mountMain(s, feature, piece, l.u, l.v, speed, air.pendingEntry or "ollieOn", false, boardAngle)
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true

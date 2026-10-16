@@ -8,7 +8,6 @@ import { waterTrickTiming } from '../sim/pop';
 import type { CrashReason, RotationState } from '../sim/rider';
 import { ropeRelativeYaw } from '../sim/rotation';
 import { liveCombo, type RunState } from '../sim/session';
-import type { SliderDef } from '../sim/park';
 import { DT } from '../sim/config';
 import { CONTROLS_HELP } from './keyboard';
 
@@ -258,14 +257,15 @@ export class Hud {
 
     // Pop timing bar.
     const f = r.ramp ? s.features.find((x) => x.def.id === r.ramp!.featureId) : undefined;
-    if (r.mode === 'onSafety' && r.ramp && f && f.def.kind === 'slider') {
-      const def = f.def as SliderDef;
-      const w = safetyWindow(def, cfg);
+    const safety = r.mode === 'onSafety' && r.ramp && f ? f.shape.pieces.find((p) => p.role === 'Safety') : undefined;
+    if (r.ramp && f && safety) {
+      const w = safetyWindow(safety, cfg);
+      const len = safety.u1 - safety.u0;
       this.timing.hidden = false;
-      this.timingLabel.textContent = `Safety pop (${def.safety})`;
-      this.timingWindow.style.left = `${(w.start / def.entryLength) * 100}%`;
-      this.timingWindow.style.width = `${((w.end - w.start) / def.entryLength) * 100}%`;
-      this.timingCursor.style.left = `${clamp01(r.ramp.u / def.entryLength) * 100}%`;
+      this.timingLabel.textContent = `Safety pop (${f.shape.safetyMode.toLowerCase()})`;
+      this.timingWindow.style.left = `${((w.start - safety.u0) / len) * 100}%`;
+      this.timingWindow.style.width = `${((w.end - w.start) / len) * 100}%`;
+      this.timingCursor.style.left = `${clamp01((r.ramp.u - safety.u0) / len) * 100}%`;
     } else if (r.mode === 'waterTrickLoad') {
       this.timing.hidden = false;
       this.timingLabel.textContent = 'Loaded: release at the peak';
@@ -294,7 +294,7 @@ export class Hud {
       const toes = toeSign(r);
       const rot = r.air?.rot ?? r.jib?.rot ?? null;
       const hit = featureUnder(s.features, r.pos);
-      const surface = r.mode === 'crashed' ? 'None' : hit ? `${hit.feature.def.id} ${hit.surface.onTop ? 'Main' : hit.feature.def.kind === 'kicker' ? 'KickerRamp' : 'Safety'}` : r.pos.y <= 0.01 ? 'Water' : 'None';
+      const surface = r.mode === 'crashed' ? 'None' : hit ? `${hit.feature.def.id} ${hit.surface.piece.role} #${hit.surface.piece.index}` : r.pos.y <= 0.01 ? 'Water' : 'None';
       this.debug.innerHTML = [
         ['State', r.mode],
         ['Tension raw / smooth', `${r.ropeTension.toFixed(0)} / ${r.tensionSmooth.toFixed(0)} N`],

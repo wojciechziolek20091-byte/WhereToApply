@@ -7,7 +7,7 @@ import { makeConfig } from '../../src/sim/config';
 import { neutralInput, type InputFrame } from '../../src/sim/input';
 import { createRng, nextFloat } from '../../src/sim/math/rng';
 import { DEFAULT_PARK } from '../../src/sim/park';
-import { TEST_PARK } from '../../src/sim/parkLayout';
+import { CATALOG_TEST_PARK, TEST_PARK } from '../../src/sim/parkLayout';
 import { createRun, stepRun } from '../../src/sim/session';
 
 const STEER = [-1, -1, 0, 1, 1];
@@ -17,9 +17,9 @@ const MODS: InputFrame['grabMod'][] = ['stalefish', 'nose', 'tail', null, null, 
 export type TraceRow = (string | number)[];
 
 /** `park`: 'default', or 'test' (features on the line, steering mostly straight so they get ridden). */
-export function traceRun(seed: number, ticks: number, park: 'default' | 'test' = 'default'): TraceRow[] {
-  const run = createRun(makeConfig({ run: { maxFalls: 99 } }), park === 'test' ? TEST_PARK : DEFAULT_PARK);
-  const straight = park === 'test' ? 0.6 : 0;
+export function traceRun(seed: number, ticks: number, park: 'default' | 'test' | 'catalog' = 'default'): TraceRow[] {
+  const run = createRun(makeConfig({ run: { maxFalls: 99 } }), park === 'test' ? TEST_PARK : park === 'catalog' ? CATALOG_TEST_PARK : DEFAULT_PARK);
+  const straight = park === 'default' ? 0 : 0.6;
   const rng = createRng(seed);
   let input: InputFrame = neutralInput();
   let hold = 0;

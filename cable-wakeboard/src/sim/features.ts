@@ -1,7 +1,7 @@
-import { pow, tan } from './math/detmath';
-import { type Vec3, addScaled, dot, forwardOf, normalize, rightOf, sub, UP, vec3 } from './math/vec';
-import type { FeatureDef, KickerDef, ResolvedFeature, SliderDef } from './park';
-import { featureLength } from './park';
+import { atan2, pow, tan } from './math/detmath';
+import { type Vec3, addScaled, dot, forwardOf, normalize, rightOf, scale, sub, UP, vec3 } from './math/vec';
+import type { KickerDef, ResolvedFeature, SliderDef } from './park';
+import { type RidePiece, pieceCentre, shapeSurfaceAt } from './featureShapes';
 
 /** Position in a feature's frame: u along its axis, v to its right. */
 export interface FeatureLocal {
@@ -15,10 +15,14 @@ export interface FeatureSurface {
   slope: number;
   /** Unit normal of the riding surface. */
   normal: Vec3;
-  /** Unit tangent up the surface along the axis. */
+  /** Unit tangent up the surface along the piece. */
   tangent: Vec3;
-  /** On the flat top of a slider (not the entry ramp). */
+  /** On a slideable piece (a main or exit ramp), not an entry ramp. */
   onTop: boolean;
+  /** The ride piece under the point. */
+  piece: RidePiece;
+  /** dh/d(distance across) on walls and pyramid side faces. */
+  crossSlope: number;
 }
 
 export const toLocal = (f: ResolvedFeature, pos: Vec3): FeatureLocal => {
@@ -34,12 +38,14 @@ export const toWorld = (f: ResolvedFeature, u: number, v: number, y: number): Ve
 /** Kicker exponent so the slope at the lip equals tan(lipAngle). */
 export const kickerExponent = (k: KickerDef): number => Math.max(1, (tan(k.lipAngle) * k.length) / k.height);
 
+/** The old kicker formula; the sim now rides `featureShapes` pieces, which give the same numbers. */
 export function kickerHeightAt(k: KickerDef, u: number): { height: number; slope: number } {
   const x = Math.min(Math.max(u / k.length, 0), 1);
   const p = kickerExponent(k);
   return { height: k.height * pow(x, p), slope: ((k.height * p) / k.length) * pow(x, p - 1) };
 }
 
+/** The old slider formula (see kickerHeightAt). */
 export function sliderHeightAt(sd: SliderDef, u: number): { height: number; slope: number; onTop: boolean } {
   if (u < sd.entryLength) {
     const slope = sd.height / sd.entryLength;
@@ -48,17 +54,30 @@ export function sliderHeightAt(sd: SliderDef, u: number): { height: number; slop
   return { height: sd.height, slope: 0, onTop: true };
 }
 
-export const insideFootprint = (def: FeatureDef, l: FeatureLocal, margin = 0): boolean =>
-  l.u >= -margin && l.u <= featureLength(def) + margin && Math.abs(l.v) <= def.width / 2 + margin;
+/** Heading of a piece's centre line (splayed boxes turn off the feature's axis). */
+export const pieceHeading = (f: ResolvedFeature, p: RidePiece): number =>
+  p.v1 === p.v0 ? f.heading : f.heading + atan2(p.v1 - p.v0, p.u1 - p.u0);
 
-/** Surface under a local point, or null outside the footprint. */
+/** Distance across a piece from its centre line. */
+export const offCentre = (p: RidePiece, l: FeatureLocal): number => l.v - pieceCentre(p, l.u);
+
+/** Surface under a local point, or null off every ride piece. */
 export function surfaceAt(f: ResolvedFeature, l: FeatureLocal): FeatureSurface | null {
-  if (!insideFootprint(f.def, l)) return null;
-  const hs = f.def.kind === 'kicker' ? { ...kickerHeightAt(f.def, l.u), onTop: false } : sliderHeightAt(f.def, l.u);
+  const s = shapeSurfaceAt(f.shape, l.u, l.v);
+  if (!s) return null;
+  const p = s.piece;
   const fwd = forwardOf(f.heading);
-  const tangent = normalize(addScaled(fwd, UP, hs.slope));
-  const normal = normalize(addScaled(UP, fwd, -hs.slope));
-  return { height: hs.height, slope: hs.slope, normal, tangent, onTop: hs.onTop };
+  const right = rightOf(f.heading);
+  if (s.crossSlope !== 0 || p.wall) {
+    // Walls and pyramid side faces: the local normal (x along, z across) in the world.
+    const normal = normalize(addScaled(addScaled(scale(UP, s.normal.y), fwd, s.normal.x), right, s.normal.z));
+    return { height: s.height, slope: 0, normal, tangent: fwd, onTop: p.slide, piece: p, crossSlope: s.crossSlope };
+  }
+  const k = (p.v1 - p.v0) / (p.u1 - p.u0);
+  const along = addScaled(fwd, right, k);
+  const tangent = normalize(addScaled(along, UP, s.slope));
+  const normal = normalize(addScaled(UP, fwd, -s.slope));
+  return { height: s.height, slope: s.slope, normal, tangent, onTop: p.slide, piece: p, crossSlope: 0 };
 }
 
 /** Highest feature surface under a world position, if any. */

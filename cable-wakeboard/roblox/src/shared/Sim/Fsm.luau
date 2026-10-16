@@ -6,11 +6,11 @@ Fsm.TRANSITIONS = {
 	ridingBlind = { "riding", "airborne", "crashed" },
 	waterTrickLoad = { "riding", "waterTrickAir", "airborne", "onKicker", "onSafety", "crashed" },
 	waterTrickAir = { "landing", "onFeature", "crashed" },
-	airborne = { "landing", "onFeature", "crashed" },
-	onKicker = { "airborne", "crashed" },
+	airborne = { "landing", "onFeature", "onKicker", "crashed" },
+	onKicker = { "airborne", "onFeature", "riding", "crashed" },
 	onSafety = { "airborne", "onFeature", "crashed" },
-	onFeature = { "airborne", "crashed" },
-	landing = { "riding", "ridingBlind", "onKicker", "onSafety", "crashed" },
+	onFeature = { "airborne", "onKicker", "riding", "crashed" },
+	landing = { "riding", "ridingBlind", "onKicker", "onSafety", "onFeature", "crashed" },
 	crashed = { "riding" },
 }
 

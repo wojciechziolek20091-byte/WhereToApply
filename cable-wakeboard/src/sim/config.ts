@@ -136,6 +136,11 @@ export interface SafetyConfig {
   perfectFraction: number;
   /** Combo multiplier for a sketchy pop-on (early pop onto a flush main). */
   sketchyMultiplier: number;
+  /**
+   * Popping across a water gap (gap boxes) uses this fraction of the ollie's
+   * pop speed: the safety's slope already carries the rider over.
+   */
+  gapPopScale: number;
 }
 
 /** Spins (around the vertical axis), from A/D. */
@@ -436,7 +441,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   },
   ollie: { chargeTime: 0.5, minV: 3.5, maxV: 6.5, clearance: 0.1 },
   kicker: { lipPopWindow: 0.12, lipPopBonus: 0.2 },
-  safety: { popWindowFraction: 0.08, popWindowMinMetres: 1.0, perfectFraction: 0.4, sketchyMultiplier: 0.8 },
+  safety: { popWindowFraction: 0.08, popWindowMinMetres: 1.0, perfectFraction: 0.4, sketchyMultiplier: 0.8, gapPopScale: 0.25 },
   spin: { rate: deg(540), accelTime: 0.1, maxCarry: deg(90) },
   flip: { rate: deg(400), maxCarry: deg(60) },
   handlePass: {

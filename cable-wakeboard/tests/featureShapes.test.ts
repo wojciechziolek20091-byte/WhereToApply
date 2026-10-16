@@ -95,6 +95,7 @@ describe('feature catalogue shapes', () => {
 describe('legacy kicker and slider defs as pieces', () => {
   it('give bit-identical heights and slopes to the old formulas', () => {
     for (const def of [...LAKESIDE_PARK.features, ...TEST_PARK.features]) {
+      if (def.kind === 'feature') continue;
       const shape = legacyShape(def);
       const len = def.kind === 'kicker' ? def.length : def.entryLength + def.length;
       for (let i = 0; i <= 400; i++) {

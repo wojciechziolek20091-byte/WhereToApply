@@ -28,7 +28,7 @@ function runLuau(tail: string): string {
   return execFileSync(LUAU!, [file], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
 }
 
-function luauTrace(seed: number, park: 'default' | 'test' = 'default'): string[][] {
+function luauTrace(seed: number, park: 'default' | 'test' | 'catalog' = 'default'): string[][] {
   const trace = readFileSync(TRACE_LUAU, 'utf8');
   const out = runLuau(`local traceRun = (function()\n${trace}\nend)()\ntraceRun(${seed}, ${TICKS}, "${park}")`);
   return out.trimEnd().split('\n').map((line) => line.split('\t'));
@@ -166,5 +166,13 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     const events = ts.map((r) => String(r[28] ?? '')).join(',');
     expect(events).toContain('featureEnter');
     expect(events).toContain('slideDone');
+  });
+
+  it.each([11, 23, 37])('catalogue map seed %i (all 15 wake park features): identical trace', (seed) => {
+    const ts = traceRun(seed, TICKS, 'catalog');
+    const lu = luauTrace(seed, 'catalog');
+    expect(firstDivergence(ts, lu)).toBeNull();
+    const events = ts.map((r) => String(r[28] ?? '')).join(',');
+    expect(events).toContain('featureEnter');
   });
 });

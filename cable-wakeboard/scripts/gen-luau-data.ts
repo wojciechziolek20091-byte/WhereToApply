@@ -14,7 +14,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DEFAULT_CONFIG, DT, GRAVITY } from '../src/sim/config';
-import { LAKESIDE_PARK, TEST_PARK } from '../src/sim/parkLayout';
+import { CATALOG_TEST_PARK, LAKESIDE_PARK, TEST_PARK } from '../src/sim/parkLayout';
 import { DEFAULT_ANIM_CONFIG } from '../src/anim/config';
 import { ALL_CLIPS, CRASH_LEAD_IN } from '../src/anim/poses';
 import { CATALOG_COMMON, FEATURE_CATALOG } from '../src/sim/featureCatalog';
@@ -54,6 +54,10 @@ ParkLayout.LAKESIDE_PARK = ${lua(LAKESIDE_PARK, '')}
 -- Test map (spec section 16): features on the cable line; same site as the default park.
 ParkLayout.TEST_PARK = ${lua({ ...TEST_PARK, site: undefined }, '')}
 ParkLayout.TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
+
+-- Every catalogue feature on the cable line (tests, parity).
+ParkLayout.CATALOG_TEST_PARK = ${lua({ ...CATALOG_TEST_PARK, site: undefined }, '')}
+ParkLayout.CATALOG_TEST_PARK.site = ParkLayout.LAKESIDE_PARK.site
 
 return ParkLayout
 `;

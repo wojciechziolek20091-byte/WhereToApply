@@ -656,6 +656,7 @@ export class BabylonRenderer {
       const float = boxHull([d.length / 2, -0.1, 0], [d.length / 2 + 0.2, 0.18, d.width / 2 + 0.25], look.kickerSide);
       return placeHulls([...ramp, ...sides, float], origin, f.heading);
     }
+    if (d.kind === 'feature') return [];
     const entry = extrudeProfile([[0, 0.02], [d.entryLength, d.height]], Math.max(d.width, 0.6), () => look.ramp(0.3));
     const top = d.style === 'tube'
       ? [

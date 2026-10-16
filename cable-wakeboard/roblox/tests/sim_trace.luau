@@ -22,9 +22,12 @@ end
 
 local function traceRun(seed, ticks, park)
 	local Rng = Sim.Rng
-	local parkDef = if park == "test" then Sim.ParkLayout.TEST_PARK else Sim.Park.DEFAULT_PARK
+	local parkDef = if park == "test"
+		then Sim.ParkLayout.TEST_PARK
+		elseif park == "catalog" then Sim.ParkLayout.CATALOG_TEST_PARK
+		else Sim.Park.DEFAULT_PARK
 	local run = Sim.Session.createRun(Sim.Config.makeConfig({ run = { maxFalls = 99 } }), parkDef)
-	local straight = if park == "test" then 0.6 else 0
+	local straight = if park == "default" or park == nil then 0 else 0.6
 	local rng = Rng.createRng(seed)
 	local input = Sim.Input.neutralInput()
 	local hold = 0

@@ -119,6 +119,8 @@ export interface PyramidParams {
 export interface SpineParams {
   shape: 'spine';
   rampLength: number;
+  /** The landing ramp can be longer than the launch ramp, so riders at cable speed come down on it. */
+  landingLength: number;
   width: number;
   peak: number;
   lipAngle: number;
@@ -246,7 +248,7 @@ export const FEATURE_CATALOG: Record<string, CatalogEntry> = {
   },
   Spine: {
     meta: { type: 'Spine', label: 'Spine', difficulty: 3, material: 'HDPE', allowedSlides: '', bidirectional: false, tag: 'Kicker', icon: 'air' },
-    params: { shape: 'spine', rampLength: 5, width: 3, peak: 1.4, lipAngle: 30 },
+    params: { shape: 'spine', rampLength: 5, landingLength: 12, width: 3, peak: 1.4, lipAngle: 15 },
   },
 };
 

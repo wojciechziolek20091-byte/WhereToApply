@@ -151,6 +151,8 @@ export interface AirState {
   preWind: number;
   /** Feature part ('id:main' / 'id:ramp') the board is above, for the clearance check. */
   overFeature: string | null;
+  /** Popped off a gap safety: landing on its main is this entry (Pop-on / pop). */
+  pendingEntry: 'popOn' | 'pop' | null;
 }
 
 /** Contact with a feature surface (kicker ramp or the safety of a box or rail). */

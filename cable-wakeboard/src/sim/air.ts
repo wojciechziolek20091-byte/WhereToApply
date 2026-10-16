@@ -61,6 +61,7 @@ export function createAirState(
     fromBlind,
     lipPop: false,
     overFeature: null,
+    pendingEntry: null,
     preWind: 0,
   };
 }

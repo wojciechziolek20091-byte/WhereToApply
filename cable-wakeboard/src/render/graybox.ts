@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { cablePointAt } from '../sim/cable';
 import { riderPose } from './pose';
 import { kickerHeightAt } from '../sim/features';
+import { pieceHeightAt } from '../sim/featureShapes';
+import { shapeOfDef } from '../sim/park';
 import { headingOf, lerpVec, sub, type Vec3 } from '../sim/math/vec';
 import type { FeatureDef, ResolvedFeature } from '../sim/park';
 import { hipPosition } from '../sim/step';
@@ -52,6 +54,22 @@ function featureObject(def: FeatureDef): THREE.Object3D {
     }
     pts.push([def.length, 0]);
     g.add(profileMesh(pts, def.width, COLORS.feature));
+    return g;
+  }
+  if (def.kind === 'feature') {
+    // Catalogue features: each ride piece as a profile, sampled along its length.
+    for (const p of shapeOfDef(def).pieces) {
+      if (p.axis !== 'u') continue;
+      const pts: [number, number][] = [[p.u0, -0.3]];
+      for (let i = 0; i <= 12; i++) {
+        const u = p.u0 + ((p.u1 - p.u0) * i) / 12;
+        pts.push([u, pieceHeightAt(p, u).height]);
+      }
+      pts.push([p.u1, -0.3]);
+      const m = profileMesh(pts, p.width, p.slide ? COLORS.rail : COLORS.feature);
+      m.position.z = (p.v0 + p.v1) / 2;
+      g.add(m);
+    }
     return g;
   }
   const ramp: [number, number][] = [

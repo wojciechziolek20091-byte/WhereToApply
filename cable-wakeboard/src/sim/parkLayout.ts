@@ -195,3 +195,21 @@ export const TEST_PARK: ParkDef = {
   ],
   site: LAKESIDE_PARK.site,
 };
+
+/**
+ * Every wake park catalogue feature (featureCatalog.ts) on the cable line,
+ * one after another round the loop, for tests and the TypeScript / Luau
+ * parity check. Open it with `?park=catalog`.
+ */
+export const CATALOG_TEST_PARK: ParkDef = {
+  name: 'Catalogue test map',
+  startS: 30,
+  features: (
+    [
+      ['BeginnerKicker', 45], ['Slider', 66], ['Funbox', 112], ['MediumKicker', 135], ['PipeRail', 158], ['GapBox', 180],
+      ['KinkRail', 204], ['Transfer', 226], ['FlatRail', 262], ['Rooftop', 284], ['StepUp', 332], ['Pyramid', 358],
+      ['ProKicker', 410], ['Spine', 440], ['WallRide', 478],
+    ] as const
+  ).map(([catalog, s]) => ({ kind: 'feature' as const, id: `cat_${catalog}`, name: catalog, catalog, s, offset: 0 })),
+  site: LAKESIDE_PARK.site,
+};

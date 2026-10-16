@@ -2,6 +2,8 @@ import type { CablePath } from './cable';
 import { cablePointAt } from './cable';
 import { type Vec3, addScaled, horizontal, rightOf } from './math/vec';
 import { LAKESIDE_PARK } from './parkLayout';
+import type { ShapeParams } from './featureCatalog';
+import { buildShape, type FeatureShape, legacyShape } from './featureShapes';
 
 /**
  * Features are placed relative to the cable: `s` is the arc length along the
@@ -40,7 +42,21 @@ export interface SliderDef extends FeatureBase {
   safety: 'flush' | 'gap';
 }
 
-export type FeatureDef = KickerDef | SliderDef;
+/**
+ * A feature from the wake park catalogue (featureCatalog.ts), with optional
+ * parameter overrides. `side` (+1 right, -1 left) puts a transfer's second box
+ * or a wall ride's wall on that side of the feature's axis.
+ */
+export interface CatalogFeatureDef extends FeatureBase {
+  kind: 'feature';
+  catalog: string;
+  params?: Partial<ShapeParams>;
+  side?: number;
+  /** Line accent colour name (FeatureConfig.Accents); looks only. */
+  accent?: string;
+}
+
+export type FeatureDef = KickerDef | SliderDef | CatalogFeatureDef;
 
 /** A point on the ground plane (m): x east, z south. */
 export interface GroundPoint {
@@ -117,7 +133,13 @@ export interface ResolvedFeature {
   /** Start of the feature on the water (y = 0). */
   origin: Vec3;
   heading: number;
+  /** Ride pieces in the feature's frame. */
+  shape: FeatureShape;
 }
+
+/** Ride pieces of any feature def. */
+export const shapeOfDef = (def: FeatureDef): FeatureShape =>
+  def.kind === 'feature' ? buildShape(def.catalog, def.params, def.side ?? 1) : legacyShape(def);
 
 /** The park from the user's sketch, with scenery from their park map and photos (see parkLayout.ts). */
 export const DEFAULT_PARK: ParkDef = LAKESIDE_PARK;
@@ -126,13 +148,23 @@ export function resolvePark(park: ParkDef, path: CablePath): ResolvedFeature[] {
   return park.features.map((def) => {
     const p = cablePointAt(path, def.s);
     const origin = addScaled(horizontal(p.pos), rightOf(p.heading), def.offset);
-    return { def, origin, heading: p.heading + (def.yaw ?? 0) };
+    return { def, origin, heading: p.heading + (def.yaw ?? 0), shape: shapeOfDef(def) };
   });
 }
 
 /** Total length of a feature along its axis. */
-export const featureLength = (def: FeatureDef): number =>
-  def.kind === 'kicker' ? def.length : def.entryLength + def.length;
+export const featureLength = (def: FeatureDef): number => {
+  if (def.kind === 'kicker') return def.length;
+  if (def.kind === 'slider') return def.entryLength + def.length;
+  return shapeOfDef(def).uMax;
+};
 
 /** No features: flat water only. Used by physics tests. */
 export const FLAT_PARK: ParkDef = { name: 'Flat water', features: [] };
+
+/** Footprint width of a feature across its axis. */
+export const featureWidth = (def: FeatureDef): number => {
+  if (def.kind !== 'feature') return def.width;
+  const sh = shapeOfDef(def);
+  return sh.vMax - sh.vMin;
+};

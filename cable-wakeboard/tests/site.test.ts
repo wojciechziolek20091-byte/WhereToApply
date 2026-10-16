@@ -8,7 +8,7 @@ import {
 } from '../src/art/site';
 import { buildCablePath, cablePointAt } from '../src/sim/cable';
 import { DEFAULT_CONFIG } from '../src/sim/config';
-import { featureLength } from '../src/sim/park';
+import { featureLength, featureWidth } from '../src/sim/park';
 import { DEFAULT_PARK } from '../src/sim/park';
 import { createSim } from '../src/sim/world';
 
@@ -58,7 +58,7 @@ describe('default park site', () => {
     for (const a of feats) {
       for (const b of feats) {
         if (a === b) continue;
-        const sideBySide = Math.abs(a.offset - b.offset) > (a.width + b.width) / 2 + 2;
+        const sideBySide = Math.abs(a.offset - b.offset) > (featureWidth(a) + featureWidth(b)) / 2 + 2;
         const apart = a.s + featureLength(a) < b.s || b.s + featureLength(b) < a.s;
         expect(sideBySide || apart).toBe(true);
       }
