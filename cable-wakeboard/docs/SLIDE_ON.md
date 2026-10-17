@@ -39,6 +39,48 @@ How the calculator works:
 - *Thin rails*: the board's middle has to pass over the rail.
 - *Round sides*: they start the climb 0.15 m lower.
 
+## Approach tracking and availability (spec 3)
+
+`ApproachTracker` reads each approach, and `featureRide/slideOn.ts`
+(`assessSlideOn`) decides whether a slide-on is possible. They give:
+- the turn-in toward the feature (`approach.turnIn`, signed) and the
+  inward speed;
+- where the board will meet the side edge (`contactU`), with the top height,
+  edge type and radius there, and the main left after it;
+- the highest top this approach can reach (the calculator at the current
+  speed and turn-in, full charge, full lift);
+- `slideOnBlock`: '' when a slide-on is possible, otherwise why not.
+
+| Check | Default | Block |
+|---|---|---|
+| Side approach | not dead ahead | `front` |
+| Within `TrackRange` of the start | 20 m | `range` |
+| Turn-in toward the feature | 6-32 deg | `angle` |
+| Off the side | 0.2-2.8 m | `distance` |
+| A top at the contact point | | `noTop` |
+| No wall over 0.3 m above the top (`sideWall`, or a wall piece) | | `wall` |
+| Top no higher than the reachable height | | `height` |
+| Main left after contact | 2.0 m | `end` |
+
+Edge types come from the ride data, or from the feature def's `sideType`:
+- a round profile is `Round`;
+- a flat top narrower than 0.35 m is a thin `Rail`;
+- a feature with side faces (the pyramid) is `Bank`;
+- wall pieces are `Wall`;
+- any other flat top is `Rounded` (the validator's 0.04 m coping radius).
+
+`Coping` and `Kanted` exist only by a def's `sideType` (the catalogue has no
+metal-edged ledge).
+
+**Approach cue.** While a slide-on is possible, the side edge on the rider's
+side glows soft cyan for 3 m around the contact point, and a disc marks the
+contact point. F9 toggles it in the web game, F9 in the Roblox client too.
+There is no tutorial yet, so it is on by default.
+
+| | |
+|---|---|
+| ![Approach](slide-on/cue-approach.jpg) Turned in toward the pipe rail: the near edge glows | ![Top](slide-on/cue-top.jpg) From above: the contact marker on the edge |
+
 ## Decisions (where the spec and the game differ)
 
 1. **Side-entry pop height.**

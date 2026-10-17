@@ -218,6 +218,7 @@ Config.DEFAULT_CONFIG = {
 		MaxLateral = 2.8,
 		MinRemaining = 2,
 		WallBlock = 0.3,
+		RailMaxWidth = 0.35,
 		ClimbEfficiency = 0.85,
 		EdgeFriction = { Rounded = 0.15, Coping = 0.1, Round = 0.08, Kanted = 0.12, Rail = 0.05, Bank = 0, Wall = 0 },
 		RoundTailAllowance = 0.15,

@@ -18,7 +18,7 @@ export const CONTROLS_HELP = [
   'E: indy. E+R stalefish, E+N nose, E+T tail. Let go before landing',
   'Box/rail: tap A/D to balance, hold to rotate 90. Shift: arms out. X: let go',
   'Enter: restart   P: pause   F3: debug   H: help',
-  'F4: slow motion (1, 0.25, 0.1)   F6: skeleton   F7: pose scrubber   F8: approach guide',
+  'F4: slow motion (1, 0.25, 0.1)   F6: skeleton   F7: pose scrubber   F8: approach guide   F9: slide-on cue',
 ];
 
 /** Tracks held keys and turns them into an InputFrame for the current rider. */
@@ -31,7 +31,7 @@ export class Keyboard {
     target.addEventListener('keydown', (e) => {
       if (!this.down.has(e.code)) this.pressed.add(e.code);
       this.down.add(e.code);
-      if (e.code === 'Space' || e.code === 'F3' || e.code === 'F4' || e.code === 'F6' || e.code === 'F7' || e.code === 'F8' || e.code.startsWith('Arrow')) e.preventDefault();
+      if (e.code === 'Space' || e.code === 'F3' || e.code === 'F4' || e.code === 'F6' || e.code === 'F7' || e.code === 'F8' || e.code === 'F9' || e.code.startsWith('Arrow')) e.preventDefault();
     });
     target.addEventListener('keyup', (e) => this.down.delete(e.code));
     target.addEventListener('blur', () => this.down.clear());

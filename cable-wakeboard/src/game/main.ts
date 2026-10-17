@@ -20,6 +20,8 @@ interface GameRenderer {
   render(sim: SimState, prev: RenderSnapshot, alpha: number, frameSeconds: number, events?: SimEvent[]): void;
   setPalette?(palette: RiderPalette): void;
   scrub?: { name: string; u: number } | null;
+  /** Slide-on approach cue (F9). */
+  slideOnCue?: boolean;
   showSkeleton?: boolean;
 }
 
@@ -118,6 +120,7 @@ function frame(now: number): void {
   if (keys.consume('KeyH')) hud.toggleHelp();
   if (keys.consume('F3')) hud.toggleDebug();
   if (keys.consume('F8')) hud.toggleGuide();
+  if (keys.consume('F9')) renderer.slideOnCue = !renderer.slideOnCue;
   if (keys.consume('Enter')) {
     run = createRun(CONFIG, PARK);
     prev = snapshotOf(run.sim);

@@ -1,5 +1,7 @@
 import { edgeNorm, toeSign } from '../edge';
-import { toLocal } from '../features';
+import { type FeatureLocal, toLocal } from '../features';
+import type { ResolvedFeature } from '../park';
+import { assessSlideOn } from './slideOn';
 import { DT } from '../config';
 import { cos } from '../math/detmath';
 import { wrapAngle } from '../math/scalar';
@@ -21,7 +23,7 @@ const NEVER = 99;
 export function trackApproach(s: SimState): void {
   const { rider: r, cfg } = s;
   const A = cfg.featureRide.Approach;
-  let best: { score: number; state: ApproachState } | null = null;
+  let best: { score: number; state: ApproachState; f: ResolvedFeature; l: FeatureLocal } | null = null;
   const speed = horizontalLength(r.vel);
   const travel = speed > 0.5 ? headingOf(r.vel) : r.heading;
   for (const f of s.features) {
@@ -43,6 +45,8 @@ export function trackApproach(s: SimState): void {
     }
     best = {
       score,
+      f,
+      l,
       state: {
         featureId: f.def.id,
         toStart,
@@ -54,6 +58,15 @@ export function trackApproach(s: SimState): void {
         edgeTime: 0,
         edgeAge: 0,
         featureSide,
+        inwardSpeed: 0,
+        turnIn: 0,
+        contactU: 0,
+        topHeight: 0,
+        sideType: 'Rounded',
+        edgeRadius: 0,
+        remaining: 0,
+        maxHeight: 0,
+        slideOnBlock: 'front',
         speed,
         tension: r.ropeTension,
         ropeAngle: wrapAngle(r.ropeHeading - f.heading),
@@ -70,5 +83,7 @@ export function trackApproach(s: SimState): void {
   const hard = Math.abs(a.edge) >= A.HardEdge;
   a.edgeTime = hard ? (same ? same.edgeTime : 0) + DT : 0;
   a.edgeAge = hard ? 0 : (same ? same.edgeAge : NEVER) + DT;
+  // Can the board slide on from here (side approaches spec 3)?
+  assessSlideOn(s, best.f, best.l, a);
   r.approach = a;
 }

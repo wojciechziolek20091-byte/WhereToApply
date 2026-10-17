@@ -195,7 +195,7 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
       const d = firstDivergence(ts, lu);
       expect(d, sc.name).toBeNull();
       const last = ts.at(-1)!;
-      reasons.push(`${String(last[last.length - 1])}/${String(ts.find((r) => r[17] !== '-')?.[17] ?? '-')}`);
+      reasons.push(`${String(last[last.length - 1])}/${String(ts.find((r) => r[22] !== '-')?.[22] ?? '-')}`);
     });
     // The scenarios cover the entry outcomes they are named for.
     expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseHitSide/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));

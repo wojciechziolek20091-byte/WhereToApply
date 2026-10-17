@@ -31,3 +31,56 @@ describe('SlideOnConfig.maxReachableHeight (side approaches spec 4.3, 8.1)', () 
     expect(at(6)).toBeLessThan(at(20) - 0.1);
   });
 });
+
+import type { FeatureDef } from '../src/sim/park';
+import { toWorld } from '../src/sim/features';
+import { trackApproach } from '../src/sim/featureRide/approachTracker';
+import { forwardOf, scale } from '../src/sim/math/vec';
+import { featureSim } from './helpers';
+
+const box = (o: Partial<Extract<FeatureDef, { kind: 'slider' }>> = {}): FeatureDef => ({
+  kind: 'slider', id: 'b', name: 'B', style: 'box', s: 135, offset: 0, length: 8, width: 1, height: 0.5, entryLength: 3, safety: 'flush', ...o,
+});
+const cat = (name: string): FeatureDef => ({ kind: 'feature', id: 'b', name, catalog: name, s: 135, offset: 0 }) as FeatureDef;
+
+/** Beside the feature on its left (v < 0), `gap` m off the side, `u` along it, turned `turn` degrees in at 8.3 m/s. */
+function approachAt(def: FeatureDef, gap: number, u: number, turn: number) {
+  const s = featureSim(def);
+  const f = s.features[0]!;
+  const r = s.rider;
+  r.pos = toWorld(f, u, f.shape.vMin - gap, 0);
+  r.heading = f.heading + deg(turn);
+  r.vel = scale(forwardOf(r.heading), 8.3);
+  trackApproach(s);
+  return r.approach!;
+}
+
+describe('Slide-on availability (side approaches spec 3)', () => {
+  it('beside a box, turned 15 degrees in: available, contact predicted on the main', () => {
+    const a = approachAt(box(), 1, 2, 15);
+    expect(a.slideOnBlock).toBe('');
+    expect(a.turnIn).toBeCloseTo(deg(15), 6);
+    expect(a.inwardSpeed).toBeCloseTo(8.3 * Math.sin(deg(15)), 6);
+    // 1 m off at 15 degrees: the edge comes 1 / tan(15) = 3.7 m further on.
+    expect(a.contactU).toBeCloseTo(2 + 1 / Math.tan(deg(15)), 3);
+    expect(a.topHeight).toBeCloseTo(0.5, 6);
+    expect(a.sideType).toBe('Rounded');
+  });
+
+  it('blocked: too parallel, too steep, too far off, a tall wall, too near the end, too high', () => {
+    expect(approachAt(box(), 1, 2, 3).slideOnBlock).toBe('angle');
+    expect(approachAt(box(), 1, 2, 40).slideOnBlock).toBe('angle');
+    expect(approachAt(box(), 3.5, -4, 15).slideOnBlock).toBe('distance');
+    expect(approachAt(box({ sideWall: 0.5 }), 1, 2, 15).slideOnBlock).toBe('wall');
+    expect(approachAt(box({ sideWall: 0.2 }), 1, 2, 15).slideOnBlock).toBe('');
+    expect(approachAt(box(), 1, 5.8, 15).slideOnBlock).toBe('end');
+    expect(approachAt(cat('Funbox'), 1, 3, 15).slideOnBlock).toBe('height');
+  });
+
+  it('edge types from the ride data: pipes are round, narrow tops thin rails, a pyramid has banks', () => {
+    expect(approachAt(cat('PipeRail'), 1, 2, 15).sideType).toBe('Round');
+    expect(approachAt(box({ style: 'rail', width: 0.12 }), 1, 2, 15).sideType).toBe('Rail');
+    expect(approachAt(cat('Pyramid'), 1, 0, 15).sideType).toBe('Bank');
+    expect(approachAt(box({ sideType: 'Coping' }), 1, 2, 15).sideType).toBe('Coping');
+  });
+});

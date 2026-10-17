@@ -1,3 +1,4 @@
+import type { SideType } from './featureRide/slideOnConfig';
 import type { CablePath } from './cable';
 import type { CableConfig } from './config';
 import { cablePointAt } from './cable';
@@ -18,6 +19,10 @@ interface FeatureBase {
   offset: number;
   /** Extra yaw relative to the cable heading (rad). */
   yaw?: number;
+  /** Side edge type for slide-ons when the ride data does not say (a metal-edged ledge: 'Coping', a kanted top: 'Kanted'). */
+  sideType?: SideType;
+  /** A wall along the sides this far above the top (m): taller than SlideOn.WallBlock blocks slide-ons. */
+  sideWall?: number;
 }
 
 /** Curved ramp. Height follows a power curve whose slope at the lip is lipAngle. */

@@ -1,3 +1,5 @@
+import type { SideType } from './featureRide/slideOnConfig';
+import type { SlideOnBlock } from './featureRide/slideOn';
 import type { Vec3 } from './math/vec';
 import type { GrabId, SlideId } from './tricks/data';
 
@@ -327,6 +329,19 @@ export interface ApproachState {
   edgeAge: number;
   /** The feature's side of the direction of travel: +1 right, -1 left, 0 dead ahead. */
   featureSide: number;
+  /** Slide-on (side approaches spec 3): speed toward the feature's side (m/s), turn-in toward it (rad, - away). */
+  inwardSpeed: number;
+  turnIn: number;
+  /** Where the board meets the side edge (m along the feature), the top there, its edge, and the main left after it. */
+  contactU: number;
+  topHeight: number;
+  sideType: SideType;
+  edgeRadius: number;
+  remaining: number;
+  /** Highest top a slide-on reaches from this approach (full charge, full nose lift). */
+  maxHeight: number;
+  /** Why a slide-on is not possible ('' when it is). */
+  slideOnBlock: SlideOnBlock;
   speed: number;
   tension: number;
   /** Rope direction relative to the feature axis (rad). */

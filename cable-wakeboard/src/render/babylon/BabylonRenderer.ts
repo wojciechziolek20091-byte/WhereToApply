@@ -41,7 +41,8 @@ import { buildCablePath, cablePointAt } from '../../sim/cable';
 import { DEFAULT_CONFIG } from '../../sim/config';
 import { towerParts } from '../../art/tower';
 import { FEATURE_CONFIG } from '../../park/featureConfig';
-import { kickerHeightAt } from '../../sim/features';
+import { kickerHeightAt, toWorld } from '../../sim/features';
+import { topPieceAt } from '../../sim/featureRide/slideOn';
 import { createRng, nextFloat, nextRange } from '../../sim/math/rng';
 import { clamp01 } from '../../sim/math/scalar';
 import { horizontalLength, lerpVec, type Vec3 } from '../../sim/math/vec';
@@ -279,6 +280,10 @@ export class BabylonRenderer {
   private scrubFrame: AnimFrame | null = null;
   /** Skeleton overlay: joints, centre of mass, rotation axis, IK targets. */
   showSkeleton = false;
+  /** Slide-on approach cue (F9): the side edge glows and a marker shows where the board will meet it. */
+  slideOnCue = true;
+  private cueEdge!: Mesh;
+  private cueMark!: Mesh;
   private overlay: { lines: LinesMesh | null; com: Mesh; targets: Mesh[] } | null = null;
   private readonly splash: ParticleSystem;
   private readonly splashEmitter = new Vector3();
@@ -368,6 +373,7 @@ export class BabylonRenderer {
     this.rope = CreateLines('rope', { points: [Vector3.Zero(), Vector3.Zero()], updatable: true }, scene);
     this.rope.color = c3(look.rope);
     this.buildGhosts(carrierMat);
+    this.buildSlideOnCue();
 
     this.spray = this.buildSpray();
     this.splash = this.buildSplash();
@@ -736,6 +742,51 @@ export class BabylonRenderer {
   }
 
   /** Three other riders spaced around the loop, each on its own carrier. */
+  private buildSlideOnCue(): void {
+    const mat = new StandardMaterial('slideOnCueMat', this.scene);
+    mat.diffuseColor = new Color3(0.55, 0.95, 1);
+    mat.emissiveColor = new Color3(0.45, 0.9, 1);
+    mat.specularColor = Color3.Black();
+    mat.alpha = 0.8;
+    mat.disableLighting = true;
+    this.cueEdge = CreateBox('slideOnCueEdge', { width: 1, height: 0.05, depth: 0.08 }, this.scene);
+    this.cueEdge.material = mat;
+    this.cueEdge.isPickable = false;
+    this.cueMark = CreateDisc('slideOnCueMark', { radius: 0.2, tessellation: 20 }, this.scene);
+    this.cueMark.material = mat;
+    this.cueMark.rotation.x = Math.PI / 2;
+    this.cueMark.isPickable = false;
+    this.cueEdge.setEnabled(false);
+    this.cueMark.setEnabled(false);
+  }
+
+  /** Slide-on cue (side approaches spec 3): shown while the tracker says a slide-on is possible. */
+  private updateSlideOnCue(sim: SimState): void {
+    const a = sim.rider.approach;
+    const on = this.slideOnCue && !!a && a.slideOnBlock === '' && (sim.rider.mode === 'riding' || sim.rider.mode === 'airborne');
+    const f = on ? sim.features.find((x) => x.def.id === a!.featureId) : undefined;
+    const p = f ? topPieceAt(f, a!.contactU) : null;
+    if (!a || !f || !p) {
+      this.cueEdge.setEnabled(false);
+      this.cueMark.setEnabled(false);
+      return;
+    }
+    // The edge on the rider's side, 3 m of it around the contact point.
+    const half = p.width / 2;
+    const centre = p.v0 + (p.v1 - p.v0) * ((a.contactU - p.u0) / (p.u1 - p.u0));
+    const v = a.lateral < 0 ? centre - half : centre + half;
+    const u0 = Math.max(p.u0, a.contactU - 1.5);
+    const u1 = Math.min(p.u1, a.contactU + 1.5);
+    const mid = toWorld(f, (u0 + u1) / 2, v, a.topHeight + 0.02);
+    this.cueEdge.setEnabled(true);
+    this.cueEdge.position = v3(mid);
+    this.cueEdge.scaling.x = Math.max(0.2, u1 - u0);
+    this.cueEdge.rotation.y = -f.heading;
+    const mark = toWorld(f, a.contactU, v, a.topHeight + 0.04);
+    this.cueMark.setEnabled(true);
+    this.cueMark.position = v3(mark);
+  }
+
   private buildGhosts(carrierMat: StandardMaterial): void {
     const palettes: RiderPalette[] = ['A', 'B', 'A'];
     palettes.forEach((pal, k) => {
@@ -937,6 +988,7 @@ export class BabylonRenderer {
       const t = performance.now() / 1000;
       for (const b of this.buoyMeshes) b.mesh.position.y = b.y + B.BobAmplitude * Math.sin(2 * Math.PI * B.BobFrequency * t + b.phase);
     }
+    this.updateSlideOnCue(sim);
     if (this.pointCam) {
       this.camera.position.set(...this.pointCam.from);
       this.camera.setTarget(new Vector3(...this.pointCam.to));

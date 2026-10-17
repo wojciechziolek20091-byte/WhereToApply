@@ -43,6 +43,8 @@ export interface SlideOnConfig {
   MinRemaining: number;
   /** A wall more than this above the riding top blocks a slide-on. */
   WallBlock: number;
+  /** Flat tops narrower than this are thin rails (no side face to climb). */
+  RailMaxWidth: number;
   /** Climb: share of the inward kinetic energy that lifts the board, and the scrape cost by edge (J/kg). */
   ClimbEfficiency: number;
   EdgeFriction: Record<SideType, number>;
@@ -91,6 +93,7 @@ export const DEFAULT_SLIDE_ON: SlideOnConfig = {
   MaxLateral: 2.8,
   MinRemaining: 2.0,
   WallBlock: 0.3,
+  RailMaxWidth: 0.35,
   ClimbEfficiency: 0.85,
   EdgeFriction: { Rounded: 0.15, Coping: 0.1, Round: 0.08, Kanted: 0.12, Rail: 0.05, Bank: 0, Wall: 0 },
   RoundTailAllowance: 0.15,

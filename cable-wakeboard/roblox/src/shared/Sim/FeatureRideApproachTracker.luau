@@ -5,6 +5,7 @@ local DetMath = require(script.Parent.DetMath)
 local Edge = require(script.Parent.Edge)
 local Features = require(script.Parent.Features)
 local Scalar = require(script.Parent.Scalar)
+local SlideOn = require(script.Parent.FeatureRideSlideOn)
 local Vec = require(script.Parent.Vec)
 
 local DT = Config.DT
@@ -37,6 +38,8 @@ function ApproachTracker.trackApproach(s)
 					end
 					best = {
 						score = score,
+						f = f,
+						l = l,
 						state = {
 							featureId = f.def.id,
 							toStart = toStart,
@@ -48,6 +51,15 @@ function ApproachTracker.trackApproach(s)
 							edgeTime = 0,
 							edgeAge = 0,
 							featureSide = featureSide,
+							inwardSpeed = 0,
+							turnIn = 0,
+							contactU = 0,
+							topHeight = 0,
+							sideType = "Rounded",
+							edgeRadius = 0,
+							remaining = 0,
+							maxHeight = 0,
+							slideOnBlock = "front",
 							speed = speed,
 							tension = r.ropeTension,
 							ropeAngle = Scalar.wrapAngle(r.ropeHeading - f.heading),
@@ -66,6 +78,8 @@ function ApproachTracker.trackApproach(s)
 	local hard = math.abs(a.edge) >= A.HardEdge
 	a.edgeTime = if hard then (if same then same.edgeTime else 0) + DT else 0
 	a.edgeAge = if hard then 0 else (if same then same.edgeAge else NEVER) + DT
+	-- Can the board slide on from here (side approaches spec 3)?
+	SlideOn.assessSlideOn(s, best.f, best.l, a)
 	r.approach = a
 end
 

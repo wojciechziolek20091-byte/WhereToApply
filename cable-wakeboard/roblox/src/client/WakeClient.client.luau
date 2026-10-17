@@ -643,6 +643,52 @@ ContextActionService:BindAction("ParkMap", function(_, state)
 	end
 	return Enum.ContextActionResult.Sink
 end, false, Enum.KeyCode.M)
+-- Slide-on approach cue (side approaches spec 3, F9): the side edge glows and a
+-- marker shows where the board will meet it, while a slide-on is possible.
+local slideOnCue = true
+local cueEdge = part("SlideOnCueEdge", Vector3.new(1, 0.05 * S, 0.08 * S), CFrame.new(), Color3.fromRGB(140, 242, 255))
+cueEdge.Material = Enum.Material.Neon
+cueEdge.Transparency = 0.45
+local cueMark = part("SlideOnCueMark", Vector3.new(0.02 * S, 0.4 * S, 0.4 * S), CFrame.new(), Color3.fromRGB(140, 242, 255), "Part")
+cueMark.Shape = Enum.PartType.Cylinder
+cueMark.Material = Enum.Material.Neon
+cueMark.Transparency = 0.3
+ContextActionService:BindAction("SlideOnCue", function(_, state)
+	if state == Enum.UserInputState.Begin then
+		slideOnCue = not slideOnCue
+	end
+	return Enum.ContextActionResult.Sink
+end, false, Enum.KeyCode.F9)
+local function updateSlideOnCue(sim)
+	local r = sim.rider
+	local a = r.approach
+	local f = nil
+	if slideOnCue and a and a.slideOnBlock == "" and (r.mode == "riding" or r.mode == "airborne") then
+		for _, x in sim.features do
+			if x.def.id == a.featureId then
+				f = x
+			end
+		end
+	end
+	local p = if f then Sim.FeatureRideSlideOn.topPieceAt(f, a.contactU) else nil
+	cueEdge.Transparency = if p then 0.45 else 1
+	cueMark.Transparency = if p then 0.3 else 1
+	if not p then
+		return
+	end
+	local half = p.width / 2
+	local centre = p.v0 + (p.v1 - p.v0) * ((a.contactU - p.u0) / (p.u1 - p.u0))
+	local v = if a.lateral < 0 then centre - half else centre + half
+	local u0 = math.max(p.u0, a.contactU - 1.5)
+	local u1 = math.min(p.u1, a.contactU + 1.5)
+	local mid = Sim.Features.toWorld(f, (u0 + u1) / 2, v, a.topHeight + 0.02)
+	local fwd = Vector3.new(math.cos(f.heading), 0, math.sin(f.heading))
+	cueEdge.Size = Vector3.new(math.max(0.2, u1 - u0) * S, 0.05 * S, 0.08 * S)
+	cueEdge.CFrame = CFrame.fromMatrix(Vector3.new(mid.x, mid.y, mid.z) * S, fwd, Vector3.yAxis)
+	local mark = Sim.Features.toWorld(f, a.contactU, v, a.topHeight + 0.04)
+	-- A flat disc: the cylinder's axis (x) points up.
+	cueMark.CFrame = CFrame.fromMatrix(Vector3.new(mark.x, mark.y, mark.z) * S, Vector3.yAxis, fwd)
+end
 ContextActionService:BindAction("SteerStick", function(_, _, inputObject)
 	analogSteer = inputObject.Position.X
 	return Enum.ContextActionResult.Pass
@@ -887,6 +933,7 @@ RunService.RenderStepped:Connect(function(rawDt)
 	-- HUD.
 	meterFill.Size = UDim2.new(tFrac, 0, 1, 0)
 	loadedTag.Visible = r.mode == "waterTrickLoad"
+	updateSlideOnCue(sim)
 	local live = Sim.Session.liveCombo(run)
 	local total = run.points + (if live then live.total else 0)
 	local statusText = if run.finished then `Run over ({run.endReason}): judges {run.score and run.score.total or 0}. Enter to restart` else ""
