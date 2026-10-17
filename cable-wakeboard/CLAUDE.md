@@ -65,8 +65,14 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   air.ts      Air integration: spins, flips, grabs, handle passes, water tricks.
   landing.ts  Landing evaluation and crash reasons.
   actions.ts  Shared transitions: applyRope (cap, smoothing, yank), crash, takeOff, touchDown.
-  onFeature.ts Kicker ramps and lip pop, safety pop window, slides (90-degree
-              steps, balance, passes), landing on a main, clearance check.
+  onFeature.ts Kicker ramps and lip pop, safety pop window, slides, walls; calls
+              the featureRide modules for the rules.
+  featureRide/ Feature riding spec (docs/MECHANICS.md section 7, docs/FEATURE_RIDING.md):
+              config (DEFAULT_CONFIG.featureRide), approachTracker, entryResolver,
+              slideController, featureRotation, pressController, exitResolver,
+              featureSpecials, featureTrickNamer, featureScoring. Twins:
+              Sim/FeatureRide<Name>.luau. A whole feature line is one
+              `featureLine` event, scored by the session.
   rider.ts    RiderState and the mode / handle / crash types.
   input.ts    InputFrame (raw buttons) and InputMemory (presses, taps, grab chords).
   events.ts   SimEvent union emitted each tick.
@@ -146,8 +152,10 @@ Rider modes (fsm.ts): `riding`, `ridingBlind`, `waterTrickLoad`, `waterTrickAir`
 `airborne`, `onKicker`, `onSafety`, `onFeature`, `landing`, `crashed`. Only
 `transition()` changes the mode; illegal moves throw with `debug.enabled`.
 Physics never names tricks: it emits `landed` (with the `AirState`) and
-`slideDone` (with the `JibState`); the session classifies them with
-`tricks/classify.ts` and chains them into combos.
+`featureLine` (every slide of a feature line, its exit and air); the session
+names them with `tricks/classify.ts` and `featureRide/featureScoring.ts` and
+chains them into combos. Scenario suite: `tests/scenarios/featureScenarios.ts`
+(`npx vite-node scripts/feature-ride-report.ts` prints the table).
 
 In the browser console, `cable()` returns the live `RunState`. `?cam=front|back|side`
 frames the rider close up for checking the character; `?cam=aerial` (drone view

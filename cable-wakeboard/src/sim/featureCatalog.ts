@@ -201,7 +201,7 @@ export const FEATURE_CATALOG: Record<string, CatalogEntry> = {
     meta: { type: 'GapBox', label: 'Gap box', difficulty: 3, material: 'HDPE', allowedSlides: ALL_SLIDES, bidirectional: false, tag: 'Obstacle', icon: 'box' },
     params: box({
       style: 'Box', width: 1.0, safetyMode: 'Gap', safetyLength: 3, safetyTop: 0.9, safetyWidth: 1.2, gap: 1.2,
-      mains: [{ height: 0.8, gapBefore: 0, kinks: [{ length: 6, angle: 0 }] }],
+      mains: [{ height: 0.8, gapBefore: 0, kinks: [{ length: 10, angle: 0 }] }],
     }),
   },
   PipeRail: {

@@ -78,6 +78,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #7fb2e0; fon
   text-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
   opacity: 0;
 }
+.popup.popup-long { white-space: normal; width: min(860px, calc(100vw - 32px)); text-align: center; font-size: clamp(22px, 3.4vw, 36px); line-height: 1.15; }
 .popup-fall { color: var(--ui-fall); -webkit-text-stroke-color: #3a0d08; }
 .popup-pts { margin-left: 0.5em; }
 .popup.popup-show { animation: pop 1.8s ease-out forwards; }

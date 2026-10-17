@@ -359,7 +359,7 @@ ParkLayout.WAKE_PARK = {
 			line = "S1",
 		},
 		{ kind = "feature", id = "S2_PipeRail", name = "Pipe rail", catalog = "PipeRail", s = 215.68, offset = 4.39, yaw = -0.1396, accent = "Teal", line = "S2" },
-		{ kind = "feature", id = "S2_GapBox", name = "Gap box", catalog = "GapBox", s = 260.56, offset = -4.27, yaw = 0.1396, accent = "Teal", line = "S2" },
+		{ kind = "feature", id = "S2_GapBox", name = "Gap box", catalog = "GapBox", s = 258.58, offset = -4.55, yaw = 0.1396, accent = "Teal", line = "S2" },
 		{
 			kind = "feature",
 			id = "S2_FlatDownRail",

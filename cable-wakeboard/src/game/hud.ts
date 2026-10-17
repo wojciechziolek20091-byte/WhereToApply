@@ -206,7 +206,8 @@ export class Hud {
   }
 
   private flash(text: string, kind: 'trick' | 'fall', now: number): void {
-    this.popup.className = `popup popup-${kind}`;
+    // Feature lines can be long ("Pop-on 180-in Switch 50-50 180 ... to Fakie"): smaller, wrapped.
+    this.popup.className = `popup popup-${kind}${text.replace(/<[^>]*>/g, '').length > 26 ? ' popup-long' : ''}`;
     this.popup.innerHTML = text;
     void this.popup.offsetWidth;
     this.popup.classList.add('popup-show');

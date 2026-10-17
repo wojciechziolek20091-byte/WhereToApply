@@ -91,7 +91,7 @@ FeatureCatalog.FEATURE_CATALOG = {
 			exitLength = 0,
 			style = "Box",
 			width = 1,
-			mains = { { height = 0.8, gapBefore = 0, kinks = { { length = 6, angle = 0 } } } },
+			mains = { { height = 0.8, gapBefore = 0, kinks = { { length = 10, angle = 0 } } } },
 		},
 	},
 	PipeRail = {
