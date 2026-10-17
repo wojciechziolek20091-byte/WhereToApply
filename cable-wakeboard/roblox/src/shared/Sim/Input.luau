@@ -33,6 +33,9 @@ function Input.createInputMemory()
 		lastSteerDir = 0,
 		steerAge = 0,
 		steerTap = 0,
+		foreDir = 0,
+		foreHeldTime = 0,
+		foreTap = 0,
 		grabTime = 0,
 		grabChoice = nil,
 	}
@@ -77,6 +80,18 @@ function Input.updateInputMemory(m, input, cfg, dt)
 		m.steerAge = 0
 	else
 		m.steerAge += dt
+	end
+
+	local fore = if input.forward then 1 elseif input.back then -1 else 0
+	m.foreTap = 0
+	if fore ~= m.foreDir then
+		if m.foreDir ~= 0 and m.foreHeldTime < cfg.feature.tapTime then
+			m.foreTap = m.foreDir
+		end
+		m.foreDir = fore
+		m.foreHeldTime = 0
+	elseif fore ~= 0 then
+		m.foreHeldTime += dt
 	end
 
 	if not input.grab then

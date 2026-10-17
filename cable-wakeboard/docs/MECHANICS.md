@@ -325,6 +325,34 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     `Safety.LandingPitchTolerance` (15 degrees, sketchy beyond, `badAngle`
     past 30). Then the rider rides on up it and can pop in the window.
   - Popped off a safety and down on the water before its main: `landedInGap`.
+- **SlideController** (`slideController.ts`, spec 5.1, 5.6, 5.7): what the
+  feature does to a slide.
+  - *Speed along the feature*: rope pull along it, gravity along the slope,
+    and friction. Friction is the feature's own, else its material's
+    (`Slide.MaterialFriction`: HDPE 0.06, pipe 0.05, skatelite 0.12), x1.6
+    in a boardslide.
+  - *Stall*: slower than `Slide.StallSpeed` (1.0 m/s) is `stalled`. That is
+    up a rooftop or a step-up with the rope slack; a taut rope keeps pulling.
+  - *Kinks*: over a down kink the board lifts for (0.068 x angle x speed) s,
+    if at least 0.05 s, at most 0.15 s. Landing that with anything held
+    (knees not soft) is a balance hit of 0.25. Kinks sharper than 12 degrees
+    check the speed against 12 m/s x 12 / angle (9.6 m/s on the rooftop's
+    15-degree kink). Up to 15% over is sketchy with a hit; more is
+    `kinkThrow`.
+  - *Balance across* (`jib.balance`) drifts with:
+    - smooth noise, by top (box 0.9, flat rail 1.6, pipe 2.0) and slide
+      (boardslide x1.3; on a pipe a 50-50 x1.25 and a boardslide x0.85);
+    - the rope's pull across the feature (1400 N tips one unit per second);
+    - the cross slope.
+
+    A/D taps correct it. A rope tension spike over 1600 N throws it 0.35
+    toward the cable side, once per spike.
+  - *Balance fore-aft* (`jib.fore`, boardslides and presses): noise, the
+    rope's pull along the feature (4000 N per unit per second) and the
+    slope. W/S taps correct it; outside those slides it settles back.
+  - Either axis past 1 falls off (`fellOffFeature`), unless within
+    `Balance.LastMetre` (1 m) of the end: then it is a sketchy exit. The HUD
+    shows both meters (the fore-aft one only while it moves).
 
 **The default park** (`parkLayout.ts`): the cable layout is the user's sketch
 (`docs/park-sketch.jpg`), a five-tower "house" loop with tall sides and a
@@ -356,7 +384,7 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 | `grabHeldOnLanding` | Still grabbing at touchdown |
 | `raleyExtendedOnLanding` | Raley not swung down in time |
 | `caughtEdgeBlind` | Wrong spin-out direction, or blind too long |
-| `fellOffFeature` | Balance out of range, stalled, or off the side |
+| `fellOffFeature` | Balance out of range, or off the side |
 | `ropeYank` | Hard snap back to taut while off balance |
 | `badLandingYaw` | Board sideways without having spun |
 | `hardLanding` | Impact beyond what the legs absorb (on a feature: over 8 m/s) |
@@ -368,6 +396,8 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 | `slippedOut` | Hard edge held into the pop: the base lands rolled |
 | `badAngle` | Board more than 30 degrees off a slide angle, or off a safety's slope |
 | `landedInGap` | Popped off a gap safety and came down in the gap |
+| `stalled` | Slower than 1 m/s along a feature (up a rooftop with the rope slack) |
+| `kinkThrow` | Over a kink sharper than 12 degrees too fast |
 
 ## 9. Tricks, names and points
 

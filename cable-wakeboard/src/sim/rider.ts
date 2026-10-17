@@ -59,6 +59,10 @@ export type CrashReason =
   | 'slippedOut'
   /** Board too far off a slide angle at contact. */
   | 'badAngle'
+  /** Too slow along the feature (up a rooftop, a step-up): slid back. */
+  | 'stalled'
+  /** Over a sharp kink too fast: thrown off the line. */
+  | 'kinkThrow'
   /** Popped off a gap safety into the gap. */
   | 'landedInGap';
 
@@ -226,6 +230,14 @@ export interface JibState {
   inRotation: number;
   /** 0..1 entry quality (EntryResolver). */
   entryQuality: number;
+  /** Fore-aft balance (boardslides and presses), meter units, + toward the pull. */
+  fore: number;
+  /** Board pitch along the feature last tick (rad), for kinks. */
+  pitch: number;
+  /** Seconds left of a kink lift (the board off the surface), 0 when down. */
+  lift: number;
+  /** Rope tension above the spike threshold (one impulse per spike). */
+  spiked: boolean;
   /** Early pop onto a flush main: combo multiplier x0.8. */
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */

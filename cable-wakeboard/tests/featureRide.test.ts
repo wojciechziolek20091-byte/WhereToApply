@@ -3,9 +3,10 @@ import type { FeatureDef } from '../src/sim/park';
 import { surfaceAt, toWorld } from '../src/sim/features';
 import { trackApproach } from '../src/sim/featureRide/approachTracker';
 import { balanceHalfWidth } from '../src/sim/featureRide/entryResolver';
+import { slideFriction, stepBalance } from '../src/sim/featureRide/slideController';
 import type { SimEvent } from '../src/sim/events';
 import type { InputFrame } from '../src/sim/input';
-import { add, forwardOf, scale, vec3 } from '../src/sim/math/vec';
+import { add, forwardOf, normalize, scale, vec3 } from '../src/sim/math/vec';
 import { airOverFeature } from '../src/sim/onFeature';
 import type { AirState } from '../src/sim/rider';
 import { takeOff } from '../src/sim/step';
@@ -293,5 +294,160 @@ describe('Entry scenarios (feature ride M2-M3, spec 12.2)', () => {
       return e.type === 'crash';
     });
     expect(events.find((e) => e.type === 'crash')).toMatchObject({ reason: 'landedInGap' });
+  });
+});
+
+const catalog = (name: string): FeatureDef => ({ kind: 'feature', id: 'g', name, catalog: name, s: 135, offset: 0 }) as FeatureDef;
+
+/** Ride straight onto a feature; `onFeature` runs once on the first tick on the main. */
+function ride(def: FeatureDef, cfg: Parameters<typeof featureSim>[1], onFeature: (s: SimState) => void = () => {}, input: (t: number, s: SimState) => Partial<InputFrame> = () => ({})) {
+  const s = featureSim(def, cfg);
+  let on = false;
+  let lift = 0;
+  const events: SimEvent[] = [];
+  runUntil(
+    s,
+    12,
+    (t, st) => {
+      if (!on && st.rider.mode === 'onFeature') {
+        on = true;
+        onFeature(st);
+      }
+      if (st.rider.jib) lift = Math.max(lift, st.rider.jib.lift);
+      return input(t, st);
+    },
+    (e) => {
+      events.push(e);
+      return e.type === 'crash' || e.type === 'featureExit';
+    },
+  );
+  const c = events.find((e) => e.type === 'crash');
+  const slide = events.find((e) => e.type === 'slideDone');
+  return { s, crash: c?.type === 'crash' ? c.reason : null, lift, jib: slide?.type === 'slideDone' ? slide.jib : null };
+}
+
+describe('SlideController: slide physics on the feature (feature ride M4, spec 5.1)', () => {
+  it('friction from the material (HDPE 0.06, pipe 0.05); boardslides x1.6', () => {
+    const on = (def: FeatureDef) => {
+      const s = featureSim(def);
+      const j = { boardAngle: 0 } as Parameters<typeof slideFriction>[1];
+      const f = s.features[0]!;
+      return [slideFriction(f, j, s), slideFriction(f, { ...j, boardAngle: Math.PI / 2 }, s)];
+    };
+    const [box, boxBoard] = on(slider());
+    expect(box).toBeCloseTo(0.06, 9);
+    expect(boxBoard).toBeCloseTo(0.096, 9);
+    expect(on(slider({ style: 'tube', width: 0.4 }))[0]).toBeCloseTo(0.05, 9);
+    expect(on(catalog('PipeRail'))[0]).toBeCloseTo(0.05, 9);
+  });
+
+  it('fail 8: up a rooftop too slow (rope slack): Stalled', () => {
+    const slow = ride(catalog('Rooftop'), noBalance, (s) => {
+      s.rider.vel = scale(normalize(s.rider.vel), 1.5);
+      s.carrier.s -= 14;
+    });
+    expect(slow.crash).toBe('stalled');
+    expect(ride(catalog('Rooftop'), noBalance).crash).toBeNull();
+  });
+
+  it('kinks: a down kink at speed lifts the board 0.05-0.15 s; a sharp one too fast throws the rider (KinkThrow)', () => {
+    const kink = ride(catalog('KinkRail'), noBalance);
+    expect(kink.crash).toBeNull();
+    expect(kink.lift).toBeGreaterThanOrEqual(0.05);
+    expect(kink.lift).toBeLessThanOrEqual(0.15);
+    // The rooftop's 15-degree down kink at the park's speed is fine; much faster is sketchy, then a throw.
+    expect(ride(catalog('Rooftop'), noBalance).jib?.sketchy).toBe(false);
+    expect(ride(catalog('Rooftop'), { ...noBalance, cable: { carrierSpeed: 10 } }).jib?.sketchy).toBe(true);
+    expect(ride(catalog('Rooftop'), { ...noBalance, cable: { carrierSpeed: 12 } }).crash).toBe('kinkThrow');
+  });
+
+  it('landing a kink lift with an input held costs balance; soft knees (nothing held) do not', () => {
+    const balanceAfter = (hold: boolean) => {
+      let out = 0;
+      ride(catalog('KinkRail'), {}, () => {}, (_t, s) => {
+        const j = s.rider.jib;
+        if (j && j.lift > 0) out = -1;
+        if (j && out === -1 && j.lift === 0) out = j.balance;
+        return { armsOut: false, pop: hold && !!j && j.lift > 0 };
+      });
+      return out;
+    };
+    const soft = balanceAfter(false);
+    const stiff = balanceAfter(true);
+    expect(Math.abs(stiff - soft)).toBeGreaterThan(0.1);
+  });
+});
+
+describe('SlideController: balance (feature ride M4, spec 5.6, 5.7)', () => {
+  /** A box slide in progress, for driving stepBalance directly. */
+  const onBox = (def = slider()) => {
+    const s = featureSim(def);
+    runUntil(s, 6, () => ({}), () => s.rider.mode === 'onFeature');
+    const f = s.features[0]!;
+    const j = s.rider.jib!;
+    const piece = f.shape.pieces.find((p) => p.slide)!;
+    const surface = surfaceAt(f, { u: s.rider.ramp!.u, v: 0 })!;
+    const mem = { steerTap: 0, foreTap: 0 } as Parameters<typeof stepBalance>[8];
+    return { s, f, j, piece, surface, mem };
+  };
+
+  it('a rope tension spike over 1600 N throws the balance toward the cable side, once per spike', () => {
+    const { s, f, j, piece, surface, mem } = onBox();
+    j.balance = 0;
+    j.time = 0;
+    s.rider.ropeTension = 1700;
+    stepBalance(s, j, f, piece, surface, 6, 300, 800, mem);
+    const first = j.balance;
+    expect(first).toBeGreaterThan(0.3);
+    stepBalance(s, j, f, piece, surface, 6, 300, 800, mem);
+    expect(j.balance - first).toBeLessThan(0.1);
+  });
+
+  it('out of balance mid-feature falls off; within the last metre it is a sketchy exit', () => {
+    const { s, f, j, piece, surface, mem } = onBox();
+    s.rider.ropeTension = 800;
+    j.balance = 1.5;
+    expect(stepBalance(s, j, f, piece, surface, 6, 0, 800, mem)).toBe('fell');
+    j.balance = 1.5;
+    expect(stepBalance(s, j, f, piece, surface, piece.u1 - 0.5, 0, 800, mem)).toBe('sketchyExit');
+  });
+
+  it('fore-aft only moves in boardslides (rope along the feature tips it; W/S taps correct it) and settles in a 50-50', () => {
+    const { s, f, j, piece, surface, mem } = onBox();
+    s.rider.ropeTension = 800;
+    j.balance = 0;
+    j.fore = 0.5;
+    stepBalance(s, j, f, piece, surface, 6, 0, 800, mem);
+    expect(j.fore).toBeLessThan(0.5);
+    j.boardAngle = Math.PI / 2;
+    j.fore = 0;
+    for (let i = 0; i < 60; i++) stepBalance(s, j, f, piece, surface, 6, 0, 2000, mem);
+    expect(j.fore).toBeGreaterThan(0.2);
+    const before = j.fore;
+    stepBalance(s, j, f, piece, surface, 6, 0, 2000, { ...mem, foreTap: -1 });
+    expect(j.fore).toBeLessThan(before - 0.25);
+  });
+
+  it('noise: pipes drift more than rails, rails more than boxes; on a pipe a boardslide is steadier than a 50-50', () => {
+    const drift = (def: FeatureDef, boardAngle: number) => {
+      const { s, f, j, piece, surface, mem } = onBox(def);
+      s.rider.ropeTension = 0;
+      let sum = 0;
+      j.boardAngle = boardAngle;
+      for (let i = 0; i < 300; i++) {
+        j.balance = 0;
+        j.time = i * 0.05;
+        stepBalance(s, j, f, piece, surface, 6, 0, 0, mem);
+        sum += Math.abs(j.balance);
+      }
+      return sum;
+    };
+    const box = drift(slider(), 0);
+    const rail = drift(slider({ style: 'rail', width: 0.12 }), 0);
+    const pipe = drift(slider({ style: 'tube', width: 0.4 }), 0);
+    expect(rail).toBeGreaterThan(box);
+    expect(pipe).toBeGreaterThan(rail);
+    expect(drift(slider({ style: 'tube', width: 0.4 }), Math.PI / 2)).toBeLessThan(pipe);
+    expect(drift(slider(), Math.PI / 2)).toBeGreaterThan(box);
   });
 });

@@ -36,6 +36,8 @@ const CRASH_NAMES: Record<CrashReason, string> = {
   slippedOut: 'Slipped out: edge still on',
   badAngle: 'Bad angle on the feature',
   landedInGap: 'Landed in the gap',
+  stalled: 'Stalled: too slow',
+  kinkThrow: 'Thrown off at the kink',
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, text = ''): HTMLElementTagNameMap[K] => {
@@ -80,6 +82,8 @@ export class Hud {
   private readonly ringLabel: HTMLElement;
   private readonly balance: HTMLElement;
   private readonly balanceCursor: HTMLElement;
+  private readonly foreRow: HTMLElement;
+  private readonly foreCursor: HTMLElement;
   private readonly status: HTMLElement;
   private readonly help: HTMLElement;
   private readonly debug: HTMLElement;
@@ -158,6 +162,11 @@ export class Hud {
     el('div', 'tile-label', this.balance, 'Balance: tap A / D');
     const bt = el('div', 'balance-track', this.balance);
     this.balanceCursor = el('b', 'balance-cursor', bt);
+    // Fore-aft (boardslides and presses): tap W / S.
+    this.foreRow = el('div', 'balance-fore', this.balance);
+    el('div', 'tile-label', this.foreRow, 'Fore-aft: tap W / S');
+    const ft = el('div', 'balance-track', this.foreRow);
+    this.foreCursor = el('b', 'balance-cursor', ft);
 
     const helpChip = el('div', 'help-chip', root);
     helpChip.innerHTML = '<kbd>H</kbd> Help';
@@ -297,7 +306,11 @@ export class Hud {
     else if (r.jib) this.showRing(r.jib.rot, Math.PI / 2 / cfg.feature.rotateTimePer90, false);
     else this.showRing(null, 0, true);
     this.balance.hidden = !r.jib || !cfg.feature.balanceEnabled;
-    if (r.jib) this.balanceCursor.style.left = `${clamp01((r.jib.balance + 1) / 2) * 100}%`;
+    if (r.jib) {
+      this.balanceCursor.style.left = `${clamp01((r.jib.balance + 1) / 2) * 100}%`;
+      this.foreRow.hidden = Math.abs(r.jib.fore) < 0.02;
+      this.foreCursor.style.left = `${clamp01((r.jib.fore + 1) / 2) * 100}%`;
+    }
 
     this.status.textContent = [
       `Pass ${Math.min(run.pass + 1, cfg.run.passesPerRun)}/${cfg.run.passesPerRun}`,

@@ -292,6 +292,8 @@ export const CRASH_LEAD_IN: Record<string, string> = {
   slippedOut: 'crashSlipOff',
   badAngle: 'crashSide',
   landedInGap: 'crashForward',
+  stalled: 'crashSitBack',
+  kinkThrow: 'crashForward',
 };
 
 export const ALL_CLIPS: PoseClip[] = [...BASE_POSES, ...ADDITIVE_POSES, ...TRICK_CLIPS, ...GRAB_POSES, ...CRASH_CLIPS];

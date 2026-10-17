@@ -1,4 +1,4 @@
-import { cos } from './math/detmath';
+import { atan, cos } from './math/detmath';
 import type { SimConfig } from './config';
 import { deg, DT, GRAVITY } from './config';
 import { edgeNorm, toeSign, updateEdge } from './edge';
@@ -8,7 +8,6 @@ import { transition } from './fsm';
 import { updateHandle } from './handle';
 import type { InputFrame, InputMemory } from './input';
 import { approach, mod, sign, wrapAngle } from './math/scalar';
-import { valueNoise } from './math/noise';
 import { add, dot, forwardOf, headingOf, horizontal, horizontalLength, rightOf, scale, vec3 } from './math/vec';
 import type { ResolvedFeature } from './park';
 import { ollieCharge, ollieSpeed } from './pop';
@@ -21,6 +20,7 @@ import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
 import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
+import { slideFriction, stepBalance, stepKink } from './featureRide/slideController';
 
 /**
  * Kickers and obstacles (spec section 9), on any feature's ride pieces
@@ -100,6 +100,10 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     entry,
     inRotation: 0,
     entryQuality: 1,
+    fore: 0,
+    pitch: 0,
+    lift: 0,
+    spiked: false,
     sketchy,
     rot,
     noiseSeed: s.tick,
@@ -289,6 +293,7 @@ function mountMain(
   r.vel = scale(along, Math.max(speed, s.cfg.feature.stallSpeed + 0.5));
   r.heading = f.shape.legacy ? f.heading : pieceHeading(f, top ? top.piece : main);
   r.jib = startJib(s, f, boardAngle, entry, sketchy);
+  r.jib.pitch = atan(top ? top.slope : 0);
   r.popCharge = 0;
   transition(s, 'onFeature', entry);
 }
@@ -317,7 +322,8 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   const heading = f.shape.legacy ? f.heading : pieceHeading(f, piece);
   const t = surface.tangent;
   const right = rightOf(heading);
-  const friction = f.shape.friction ?? cfg.feature.friction;
+  // SlideController: friction by material and slide, stall, kinks.
+  const friction = slideFriction(f, j, s);
   let vt = dot(r.vel, t);
   let vl = dot(r.vel, right);
   const at = (dot(rope.force, t) - m * GRAVITY * t.y - friction * m * GRAVITY * surface.normal.y * sign(vt)) / m;
@@ -325,9 +331,15 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   const ropeLat = dot(rope.force, right);
   vl += (ropeLat / m - cfg.feature.lateralDamping * vl) * DT;
   r.edgeLoad = 0;
-  if (vt < cfg.feature.stallSpeed) {
+  if (vt < cfg.featureRide.Slide.StallSpeed) {
     endSlide(s);
-    crash(s, 'fellOffFeature');
+    crash(s, 'stalled');
+    return;
+  }
+  const kink = stepKink(s, j, atan(surface.slope), vt, input);
+  if (kink) {
+    endSlide(s);
+    crash(s, kink);
     return;
   }
 
@@ -354,16 +366,18 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
     return;
   }
 
-  // Balance: drifts with smooth noise (faster on rails) and the rope's sideways pull; taps correct it.
-  if (cfg.feature.balanceEnabled) {
-    const drift = piece.width >= 0.6 ? cfg.feature.balanceDriftBox : cfg.feature.balanceDriftRail;
-    const noise = valueNoise(j.time * cfg.feature.balanceNoiseRate, j.noiseSeed);
-    j.balance += (noise * drift + ropeLat / cfg.feature.ropeTip) * DT + mem.steerTap * cfg.feature.tapStrength;
-    if (Math.abs(j.balance) > 1) {
-      endSlide(s);
-      crash(s, 'fellOffFeature');
-      return;
-    }
+  // Balance across and fore-aft (SlideController); out near the end is a sketchy exit.
+  const fell = stepBalance(s, j, f, piece, surface, ramp.u, ropeLat, dot(rope.force, t), mem);
+  if (fell === 'fell') {
+    endSlide(s);
+    crash(s, 'fellOffFeature');
+    return;
+  }
+  if (fell === 'sketchyExit') {
+    j.sketchy = true;
+    r.vel = add(scale(t, vt), scale(right, vl));
+    leaveFeature(s, f, 0, 0, piece);
+    return;
   }
   j.time += DT;
   const nearest = Math.round(j.boardAngle / (Math.PI / 2)) * (Math.PI / 2);

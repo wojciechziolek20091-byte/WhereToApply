@@ -81,6 +81,65 @@ export interface FeatureRideConfig {
     /** Largest balance offset an entry leaves (meter units). */
     MaxHit: number;
   };
+  /** Slide physics on the feature (spec 5.1). */
+  Slide: {
+    /** Friction by surface material where the feature sets none (wet HDPE, pipe, skatelite). */
+    MaterialFriction: Record<'HDPE' | 'Pipe' | 'Skatelite', number>;
+    /** Boardslides and lipslides skid more; presses ride on less base. */
+    BoardslideFriction: number;
+    PressFriction: number;
+    /** Slower than this along the feature (m/s): stalled. */
+    StallSpeed: number;
+    /** Pitch changes smaller than this between ticks are not kinks (rad). */
+    KinkMinAngle: number;
+    /** Over a down kink the board lifts for (this x angle x speed) s, if at least KinkLiftMin, at most KinkLiftMax. */
+    KinkLiftPerRadSpeed: number;
+    KinkLiftMin: number;
+    KinkLiftMax: number;
+    /** Balance hit when the board re-lands with any input held (knees not soft). */
+    KinkHit: number;
+    /** Kinks sharper than this get a speed check (rad)... */
+    KinkCheckAngle: number;
+    /** ...against this speed at the check angle, less for sharper kinks (m/s). */
+    KinkThrowSpeed: number;
+    /** Up to this fraction over: sketchy with a hit; more throws the rider off. */
+    KinkSketchyMargin: number;
+    KinkSketchyHit: number;
+  };
+  /** Two-axis balance on the feature (spec 5.6, 5.7), meter units (out past 1). */
+  Balance: {
+    /** Smooth noise drift by top: box, flat rail, pipe (per s). */
+    NoiseBox: number;
+    NoiseRail: number;
+    NoisePipe: number;
+    /** Narrower than this a flat top is a rail for the noise (m). */
+    BoxMinWidth: number;
+    NoiseRate: number;
+    /** Drift by slide: boardslides and lipslides are less stable; on a pipe boardslides are the stable ones. */
+    BoardslideFactor: number;
+    LipslideFactor: number;
+    PipeFiftyFactor: number;
+    PipeBoardslideFactor: number;
+    /** Rope pull across the feature that tips one unit per second (N). */
+    RopeTip: number;
+    /** Drift per unit of cross slope (per s). */
+    CrossSlopeGain: number;
+    /** An A/D tap (shorter than feature.tapTime) corrects this much. */
+    TapStrength: number;
+    /** Rope tension spike: above this (N) the rider is thrown toward the cable side by SpikeImpulse. */
+    SpikeTension: number;
+    SpikeImpulse: number;
+    /** Fore-aft (boardslides and presses): noise, rope pull along the feature that tips one unit per second (N), slope. */
+    ForeNoise: number;
+    ForeRopeTip: number;
+    ForeSlopeGain: number;
+    /** A W/S tap corrects this much. */
+    ForeTapStrength: number;
+    /** Fore-aft settles back to centre at this rate outside boardslides and presses (per s). */
+    ForeDecay: number;
+    /** Losing balance within this of the end (m) is a sketchy exit, not a crash. */
+    LastMetre: number;
+  };
   /** Ollie onto the safety and pop off it (spec 3.5, 3.6). */
   Safety: {
     /** Board pitch off the safety's slope: sketchy beyond the tolerance, a crash beyond the limit (rad). */
@@ -122,6 +181,43 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     SkidRate: deg(90),
     SkidHit: 0.3,
     MaxHit: 0.85,
+  },
+  Slide: {
+    MaterialFriction: { HDPE: 0.06, Pipe: 0.05, Skatelite: 0.12 },
+    BoardslideFriction: 1.6,
+    PressFriction: 0.8,
+    StallSpeed: 1.0,
+    KinkMinAngle: deg(2),
+    KinkLiftPerRadSpeed: 0.068,
+    KinkLiftMin: 0.05,
+    KinkLiftMax: 0.15,
+    KinkHit: 0.25,
+    KinkCheckAngle: deg(12),
+    KinkThrowSpeed: 12,
+    KinkSketchyMargin: 0.15,
+    KinkSketchyHit: 0.5,
+  },
+  Balance: {
+    NoiseBox: 0.9,
+    NoiseRail: 1.6,
+    NoisePipe: 2.0,
+    BoxMinWidth: 0.6,
+    NoiseRate: 1.3,
+    BoardslideFactor: 1.3,
+    LipslideFactor: 1.5,
+    PipeFiftyFactor: 1.25,
+    PipeBoardslideFactor: 0.85,
+    RopeTip: 1400,
+    CrossSlopeGain: 1.5,
+    TapStrength: 0.35,
+    SpikeTension: 1600,
+    SpikeImpulse: 0.35,
+    ForeNoise: 0.6,
+    ForeRopeTip: 4000,
+    ForeSlopeGain: 2.0,
+    ForeTapStrength: 0.35,
+    ForeDecay: 2,
+    LastMetre: 1.0,
   },
   Safety: { LandingPitchTolerance: deg(15), LandingPitchCrash: deg(30) },
 };

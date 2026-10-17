@@ -68,6 +68,10 @@ export interface InputMemory {
   steerAge: number;
   /** A/D released this tick after a short press: its direction, else 0. */
   steerTap: number;
+  /** W / S held (+1 W, -1 S, 0) and for how long (s); a short press released this tick (presses, fore-aft balance). */
+  foreDir: number;
+  foreHeldTime: number;
+  foreTap: number;
   /** Grab chord: seconds since E went down, and the grab it resolved to. */
   grabTime: number;
   grabChoice: GrabId | null;
@@ -84,6 +88,9 @@ export const createInputMemory = (): InputMemory => ({
   lastSteerDir: 0,
   steerAge: 0,
   steerTap: 0,
+  foreDir: 0,
+  foreHeldTime: 0,
+  foreTap: 0,
   grabTime: 0,
   grabChoice: null,
 });
@@ -116,6 +123,16 @@ export function updateInputMemory(m: InputMemory, input: InputFrame, cfg: SimCon
     m.lastSteerDir = dir;
     m.steerAge = 0;
   } else m.steerAge += dt;
+
+  const fore = input.forward ? 1 : input.back ? -1 : 0;
+  m.foreTap = 0;
+  if (fore !== m.foreDir) {
+    if (m.foreDir !== 0 && m.foreHeldTime < cfg.feature.tapTime) m.foreTap = m.foreDir;
+    m.foreDir = fore;
+    m.foreHeldTime = 0;
+  } else if (fore !== 0) {
+    m.foreHeldTime += dt;
+  }
 
   if (!input.grab) {
     m.grabTime = 0;

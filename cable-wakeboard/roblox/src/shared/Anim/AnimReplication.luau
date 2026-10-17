@@ -38,6 +38,8 @@ local CRASHES = {
 	"slippedOut",
 	"badAngle",
 	"landedInGap",
+	"stalled",
+	"kinkThrow",
 }
 
 R.PACKET_LENGTH = 50

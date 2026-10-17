@@ -272,15 +272,7 @@ export interface FeatureConfig {
   tapTime: number;
   /** DECISION: balance can be switched off for early testing. */
   balanceEnabled: boolean;
-  /** Balance drift rate on boxes and rails (per second at full noise). */
-  balanceDriftBox: number;
-  balanceDriftRail: number;
-  /** Noise frequency of the drift (1/s). */
-  balanceNoiseRate: number;
-  /** Balance moved by one tap. */
-  tapStrength: number;
-  /** The rope's sideways pull tips the balance: pull (N) for one unit per second. */
-  ropeTip: number;
+  /* Balance drift, taps and the rope's tip moved to featureRide.Balance. */
   /** Sideways damping on a slide (1/s). */
   lateralDamping: number;
   /** Popping off a wall ride pushes away from its face with this fraction of the ollie's speed. */
@@ -503,11 +495,6 @@ export const DEFAULT_CONFIG: SimConfig = {
     rotateTimePer90: 0.18,
     tapTime: 0.15,
     balanceEnabled: true,
-    balanceDriftBox: 0.9,
-    balanceDriftRail: 1.6,
-    balanceNoiseRate: 1.3,
-    tapStrength: 0.35,
-    ropeTip: 1400,
     lateralDamping: 6,
     wallPopOut: 0.6,
     sideHop: 2.8,

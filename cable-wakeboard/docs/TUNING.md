@@ -65,9 +65,9 @@ not bugs.
 | | stiffImpact / absorbImpact | **9.0 / 2.0 m/s** | was 6.5 / 4.0 |
 | | graceTime | 0.15 s | |
 | feature | rotateTimePer90 / tapTime | 0.18 / 0.15 s | |
-| | balanceDrift box / rail | 0.9 / 1.6 | |
-| | balanceNoiseRate / tapStrength | 1.3 / 0.35 | |
-| | ropeTip | 1400 N | |
+| featureRide.Balance | NoiseBox / NoiseRail / NoisePipe | 0.9 / 1.6 / **2.0** | moved from feature.balanceDrift*; pipe new |
+| | NoiseRate / TapStrength | 1.3 / 0.35 | moved from feature.* |
+| | RopeTip | 1400 N | moved from feature.ropeTip |
 | combo | linkWindow | 2 s on water | |
 | | repeatPenalty | 0.5 | |
 | | perTrick / maxMultiplier | +0.25 / ×4 | |

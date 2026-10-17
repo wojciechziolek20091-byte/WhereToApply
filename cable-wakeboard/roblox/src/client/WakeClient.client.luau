@@ -910,8 +910,12 @@ RunService.RenderStepped:Connect(function(rawDt)
 		prompt.Text = if w and math.abs(hp - w.centre) <= w.half then "PASS NOW (Q)" else "Handle pass: Q"
 	elseif r.jib and sim.cfg.feature.balanceEnabled then
 		prompt.Visible = true
-		local cells = math.floor((r.jib.balance + 1) * 5 + 0.5)
-		prompt.Text = "Balance " .. string.rep("-", math.clamp(cells, 0, 10)) .. "|" .. string.rep("-", math.clamp(10 - cells, 0, 10))
+		local function meter(v)
+			local cells = math.floor((v + 1) * 5 + 0.5)
+			return string.rep("-", math.clamp(cells, 0, 10)) .. "|" .. string.rep("-", math.clamp(10 - cells, 0, 10))
+		end
+		-- Two axes (feature riding spec 5.6): across (A/D taps), fore-aft in boardslides and presses (W/S taps).
+		prompt.Text = "Balance " .. meter(r.jib.balance) .. (if math.abs(r.jib.fore) >= 0.02 then "   Fore-aft " .. meter(r.jib.fore) else "")
 	else
 		prompt.Visible = false
 	end

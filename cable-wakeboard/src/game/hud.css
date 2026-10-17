@@ -204,6 +204,7 @@ kbd { font: inherit; display: inline-block; padding: 0 5px; margin-right: 4px; b
 /* Balance meter on features. */
 .balance { position: absolute; left: 50%; top: 66%; transform: translateX(-50%); width: min(260px, calc(100vw - 32px)); padding: 6px 10px; border-radius: 6px; background: var(--ui-tile); text-align: center; }
 .balance-track { position: relative; height: 10px; margin-top: 5px; border-radius: 5px; background: linear-gradient(90deg, var(--ui-fall), var(--ui-tile-edge) 35%, var(--ui-tile-edge) 65%, var(--ui-fall)); }
+.balance-fore { margin-top: 6px; }
 .balance-cursor { position: absolute; top: -4px; bottom: -4px; width: 4px; background: #ffffff; transform: translateX(-2px); }
 
 /* Debug overlay (F3). */

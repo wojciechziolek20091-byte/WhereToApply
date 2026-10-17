@@ -9,11 +9,11 @@ local DetMath = require(script.Parent.DetMath)
 local Edge = require(script.Parent.Edge)
 local Features = require(script.Parent.Features)
 local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
+local SlideController = require(script.Parent.FeatureRideSlideController)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
 local Handle = require(script.Parent.Handle)
 local Landing = require(script.Parent.Landing)
-local Noise = require(script.Parent.Noise)
 local Pop = require(script.Parent.Pop)
 local Posture = require(script.Parent.Posture)
 local Rotation = require(script.Parent.Rotation)
@@ -114,6 +114,10 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		entry = entry,
 		inRotation = 0,
 		entryQuality = 1,
+		fore = 0,
+		pitch = 0,
+		lift = 0,
+		spiked = false,
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
@@ -203,6 +207,7 @@ local function mountMain(s, f, main, u, v, speed, entry, sketchy, boardAngle)
 	r.vel = Vec.scale(along, math.max(speed, s.cfg.feature.stallSpeed + 0.5))
 	r.heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, if top then top.piece else main)
 	r.jib = startJib(s, f, boardAngle, entry, sketchy)
+	r.jib.pitch = DetMath.atan(if top then top.slope else 0)
 	r.popCharge = 0
 	Fsm.transition(s, "onFeature", entry)
 end
@@ -423,7 +428,7 @@ function OnFeature.stepSlide(s, input, mem)
 	local heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, piece)
 	local t = surface.tangent
 	local right = Vec.rightOf(heading)
-	local friction = if f.shape.friction then f.shape.friction else cfg.feature.friction
+	local friction = SlideController.slideFriction(f, j, s)
 	local vt = Vec.dot(r.vel, t)
 	local vl = Vec.dot(r.vel, right)
 	local at = (Vec.dot(rope.force, t) - m * GRAVITY * t.y - friction * m * GRAVITY * surface.normal.y * Scalar.sign(vt)) / m
@@ -431,9 +436,15 @@ function OnFeature.stepSlide(s, input, mem)
 	local ropeLat = Vec.dot(rope.force, right)
 	vl += (ropeLat / m - cfg.feature.lateralDamping * vl) * DT
 	r.edgeLoad = 0
-	if vt < cfg.feature.stallSpeed then
+	if vt < cfg.featureRide.Slide.StallSpeed then
 		endSlide(s)
-		Actions.crash(s, "fellOffFeature")
+		Actions.crash(s, "stalled")
+		return
+	end
+	local kink = SlideController.stepKink(s, j, DetMath.atan(surface.slope), vt, input)
+	if kink then
+		endSlide(s)
+		Actions.crash(s, kink)
 		return
 	end
 
@@ -461,15 +472,17 @@ function OnFeature.stepSlide(s, input, mem)
 		return
 	end
 
-	if cfg.feature.balanceEnabled then
-		local drift = if piece.width >= 0.6 then cfg.feature.balanceDriftBox else cfg.feature.balanceDriftRail
-		local noise = Noise.valueNoise(j.time * cfg.feature.balanceNoiseRate, j.noiseSeed)
-		j.balance += (noise * drift + ropeLat / cfg.feature.ropeTip) * DT + mem.steerTap * cfg.feature.tapStrength
-		if math.abs(j.balance) > 1 then
-			endSlide(s)
-			Actions.crash(s, "fellOffFeature")
-			return
-		end
+	local fell = SlideController.stepBalance(s, j, f, piece, surface, ramp.u, ropeLat, Vec.dot(rope.force, t), mem)
+	if fell == "fell" then
+		endSlide(s)
+		Actions.crash(s, "fellOffFeature")
+		return
+	end
+	if fell == "sketchyExit" then
+		j.sketchy = true
+		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+		leaveFeature(s, f, 0, 0, piece)
+		return
 	end
 	j.time += DT
 	local nearest = Scalar.round(j.boardAngle / (math.pi / 2)) * (math.pi / 2)
