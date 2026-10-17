@@ -4,6 +4,10 @@ import { surfaceAt, toWorld } from '../src/sim/features';
 import { trackApproach } from '../src/sim/featureRide/approachTracker';
 import { balanceHalfWidth } from '../src/sim/featureRide/entryResolver';
 import { foreLimit, slideFriction, stepBalance } from '../src/sim/featureRide/slideController';
+import { stepExitAssist } from '../src/sim/featureRide/exitResolver';
+import { dot, rightOf } from '../src/sim/math/vec';
+import { toLocal } from '../src/sim/features';
+import { neutralInput } from '../src/sim/input';
 import { sideEntrySlide, slideSide } from '../src/sim/featureRide/featureRotation';
 import { cos } from '../src/sim/math/detmath';
 import { SLIDES } from '../src/sim/tricks/data';
@@ -623,5 +627,101 @@ describe('PressController: presses and taps (feature ride M6, spec 5.5)', () => 
     expect(tapAt('forward', 0.2)).toBe('nose');
     expect(tapAt('back', 0.2)).toBe('tail');
     expect(tapAt('forward', 2)).toBeNull();
+  });
+});
+
+/** Ride a feature until the line ends (featureLine) or a crash; `script` sees the rider's position along the feature (-1 off it). */
+function line(def: FeatureDef, script: (u: number, s: SimState, airT: number) => Partial<InputFrame>) {
+  const s = featureSim(def, noBalance);
+  let popT = -1;
+  const events: SimEvent[] = [];
+  runUntil(s, 9, (t, st) => {
+    if (popT < 0 && st.rider.mode === 'airborne' && st.rider.air?.exit) popT = t;
+    const u = st.rider.mode === 'onFeature' && st.rider.ramp ? st.rider.ramp.u : -1;
+    return script(u, st, popT < 0 ? -1 : t - popT);
+  }, (e) => {
+    events.push(e);
+    return e.type === 'crash' || e.type === 'featureLine';
+  });
+  const c = events.find((e) => e.type === 'crash');
+  const l = events.find((e) => e.type === 'featureLine');
+  const fl = l?.type === 'featureLine' ? l : null;
+  return {
+    s,
+    crash: c?.type === 'crash' ? c.reason : null,
+    line: fl,
+    outDeg: fl?.air ? Math.round(((fl.air.rot.spinAngle - fl.air.spinStart) * 180) / Math.PI) : null,
+  };
+}
+
+describe('ExitResolver: exits and out-rotations (feature ride M7, spec 6)', () => {
+  // Main 3..11 m. A boardslide: A held from 3.5 m to 5 m.
+  const board = (u: number) => (u > 3.5 && u < 5 ? -1 : 0);
+
+  it('pass 8a: a 180-out off a 50-50 (pop in the last metre)', () => {
+    const r = line(slider(), (u, _s, air) => ({ pop: u > 9.3 && u < 10.3, steer: air >= 0 && air < 0.3 ? 1 : 0 }));
+    expect(r.crash).toBeNull();
+    expect(r.line!.exit.kind).toBe('popOff');
+    expect(r.outDeg).toBe(180);
+    expect(r.s.rider.switchStance).toBe(true);
+  });
+
+  it('pass 8b: a 270-out off a boardslide', () => {
+    const r = line(slider(), (u, _s, air) => ({ pop: u > 9.3 && u < 10.3, steer: board(u) || (air >= 0 && air < 0.45 ? 1 : 0) }));
+    expect(r.crash).toBeNull();
+    expect(r.line!.exit.jibs[0]!.slideOrder.at(-1)).toBe('backboard');
+    expect(r.outDeg).toBe(270);
+  });
+
+  it('pass 8c: a boardslide ridden off the end and turned 90 to fakie', () => {
+    const r = line(slider(), (u, s) => ({ steer: board(u) || (s.rider.air?.exit && s.rider.air.time < 0.15 ? -1 : 0) }));
+    expect(r.crash).toBeNull();
+    expect(r.line!.exit.kind).toBe('rideOff');
+    expect(Math.abs(r.outDeg!)).toBe(90);
+    expect(r.s.rider.switchStance).not.toBe(r.line!.exit.switchStance);
+  });
+
+  it('a boardslide ridden off with no turn crashes on the water', () => {
+    expect(line(slider(), (u) => ({ steer: board(u) })).crash).not.toBeNull();
+  });
+
+  it('ride-off assist: within 45 degrees of forward or fakie the air finishes the turn', () => {
+    const s = featureSim(slider(), noBalance);
+    run(s, 1);
+    const air = takeOff(s, 'feature', 'b', 0, 0);
+    air.exit = { kind: 'rideOff', jibs: [], boardAngle: Math.PI / 2, switchStance: false };
+    air.rot.spinAngle = deg(150);
+    for (let i = 0; i < 10; i++) stepExitAssist(s, air, neutralInput());
+    expect(air.rot.spinAngle).toBeCloseTo(Math.PI, 6);
+    air.rot.spinAngle = deg(120);
+    stepExitAssist(s, air, neutralInput());
+    expect(air.rot.spinAngle).toBeCloseTo(deg(120), 9);
+  });
+
+  it('Space mid-feature with A/D is a side pop; without, a hop; in the last metre, a pop-off', () => {
+    expect(line(slider(), (u) => ({ pop: u > 5 && u < 6, steer: u > 5.95 && u < 6.2 ? 1 : 0 })).line?.exit.kind).toBe('sidePop');
+    expect(line(slider(), (u) => ({ pop: u > 4 && u < 5 })).line?.exit.kind).toBe('hop');
+    expect(line(slider(), (u) => ({ pop: u > 9.6 && u < 10.4 })).line?.exit.kind).toBe('popOff');
+  });
+
+  it('transfer: pop off box A, land on box B, the line carries both slides', () => {
+    // Lined up on the safety, as FeatureRideTest does; box B is toward the cable so the pull helps the hop.
+    const def = { kind: 'feature', id: 'g', name: 'G', catalog: 'Transfer', s: 135, offset: 3, side: -1 } as FeatureDef;
+    const lineUp = (st: SimState) => {
+      const f = st.features[0]!;
+      const l = toLocal(f, st.rider.pos);
+      if (st.rider.mode !== 'riding' || l.u < -26 || l.u > 0.3) return 0;
+      const pred = l.v - 0.14 * 3 + dot(st.rider.vel, rightOf(f.heading)) * 0.8;
+      return pred < -0.1 ? 1 : pred > 0.1 ? -1 : 0;
+    };
+    const r = line(def, (u, st) => ({ pop: u > 2.86 && u < 3.5, steer: lineUp(st) || (u > 3.35 && u < 3.8 ? -1 : 0) }));
+    expect(r.crash).toBeNull();
+    expect(r.line!.exit.jibs.map((j) => `${j.entry}:${j.slideOrder.join('/')}`)).toEqual(['rideOn:fiftyFifty', 'transfer:fiftyFifty']);
+  });
+
+  it('down an exit ramp into the water still in a boardslide: it catches (BadAngle)', () => {
+    const funbox = { kind: 'feature', id: 'g', name: 'G', catalog: 'Funbox', s: 135, offset: 0 } as FeatureDef;
+    expect(line(funbox, (u) => ({ steer: u > 7 && u < 8.5 ? -1 : 0 })).crash).toBe('badAngle');
+    expect(line(funbox, () => ({})).line?.exit.kind).toBe('rideOff');
   });
 });

@@ -3,6 +3,7 @@
 local Air = require(script.Parent.Air)
 local BodyPhysics = require(script.Parent.BodyPhysics)
 local Config = require(script.Parent.Config)
+local ExitResolver = require(script.Parent.FeatureRideExitResolver)
 local Fsm = require(script.Parent.Fsm)
 local Landing = require(script.Parent.Landing)
 local Pop = require(script.Parent.Pop)
@@ -140,6 +141,7 @@ function Actions.touchDown(s, air, normal, surfaceY)
 	r.air = nil
 	Fsm.transition(s, "landing", "touchdown")
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = false })
+	ExitResolver.finishLine(s, air, landing)
 	return landing
 end
 

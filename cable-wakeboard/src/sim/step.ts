@@ -11,6 +11,7 @@ import { addScaled, horizontalLength, scale, UP, vec3, add } from './math/vec';
 import { airOverFeature, stepRamp, stepSlide, tryEnterFeature } from './onFeature';
 import { trackApproach } from './featureRide/approachTracker';
 import { landedInGap, startEntry } from './featureRide/entryResolver';
+import { stepExitAssist } from './featureRide/exitResolver';
 import { sign } from './math/scalar';
 import { ollieCharge, ollieSpeed, waterTrickTiming } from './pop';
 import { updatePosture } from './posture';
@@ -110,6 +111,7 @@ function stepAirborne(s: SimState, input: InputFrame): void {
   const rope = applyRope(s);
   if (!rope) return;
   if (stepAir(r, air, rope.force, input, s.inputs, cfg)) s.events.push({ type: 'handlePass', tick: s.tick });
+  stepExitAssist(s, air, input);
   if (airOverFeature(s, air)) return;
   if (r.pos.y <= 0 && r.vel.y < 0) {
     if (landedInGap(s, air)) crash(s, 'landedInGap');

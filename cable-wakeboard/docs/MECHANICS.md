@@ -256,9 +256,10 @@ ridden in `onFeature.ts`.
     or from a side entry a **Backside / Frontside Lipslide**. Speed and
     balance are the SlideController's (below); `feature.balanceEnabled`
     turns the balance off.
-  - **Exit**: Space pops off; riding off the end rolls off. The air starts with
-    the board's angle on the feature (`air.spinStart`), so leaving a boardslide
-    needs a "90 Off" or "270 Off" spin to land.
+  - **Exit** (ExitResolver below): Space pops off; riding off the end rolls
+    off. The air starts with the board's angle on the feature
+    (`air.spinStart`), so leaving a boardslide needs a 90 (to fakie or to
+    forward) or a 270 out to land.
 
 **Feature riding** (`src/sim/featureRide/`, the feature riding spec; Luau
 twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
@@ -343,6 +344,27 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     need Q in `handlePass.featureWindow` (0.35 s) or the handle drops.
     Running off the end with the board still turning is
     `ranOutMidRotation`; at the park's speed a step needs about 1.5 m.
+- **ExitResolver** (`exitResolver.ts`, spec 6).
+  - *Exit kinds* (`air.exit.kind`):
+    - `rideOff`: ran off the end without popping. A board across the
+      feature must turn before the water; with no A/D held and within
+      `Exit.AssistAngle` (45 degrees) of forward or fakie, the air
+      finishes the turn at 360 degrees/s. Down an exit ramp into the water
+      still in a boardslide catches (`badAngle`).
+    - `popOff`: Space in the last `Exit.PopOffZone` (1 m), for
+      out-rotations.
+    - `sidePop`: Space with A/D held, anywhere (a side hop of
+      `feature.sideHop`).
+    - `hop`: Space mid-feature.
+    - `sketchy`: balance lost in the last metre.
+  - *Out-rotations* are the air's spin from the board's angle on the
+    feature: from a 50-50 180 / 360 / 540, from a boardslide 90 (to fakie
+    or forward), 270, 450.
+  - *Transfers*: landing on another feature or another part carries the
+    line on (`jib.chain`).
+  - *Line event*: the whole line (every slide, how it was left, the air)
+    is one `featureLine` event when the rider lands on the water, or rides
+    straight in.
 - **PressController** (`pressController.ts`, spec 5.5).
   - *Presses*: on a 50-50 or switch 50-50, W held past `feature.tapTime` is
     a nose press and S a tail press. The board rocks onto that end

@@ -6,6 +6,7 @@ local Config = require(script.Parent.Config)
 local Edge = require(script.Parent.Edge)
 local FeatureRideApproachTracker = require(script.Parent.FeatureRideApproachTracker)
 local FeatureRideEntryResolver = require(script.Parent.FeatureRideEntryResolver)
+local FeatureRideExitResolver = require(script.Parent.FeatureRideExitResolver)
 local Fsm = require(script.Parent.Fsm)
 local Hydro = require(script.Parent.Hydro)
 local Input = require(script.Parent.Input)
@@ -128,6 +129,7 @@ local function stepAirborne(s, input)
 	if Air.stepAir(r, air, rope.force, input, s.inputs, cfg) then
 		table.insert(s.events, { type = "handlePass", tick = s.tick })
 	end
+	FeatureRideExitResolver.stepExitAssist(s, air, input)
 	if OnFeature.airOverFeature(s, air) then
 		return
 	end

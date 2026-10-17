@@ -66,6 +66,7 @@ export function createAirState(
     crossing: null,
     cleared: [],
     tailClip: false,
+    exit: null,
     preWind: 0,
   };
 }

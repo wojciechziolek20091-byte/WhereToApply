@@ -179,6 +179,19 @@ export interface AirState {
   cleared: string[];
   /** Crossed an edge short by less than the tail-clip tolerance: the landing is sketchy. */
   tailClip: boolean;
+  /** Left a feature's slide: how, and the line of slides so far (ExitResolver). */
+  exit: FeatureExit | null;
+}
+
+/** Leaving a feature's slide (ExitResolver, spec 6). */
+export interface FeatureExit {
+  kind: 'rideOff' | 'popOff' | 'sidePop' | 'hop' | 'sketchy';
+  /** Every slide of the line, oldest first; the last is the one just left. */
+  jibs: JibState[];
+  /** Board angle to the feature when leaving (rad). */
+  boardAngle: number;
+  /** Stance on the feature. */
+  switchStance: boolean;
 }
 
 /** How the rider came at a feature when popping off the water (ApproachTracker at takeoff). */
@@ -252,6 +265,8 @@ export interface JibState {
   pressTimes: { nose: number; tail: number };
   /** A nose or tail tap at the very end. */
   endTap: 'nose' | 'tail' | null;
+  /** Earlier slides of this line (transfers, hops back on), oldest first. */
+  chain: JibState[];
   /** Early pop onto a flush main: combo multiplier x0.8. */
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */

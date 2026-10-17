@@ -1,5 +1,5 @@
 import type { LandingResult } from './landing';
-import type { AirState, CrashReason, JibState, RiderMode, TakeoffSource } from './rider';
+import type { AirState, CrashReason, FeatureExit, JibState, RiderMode, TakeoffSource } from './rider';
 
 /** Emitted by stepSim(). The session and renderer read these; physics ignores them. */
 export type SimEvent =
@@ -12,6 +12,8 @@ export type SimEvent =
   | { type: 'featureExit'; tick: number; featureId: string }
   /** Left the main of a box or rail (not by crashing): the whole slide. */
   | { type: 'slideDone'; tick: number; jib: JibState }
+  /** A feature line is done: every slide, how it was left and the air off it (null when it rode straight into the water). */
+  | { type: 'featureLine'; tick: number; exit: FeatureExit; air: AirState | null; landing: LandingResult | null }
   | { type: 'handlePass'; tick: number }
   /** Spun back out of blind on the water. */
   | { type: 'blindSpinOut'; tick: number }

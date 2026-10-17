@@ -11,15 +11,16 @@ import { add, dot, forwardOf, headingOf, horizontal, horizontalLength, rightOf, 
 import type { ResolvedFeature } from './park';
 import { ollieCharge, ollieSpeed } from './pop';
 import { updatePosture } from './posture';
-import type { AirState, JibState } from './rider';
+import type { AirState, FeatureExit, JibState } from './rider';
 import { createRotation } from './rotation';
 import type { SimState } from './world';
 import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
 import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
-import { partEnd, slideFriction, stepBalance, stepKink } from './featureRide/slideController';
+import { isBoardslide, partEnd, slideFriction, stepBalance, stepKink } from './featureRide/slideController';
 import { stepPress } from './featureRide/pressController';
+import { exitOf, popKind } from './featureRide/exitResolver';
 import { midRotation, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
 
 /**
@@ -111,6 +112,7 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     pressAmount: 0,
     pressTimes: { nose: 0, tail: 0 },
     endTap: null,
+    chain: [],
     sketchy,
     rot,
     noiseSeed: s.tick,
@@ -127,9 +129,17 @@ function endSlide(s: SimState): void {
 }
 
 /** Leave the feature into the air. Leaving a slide keeps the board's angle as the start of the spin. */
-function leaveFeature(s: SimState, f: ResolvedFeature, popSpeed: number, popQuality: number, from: RidePiece | null): AirState {
+function leaveFeature(
+  s: SimState,
+  f: ResolvedFeature,
+  popSpeed: number,
+  popQuality: number,
+  from: RidePiece | null,
+  kind: FeatureExit['kind'] = 'rideOff',
+): AirState {
   const r = s.rider;
-  const spinStart = r.jib ? wrapAngle(r.jib.boardAngle) : 0;
+  const jib = r.jib;
+  const spinStart = jib ? wrapAngle(jib.boardAngle) : 0;
   const keepHandle = r.handle;
   endSlide(s);
   s.events.push({ type: 'featureExit', tick: s.tick, featureId: f.def.id });
@@ -144,6 +154,7 @@ function leaveFeature(s: SimState, f: ResolvedFeature, popSpeed: number, popQual
   air.overFeature = `${f.def.id}:${onto ? onto.part : piece ? piece.part : 0}`;
   // The part left from: landing on another one is a transfer.
   air.cleared.push(air.overFeature);
+  if (jib) air.exit = exitOf(jib, kind, r.switchStance);
   r.handle = keepHandle === 'passing' ? 'inFront' : keepHandle;
   return air;
 }
@@ -151,7 +162,15 @@ function leaveFeature(s: SimState, f: ResolvedFeature, popSpeed: number, popQual
 /** Ride off a feature's end into the water (exit ramps, landing ramps, down rails into the water). */
 function rideOut(s: SimState, f: ResolvedFeature): void {
   const r = s.rider;
+  const jib = r.jib;
+  if (jib && isBoardslide(jib.boardAngle)) {
+    // Down into the water still across the board: it catches.
+    endSlide(s);
+    crash(s, 'badAngle');
+    return;
+  }
   endSlide(s);
+  if (jib) s.events.push({ type: 'featureLine', tick: s.tick, exit: exitOf(jib, 'rideOff', r.switchStance), air: null, landing: null });
   s.events.push({ type: 'featureExit', tick: s.tick, featureId: f.def.id });
   r.pos = vec3(r.pos.x, 0, r.pos.z);
   r.vel = horizontal(r.vel);
@@ -359,7 +378,7 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   if (fell === 'sketchyExit') {
     j.sketchy = true;
     r.vel = add(scale(t, vt), scale(right, vl));
-    leaveFeature(s, f, 0, 0, piece);
+    leaveFeature(s, f, 0, 0, piece, 'sketchy');
     return;
   }
   j.time += DT;
@@ -373,9 +392,9 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   if (input.pop) r.popCharge = ollieCharge(mem.popHeldTime, cfg);
   if (mem.popReleased) {
     const charge = ollieCharge(mem.popHeldTime, cfg);
-    // A/D pressed as the pop goes: hop sideways (transfers).
-    if (!f.shape.legacy && mem.steerDir !== 0) r.vel = add(r.vel, scale(right, mem.steerDir * cfg.feature.sideHop));
-    leaveFeature(s, f, ollieSpeed(charge, cfg), charge, piece);
+    // A/D pressed as the pop goes: off the side (a side pop, or across to a transfer box).
+    if (mem.steerDir !== 0) r.vel = add(r.vel, scale(right, mem.steerDir * cfg.feature.sideHop));
+    leaveFeature(s, f, ollieSpeed(charge, cfg), charge, piece, popKind(s, partEnd(f, piece.part) - ramp.u, mem.steerDir));
     return;
   }
 
@@ -479,7 +498,7 @@ function stepWall(s: SimState, input: InputFrame, mem: InputMemory, f: ResolvedF
     const charge = ollieCharge(mem.popHeldTime, cfg);
     const out = ollieSpeed(charge, cfg) * cfg.feature.wallPopOut;
     r.vel = add(along(vu, ws, cosT, sinT), add(scale(right, -w.side * out * sinT), vec3(0, out * cosT, 0)));
-    leaveFeature(s, f, 0, charge, piece);
+    leaveFeature(s, f, 0, charge, piece, 'popOff');
     return;
   }
 
@@ -622,6 +641,8 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   j.inRotation = e.inRotation;
   j.entryQuality = e.quality;
   j.entrySlide = e.slide;
+  // A transfer (or a hop back on) carries the line on.
+  j.chain = air.exit ? air.exit.jibs : [];
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
   return true;

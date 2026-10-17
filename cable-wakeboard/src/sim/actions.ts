@@ -1,3 +1,4 @@
+import { finishLine } from './featureRide/exitResolver';
 import { createAirState } from './air';
 import { landingSpeedKeep } from './bodyPhysics';
 import { DT } from './config';
@@ -138,5 +139,6 @@ export function touchDown(s: SimState, air: AirState, normal: Vec3, surfaceY: nu
   r.air = null;
   transition(s, 'landing', 'touchdown');
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: false });
+  finishLine(s, air, landing);
   return landing;
 }

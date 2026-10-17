@@ -62,6 +62,7 @@ function Air.createAirState(r, source, featureId, popSpeed, popQuality, cfg, spi
 		crossing = nil,
 		cleared = {},
 		tailClip = false,
+		exit = nil,
 		preWind = 0,
 	}
 end

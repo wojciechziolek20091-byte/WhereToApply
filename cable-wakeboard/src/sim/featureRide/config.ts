@@ -154,6 +154,15 @@ export interface FeatureRideConfig {
     /** A W/S tap within this of the end (m) is a nose / tail tap. */
     EndTapZone: number;
   };
+  /** Exits (spec 6). */
+  Exit: {
+    /** Space within this of the end (m) is a pop-off; earlier it is a hop (or a side pop with A/D). */
+    PopOffZone: number;
+    /** After a ride-off, within this of forward or fakie (rad) the air finishes the turn... */
+    AssistAngle: number;
+    /** ...at this rate (rad/s). */
+    AssistRate: number;
+  };
   /** Rotations on the feature (spec 5.4). */
   Rotation: {
     /** Balance hit of a hard-way step (a shorter balance window). */
@@ -239,6 +248,7 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     LastMetre: 1.0,
   },
   Press: { Pitch: deg(10), RampTime: 0.15, NarrowRate: 0.25, MinWindow: 0.2, Lean: 0.4, EndTapZone: 0.5 },
+  Exit: { PopOffZone: 1.0, AssistAngle: deg(45), AssistRate: deg(360) },
   Rotation: { HardWayHit: 0.3 },
   Safety: { LandingPitchTolerance: deg(15), LandingPitchCrash: deg(30) },
 };

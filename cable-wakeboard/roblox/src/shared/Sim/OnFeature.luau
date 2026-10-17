@@ -12,6 +12,7 @@ local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local SlideController = require(script.Parent.FeatureRideSlideController)
 local FeatureRotation = require(script.Parent.FeatureRideFeatureRotation)
 local PressController = require(script.Parent.FeatureRidePressController)
+local ExitResolver = require(script.Parent.FeatureRideExitResolver)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
 local Landing = require(script.Parent.Landing)
@@ -126,6 +127,7 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		pressAmount = 0,
 		pressTimes = { nose = 0, tail = 0 },
 		endTap = nil,
+		chain = {},
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
@@ -143,9 +145,10 @@ local function endSlide(s)
 	table.insert(s.events, { type = "slideDone", tick = s.tick, jib = j })
 end
 
-local function leaveFeature(s, f, popSpeed, popQuality, from)
+local function leaveFeature(s, f, popSpeed, popQuality, from, kind)
 	local r = s.rider
-	local spinStart = if r.jib then Scalar.wrapAngle(r.jib.boardAngle) else 0
+	local jib = r.jib
+	local spinStart = if jib then Scalar.wrapAngle(jib.boardAngle) else 0
 	local keepHandle = r.handle
 	endSlide(s)
 	table.insert(s.events, { type = "featureExit", tick = s.tick, featureId = f.def.id })
@@ -171,6 +174,9 @@ local function leaveFeature(s, f, popSpeed, popQuality, from)
 	air.overFeature = f.def.id .. ":" .. tostring(if onto then onto.part elseif piece then piece.part else 0)
 	-- The part left from: landing on another one is a transfer.
 	table.insert(air.cleared, air.overFeature)
+	if jib then
+		air.exit = ExitResolver.exitOf(jib, kind or "rideOff", r.switchStance)
+	end
 	r.handle = if keepHandle == "passing" then "inFront" else keepHandle
 	return air
 end
@@ -178,7 +184,17 @@ end
 -- Ride off a feature's end into the water.
 local function rideOut(s, f)
 	local r = s.rider
+	local jib = r.jib
+	if jib and SlideController.isBoardslide(jib.boardAngle) then
+		-- Down into the water still across the board: it catches.
+		endSlide(s)
+		Actions.crash(s, "badAngle")
+		return
+	end
 	endSlide(s)
+	if jib then
+		table.insert(s.events, { type = "featureLine", tick = s.tick, exit = ExitResolver.exitOf(jib, "rideOff", r.switchStance), air = nil, landing = nil })
+	end
 	table.insert(s.events, { type = "featureExit", tick = s.tick, featureId = f.def.id })
 	r.pos = Vec.vec3(r.pos.x, 0, r.pos.z)
 	r.vel = Vec.horizontal(r.vel)
@@ -370,7 +386,7 @@ stepWall = function(s, input, mem, f)
 		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
 		local out = Pop.ollieSpeed(charge, cfg) * cfg.feature.wallPopOut
 		r.vel = Vec.add(along(vu, ws, cosT, sinT), Vec.add(Vec.scale(right, -w.side * out * sinT), Vec.vec3(0, out * cosT, 0)))
-		leaveFeature(s, f, 0, charge, piece)
+		leaveFeature(s, f, 0, charge, piece, "popOff")
 		return
 	end
 
@@ -463,7 +479,7 @@ function OnFeature.stepSlide(s, input, mem)
 	if fell == "sketchyExit" then
 		j.sketchy = true
 		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
-		leaveFeature(s, f, 0, 0, piece)
+		leaveFeature(s, f, 0, 0, piece, "sketchy")
 		return
 	end
 	j.time += DT
@@ -481,11 +497,12 @@ function OnFeature.stepSlide(s, input, mem)
 	end
 	if mem.popReleased then
 		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
-		-- A/D pressed as the pop goes: hop sideways (transfers).
-		if not f.shape.legacy and mem.steerDir ~= 0 then
+		-- A/D pressed as the pop goes: off the side (a side pop, or across to a transfer box).
+		if mem.steerDir ~= 0 then
 			r.vel = Vec.add(r.vel, Vec.scale(right, mem.steerDir * cfg.feature.sideHop))
 		end
-		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg), charge, piece)
+		local kind = ExitResolver.popKind(s, SlideController.partEnd(f, piece.part) - ramp.u, mem.steerDir)
+		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg), charge, piece, kind)
 		return
 	end
 
@@ -671,6 +688,8 @@ function OnFeature.airOverFeature(s, air)
 	j.inRotation = e.inRotation
 	j.entryQuality = e.quality
 	j.entrySlide = e.slide
+	-- A transfer (or a hop back on) carries the line on.
+	j.chain = if air.exit then air.exit.jibs else {}
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true
