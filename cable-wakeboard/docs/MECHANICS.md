@@ -235,14 +235,18 @@ ridden in `onFeature.ts`.
 - **Box, rail, pipe** (`SliderDef`, `style` is the look): a **safety** (the
   entry ramp, `entryLength`) and a **main** (the slide surface).
   `safety: 'flush' | 'gap'`.
-  - **Ollie on** from the water: coming in below the main's top plus
-    `ollie.clearance` (0.1 m) clips the edge (`shortOllie`), checked per part as
-    the board flies onto it (`airOverFeature()`).
-  - **Safety pop**: only the last `safety.popWindowFraction` of the safety
-    counts, at least `safety.popWindowMinMetres` (`safetyWindow()`). In the
-    window: onto the main; its centre `perfectFraction` is a "Pop-on" (+150).
-    Too early: gap crashes, flush makes the entry sketchy (combo x0.8). No
-    pop: gap crashes (`missedSafetyPop`), flush rides on.
+  - **Ollie on** from the water, from the front or the side: the
+    EntryResolver below.
+  - **Safety pop**: only the last `safety.popWindowFraction` (8%) of the
+    safety counts, at least `safety.popWindowMinMetres` (0.5 m)
+    (`safetyWindow()`). Space released on the safety always pops into the
+    air (with the safety's exit angle), so A/D rotates in (180-in, 270-in)
+    before the main. In the window with a flush main the board leaves at the
+    main's height and needs no clearance check; its centre `perfectFraction`
+    is a "Pop-on" (+150). An early pop leaves lower down the safety and has
+    to clear the main like an ollie (short of it by a little is a tail clip,
+    sketchy, combo x0.8; more is `shortOllie`). No pop: gap crashes
+    (`missedSafetyPop`), flush rides on.
   - **On the main** (`onFeature`, `rider.jib`): A/D held past `feature.tapTime`
     turns the board in 90-degree steps (`rotateTimePer90`, 0.18 s); taps correct
     the balance instead. Board angle names the slide (`slideIdAt()`): parallel
@@ -271,6 +275,57 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
   `HardEdge` (0.5), and speed, rope tension and rope angle. F8 in the web game
   shows it (the approach guide).
 
+- **EntryResolver** (`entryResolver.ts`, spec sections 3 and 4): every
+  way onto a feature resolves through it.
+  - *Water pop* (`startEntry`): the approach is kept on the air. With the
+    feature beside the rider (side gap up to `SideEntry.MaxLateral`, 2.5 m)
+    and A/D held toward it at release, the pop hops sideways toward it at
+    `HopLateralVMin..Max` (1.5 to 3.0 m/s, by charge). A hard edge
+    (`Approach.HardEdge`) held within `Landing.SlipWindow` (0.2 s) of the
+    pop leaves the base rolled: 16 degrees on a heelside (backside)
+    approach, 10 toeside, 6 from the front.
+  - *Crossing an edge* (`crossEdge`): when the board first flies over a
+    main or a safety, the edge it crossed (front or side) is the one it
+    went through most recently. The base must be `Entry.Clearance` (0.08 m)
+    above the top there. Short by up to `TailClipTolerance` (0.10 m) is a
+    tail clip: on, but 25% slower, sketchy and a balance hit. More is
+    `shortOllie` at the front and `clippedSide` at a side. A side crossing at
+    more than `SideEntry.MaxAngle` (25 degrees) to the axis is `noseHitSide`.
+    Leaving across the far side on the way down, less than
+    `OvershootCatch` (0.3 m) above the top, is `overshoot`; higher is a clean
+    hop over.
+  - *Contact with a main* (`resolveLanding`), in the spec's order:
+    1. Base roll over `Landing.MaxRoll` (12 degrees) is `slippedOut`, over 8
+       is sketchy.
+    2. The board's yaw in the air (the takeoff direction turned by the spin:
+       a sideways hop drifts the board, it does not turn it) snaps to the
+       nearest 90 degrees within `SnapTolerance` (20). To `SketchyAngle`
+       (30) it is sketchy with a big balance hit; past that it is `badAngle`.
+    3. Across the feature it must land within the balance width: a box's
+       top minus 0.2 m, 0.15 m from the centre on a flat rail, 0.1 m on a
+       pipe. Short of it on the side it came in from is `clippedSide`. Just
+       past it (`OvershootRecover`, 0.1 m; none on a pipe's round top) is a
+       sketchy recovery; further is `overshoot` from the side and
+       `fellOffFeature` from the front.
+    4. Impact along the normal over `HardImpact` (5 m/s) is a balance hit
+       growing to `CrashImpact` (8 m/s); past that it is `hardLanding`.
+    5. Still spinning faster than `SkidRate` (90 degrees/s) skids: sketchy.
+
+    The hits add up (capped at `MaxHit`, 0.85) into the balance meter,
+    thrown toward the side the board is off-centre on. The kind of entry is
+    stored on `jib.entry`:
+    - `popOn` / `pop`: off the safety;
+    - `transfer`: from another feature, or another part of this one;
+    - `sideOllieOn`: across a side edge;
+    - `ollieOn`: from the front.
+
+    `jib.inRotation` is the spin in the air.
+  - *Ollie onto the safety* (`landOnSafety`, spec 3.5): the game's landing
+    rules, then the board must match the safety's slope within
+    `Safety.LandingPitchTolerance` (15 degrees, sketchy beyond, `badAngle`
+    past 30). Then the rider rides on up it and can pop in the window.
+  - Popped off a safety and down on the water before its main: `landedInGap`.
+
 **The default park** (`parkLayout.ts`): the cable layout is the user's sketch
 (`docs/park-sketch.jpg`), a five-tower "house" loop with tall sides and a
 peaked roof to the north, about 586 m a lap, run counter-clockwise so the
@@ -294,7 +349,7 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 
 | Reason | Cause |
 |---|---|
-| `shortOllie` | Flew into a main below its top plus the clearance |
+| `shortOllie` | Flew into a main's front edge more than the tail-clip tolerance below its top plus the clearance |
 | `missedSafetyPop` | Gap safety without a valid pop |
 | `handleDropped` | Q at the wrong time, or a missed pass on a feature |
 | `underRotated` / `overRotated` | Spin or flip off at touchdown |
@@ -304,9 +359,15 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 | `fellOffFeature` | Balance out of range, stalled, or off the side |
 | `ropeYank` | Hard snap back to taut while off balance |
 | `badLandingYaw` | Board sideways without having spun |
-| `hardLanding` | Impact beyond what the legs absorb |
+| `hardLanding` | Impact beyond what the legs absorb (on a feature: over 8 m/s) |
 | `hitFeature` | Rode or flew into a kicker or safety the wrong way |
 | `letGo` | Let go of the handle (X) |
+| `clippedSide` | Side ollie-on short of the side edge, or landed short of the balance width (spec 3.3) |
+| `noseHitSide` | Side ollie-on at more than 25 degrees to the feature |
+| `overshoot` | Side hop past the far side of the balance width, or down low past its far edge |
+| `slippedOut` | Hard edge held into the pop: the base lands rolled |
+| `badAngle` | Board more than 30 degrees off a slide angle, or off a safety's slope |
+| `landedInGap` | Popped off a gap safety and came down in the gap |
 
 ## 9. Tricks, names and points
 

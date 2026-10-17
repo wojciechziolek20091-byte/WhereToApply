@@ -62,9 +62,11 @@ describe('obstacles (milestone 7)', () => {
     expect(classifySlide(slide.jib, featureSim(box('flush')).cfg)?.name).toBe('50-50');
   });
 
-  it('gap safety: no pop or an early pop crashes; a pop in the window gets on, the centre is a Pop-on', () => {
+  it('gap safety: no pop crashes, an early hop back onto the safety still needs the pop; a pop in the window gets on, the centre is a Pop-on', () => {
     expect(crashOf(play(box('gap'), () => ({}), noBalance).events)).toMatchObject({ reason: 'missedSafetyPop' });
-    expect(crashOf(play(box('gap'), (t) => ({ pop: between(3.1, 3.3)(t) }), noBalance).events)).toMatchObject({ reason: 'missedSafetyPop' });
+    const early = play(box('gap'), (t) => ({ pop: between(3.15, 3.2)(t) }), noBalance).events;
+    expect(modesOf(early)).toEqual(['onSafety', 'airborne', 'onSafety', 'crashed']);
+    expect(crashOf(early)).toMatchObject({ reason: 'missedSafetyPop' });
     const { s, events } = play(box('gap'), (t) => ({ pop: between(3.2, 3.5)(t) }), noBalance);
     const slide = events.find((e) => e.type === 'slideDone');
     if (slide?.type !== 'slideDone') throw new Error('no slide');
@@ -72,8 +74,8 @@ describe('obstacles (milestone 7)', () => {
     expect(classifySlide(slide.jib, s.cfg)?.name).toBe('Pop-on 50-50');
   });
 
-  it('flush safety: an early pop makes a sketchy entry (combo multiplier)', () => {
-    const { s, events } = play(box('flush'), (t) => ({ pop: between(3.0, 3.35)(t) }), noBalance);
+  it('flush safety: an early pop is lower, just short of the main is a tail clip: a sketchy entry (combo multiplier)', () => {
+    const { s, events } = play(box('flush'), (t) => ({ pop: between(2.9, 3.25)(t) }), noBalance);
     const slide = events.find((e) => e.type === 'slideDone');
     if (slide?.type !== 'slideDone') throw new Error('no slide');
     expect(slide.jib.sketchy).toBe(true);

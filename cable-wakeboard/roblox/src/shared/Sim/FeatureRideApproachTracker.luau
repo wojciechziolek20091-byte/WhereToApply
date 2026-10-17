@@ -10,6 +10,9 @@ local Vec = require(script.Parent.Vec)
 local DT = Config.DT
 local ApproachTracker = {}
 
+-- edgeAge on an approach that never had a hard edge (s).
+local NEVER = 99
+
 function ApproachTracker.trackApproach(s)
 	local r, cfg = s.rider, s.cfg
 	local A = cfg.featureRide.Approach
@@ -27,9 +30,10 @@ function ApproachTracker.trackApproach(s)
 				if not (best and score >= best.score) then
 					local angle = Scalar.wrapAngle(travel - f.heading)
 					local side = "front"
+					local featureSide = 0
 					if l.v < sh.vMin - A.FrontMargin or l.v > sh.vMax + A.FrontMargin then
-						local worldSide = (if l.v < sh.vMin then 1 else -1) * (if DetMath.cos(angle) >= 0 then 1 else -1)
-						side = if worldSide == Edge.toeSign(r) then "toeside" else "heelside"
+						featureSide = (if l.v < sh.vMin then 1 else -1) * (if DetMath.cos(angle) >= 0 then 1 else -1)
+						side = if featureSide == Edge.toeSign(r) then "toeside" else "heelside"
 					end
 					best = {
 						score = score,
@@ -42,6 +46,8 @@ function ApproachTracker.trackApproach(s)
 							side = side,
 							edge = Edge.edgeNorm(r, cfg.edge) * (if r.edgeAngle >= 0 then 1 else -1),
 							edgeTime = 0,
+							edgeAge = 0,
+							featureSide = featureSide,
 							speed = speed,
 							tension = r.ropeTension,
 							ropeAngle = Scalar.wrapAngle(r.ropeHeading - f.heading),
@@ -56,8 +62,10 @@ function ApproachTracker.trackApproach(s)
 		return
 	end
 	local a = best.state
-	local prev = if r.approach and r.approach.featureId == a.featureId then r.approach.edgeTime else 0
-	a.edgeTime = if math.abs(a.edge) >= A.HardEdge then prev + DT else 0
+	local same = if r.approach and r.approach.featureId == a.featureId then r.approach else nil
+	local hard = math.abs(a.edge) >= A.HardEdge
+	a.edgeTime = if hard then (if same then same.edgeTime else 0) + DT else 0
+	a.edgeAge = if hard then 0 else (if same then same.edgeAge else NEVER) + DT
 	r.approach = a
 end
 

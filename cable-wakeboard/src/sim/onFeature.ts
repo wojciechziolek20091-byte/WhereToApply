@@ -20,6 +20,7 @@ import type { SimState } from './world';
 import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
+import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
 
 /**
  * Kickers and obstacles (spec section 9), on any feature's ride pieces
@@ -97,6 +98,8 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     slideTimes: { fiftyFifty: 0, switchFiftyFifty: 0, backboard: 0, frontboard: 0, wallRide: 0 },
     slideOrder: [],
     entry,
+    inRotation: 0,
+    entryQuality: 1,
     sketchy,
     rot,
     noiseSeed: s.tick,
@@ -139,6 +142,8 @@ function leaveFeature(s: SimState, f: ResolvedFeature, popSpeed: number, popQual
   // Off a lip straight onto the next part (a pyramid's top), that part counts as left too.
   const onto = piece && piece.lip ? f.shape.pieces.find((q) => q.axis === 'u' && q.u0 === piece.u1 && q.part !== piece.part) : undefined;
   air.overFeature = `${f.def.id}:${onto ? onto.part : piece ? piece.part : 0}`;
+  // The part left from: landing on another one is a transfer.
+  air.cleared.push(air.overFeature);
   r.handle = keepHandle === 'passing' ? 'inFront' : keepHandle;
   return air;
 }
@@ -201,26 +206,21 @@ export function stepRamp(s: SimState, input: InputFrame, mem: InputMemory): void
     } else {
       // Safety pop: only the last part of the safety counts.
       const w = safetyWindow(piece, cfg);
-      if (ramp.u >= w.start) {
-        const centre = (w.start + w.end) / 2;
-        const perfect = Math.abs(ramp.u - centre) <= (cfg.safety.perfectFraction * (w.end - w.start)) / 2;
-        const main = flushNext(f, piece);
-        if (main) {
-          mountMain(s, f, main, ramp.u, ramp.v, vt, perfect ? 'popOn' : 'pop', ramp.sketchy);
-          return;
-        }
-        // A water gap before the main: pop across it.
-        r.vel = add(scale(t, vt), scale(right, vl));
-        const charge = ollieCharge(mem.popHeldTime, cfg);
-        const air = leaveFeature(s, f, ollieSpeed(charge, cfg) * cfg.safety.gapPopScale, charge, piece);
-        air.pendingEntry = perfect ? 'popOn' : 'pop';
-        return;
-      }
-      if (f.shape.safetyMode === 'Gap') {
-        crash(s, 'missedSafetyPop');
-        return;
-      }
-      ramp.sketchy = true;
+      // Into the air off the safety (spec 3.6): in the window, with the
+      // main flush, the board leaves at the main's height, so flying onto it
+      // needs no clearance check; an early pop is lower and has to clear it.
+      // A/D in the air rotates in (180-in, 270-in).
+      const inWindow = ramp.u >= w.start;
+      const centre = (w.start + w.end) / 2;
+      const perfect = inWindow && Math.abs(ramp.u - centre) <= (cfg.safety.perfectFraction * (w.end - w.start)) / 2;
+      const main = flushNext(f, piece);
+      r.vel = add(scale(t, vt), scale(right, vl));
+      const charge = ollieCharge(mem.popHeldTime, cfg);
+      const air = leaveFeature(s, f, ollieSpeed(charge, cfg) * cfg.safety.gapPopScale, charge, piece);
+      air.pendingEntry = perfect ? 'popOn' : 'pop';
+      if (main && inWindow) air.cleared.push(`${f.def.id}:${main.part}`);
+      if (ramp.sketchy) air.tailClip = true;
+      return;
     }
   }
 
@@ -526,6 +526,36 @@ function landOnRamp(s: SimState, f: ResolvedFeature, air: AirState, surface: Fea
 }
 
 /**
+ * Ollie onto a safety (spec 3.5): the game's landing rules, then the board has
+ * to match the slope (sketchy past LandingPitchTolerance, a crash past
+ * LandingPitchCrash) and the base be flat. Then up the safety as if ridden
+ * on, pop window and all.
+ */
+function landOnSafety(s: SimState, f: ResolvedFeature, air: AirState, surface: FeatureSurface, u: number, v: number): void {
+  const r = s.rider;
+  const R = s.cfg.featureRide;
+  const landing = evaluateLanding(r, air, surface.normal, s.cfg);
+  r.pos = toWorld(f, u, v, surface.height);
+  const pitch = safetyPitchError(air, surface.slope);
+  const reason = landing.crash ?? (pitch > R.Safety.LandingPitchCrash ? 'badAngle' : air.entry && air.entry.roll > R.Landing.MaxRoll ? 'slippedOut' : null);
+  if (reason) {
+    crash(s, reason, landing);
+    return;
+  }
+  if (Math.abs(Math.round(air.rot.spinAngle / Math.PI)) % 2 === 1) r.switchStance = !r.switchStance;
+  if (r.handle === 'passing') r.handle = 'inFront';
+  const keep = landingSpeedKeep(s.cfg, landing.impact, landing.clean);
+  r.vel = scale(surface.tangent, Math.max(dot(r.vel, surface.tangent) * keep, s.cfg.feature.stallSpeed + 0.5));
+  r.heading = f.heading;
+  r.air = null;
+  const sketchy = pitch > R.Safety.LandingPitchTolerance || air.tailClip;
+  r.ramp = { featureId: f.def.id, u, v, releaseTick: -1, releaseTimeToLip: -1, sketchy };
+  transition(s, 'onSafety', 'landedOnSafety');
+  s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: false });
+  s.events.push({ type: 'featureEnter', tick: s.tick, featureId: f.def.id });
+}
+
+/**
  * In the air over a feature. Coming in below a main's top plus
  * `ollie.clearance` clips its edge (short ollie); coming down on a ramp or a
  * safety is a crash; coming down on a landing ramp is a landing; coming down
@@ -535,6 +565,11 @@ function landOnRamp(s: SimState, f: ResolvedFeature, air: AirState, surface: Fea
 export function airOverFeature(s: SimState, air: AirState): boolean {
   const r = s.rider;
   const hit = featureUnder(s.features, r.pos);
+  const was = air.overFeature;
+  if (was !== null && (!hit || `${hit.feature.def.id}:${hit.surface.piece.part}` !== was) && overshotSide(s, air, was)) {
+    crash(s, 'overshoot');
+    return true;
+  }
   if (!hit) {
     air.overFeature = null;
     return false;
@@ -543,11 +578,14 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   const piece = surface.piece;
   const part = `${feature.def.id}:${piece.part}`;
   const isMain = surface.onTop && !piece.wall;
-  const clearance = isMain ? s.cfg.ollie.clearance : 0;
   if (air.overFeature !== part) {
-    if (r.pos.y < surface.height + clearance) {
-      crash(s, isMain ? 'shortOllie' : 'hitFeature');
-      return true;
+    if (!air.cleared.includes(part)) {
+      // Flying onto a main or a safety across its edge: EntryResolver's clearance rules.
+      const reason = isMain || piece.role === 'Safety' ? crossEdge(s, air, feature, local, surface, part) : r.pos.y < surface.height ? 'hitFeature' : null;
+      if (reason) {
+        crash(s, reason);
+        return true;
+      }
     }
     air.overFeature = part;
   }
@@ -556,25 +594,30 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
     landOnRamp(s, feature, air, surface, local.u, local.v);
     return true;
   }
+  if (piece.role === 'Safety') {
+    landOnSafety(s, feature, air, surface, local.u, local.v);
+    return true;
+  }
   if (!isMain) {
     crash(s, 'hitFeature');
     return true;
   }
   const heading = feature.shape.legacy ? feature.heading : pieceHeading(feature, piece);
-  const yaw = wrapAngle(r.heading + air.rot.spinAngle - heading);
-  const quarter = Math.round(yaw / (Math.PI / 2));
-  const boardAngle = quarter * (Math.PI / 2);
-  const offQuarter = Math.abs(yaw - boardAngle);
-  const level = { ...air, rot: { ...air.rot, spinAngle: Math.round(air.rot.spinAngle / Math.PI) * Math.PI } };
-  const landing = evaluateLanding(r, level, surface.normal, s.cfg);
-  if (offQuarter > s.cfg.landing.maxYawError || landing.crash) {
-    crash(s, landing.crash ?? 'badLandingYaw', landing);
+  const e = resolveLanding(s, air, feature, surface, local, heading);
+  const landing = e.landing;
+  if (!e.success) {
+    crash(s, e.failReason ?? 'badAngle', landing);
     return true;
   }
   if (r.handle === 'passing') r.handle = 'inFront';
-  const speed = Math.max(dot(r.vel, surface.tangent) * landingSpeedKeep(s.cfg, landing.impact, landing.clean), s.cfg.feature.stallSpeed + 0.5);
+  const keep = landingSpeedKeep(s.cfg, landing.impact, landing.clean) * e.speedKeep;
+  const speed = Math.max(dot(r.vel, surface.tangent) * keep, s.cfg.feature.stallSpeed + 0.5);
   r.air = null;
-  mountMain(s, feature, piece, local.u, local.v, speed, air.pendingEntry ?? 'ollieOn', false, boardAngle);
+  mountMain(s, feature, piece, local.u, local.v, speed, e.kind, e.sketchy, e.boardAngle);
+  const j = r.jib!;
+  j.balance = e.balance;
+  j.inRotation = e.inRotation;
+  j.entryQuality = e.quality;
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
   return true;

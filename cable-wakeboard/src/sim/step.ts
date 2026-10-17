@@ -10,6 +10,8 @@ import { type InputFrame, updateInputMemory } from './input';
 import { addScaled, horizontalLength, scale, UP, vec3, add } from './math/vec';
 import { airOverFeature, stepRamp, stepSlide, tryEnterFeature } from './onFeature';
 import { trackApproach } from './featureRide/approachTracker';
+import { landedInGap, startEntry } from './featureRide/entryResolver';
+import { sign } from './math/scalar';
 import { ollieCharge, ollieSpeed, waterTrickTiming } from './pop';
 import { updatePosture } from './posture';
 import { canArm, planWaterTrick, shouldDisarm } from './waterTrick';
@@ -84,7 +86,8 @@ function stepWater(s: SimState, input: InputFrame): void {
       air.trick = plan.trick;
       return;
     }
-    takeOff(s, r.mode === 'ridingBlind' ? 'blindPop' : 'flat', null, ollieSpeed(charge, cfg), charge);
+    const air = takeOff(s, r.mode === 'ridingBlind' ? 'blindPop' : 'flat', null, ollieSpeed(charge, cfg), charge);
+    startEntry(s, air, sign(input.steer), charge);
     return;
   }
   if (r.mode === 'riding' && canArm(r, cfg)) transition(s, 'waterTrickLoad', 'loaded');
@@ -108,7 +111,10 @@ function stepAirborne(s: SimState, input: InputFrame): void {
   if (!rope) return;
   if (stepAir(r, air, rope.force, input, s.inputs, cfg)) s.events.push({ type: 'handlePass', tick: s.tick });
   if (airOverFeature(s, air)) return;
-  if (r.pos.y <= 0 && r.vel.y < 0) touchDown(s, air, UP, 0);
+  if (r.pos.y <= 0 && r.vel.y < 0) {
+    if (landedInGap(s, air)) crash(s, 'landedInGap');
+    else touchDown(s, air, UP, 0);
+  }
 }
 
 function stepCrashed(s: SimState): void {

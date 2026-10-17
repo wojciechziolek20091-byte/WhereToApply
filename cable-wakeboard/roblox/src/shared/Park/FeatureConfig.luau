@@ -55,7 +55,7 @@ local FeatureConfig = {
 	},
 	Bob = { Amplitude = 0.03, Frequency = 0.2, FreezeRadius = 6 },
 	Approach = { EntryDistance = 12, IdealSpeed = 8.3, IdealPopOffset = 0.06, NameTagDistance = 25 },
-	PopZoneLength = 1,
+	PopZoneLength = 0.5,
 	Validator = {
 		SafetySlope = { 12, 22 },
 		SafetyDepth = { 0.15, 0.35 },

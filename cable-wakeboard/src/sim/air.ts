@@ -62,6 +62,10 @@ export function createAirState(
     lipPop: false,
     overFeature: null,
     pendingEntry: null,
+    entry: null,
+    crossing: null,
+    cleared: [],
+    tailClip: false,
     preWind: 0,
   };
 }

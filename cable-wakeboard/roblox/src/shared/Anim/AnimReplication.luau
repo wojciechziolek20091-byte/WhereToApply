@@ -32,6 +32,12 @@ local CRASHES = {
 	"hardLanding",
 	"hitFeature",
 	"letGo",
+	"clippedSide",
+	"noseHitSide",
+	"overshoot",
+	"slippedOut",
+	"badAngle",
+	"landedInGap",
 }
 
 R.PACKET_LENGTH = 50

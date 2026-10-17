@@ -13,10 +13,22 @@ import { DEFAULT_CONFIG } from '../src/sim/config';
 import { DEFAULT_PARK } from '../src/sim/park';
 import { bundleSim } from './parity/luauBundle';
 import { type TraceRow, traceRun } from './parity/trace';
+import { ENTRY_SCENARIOS, entryTrace } from './parity/entryTrace';
 
 const LUAU = process.env.LUAU;
 const TRACE_LUAU = join(__dirname, '../roblox/tests/sim_trace.luau');
 const DUMP_LUAU = join(__dirname, '../roblox/tests/sim_dump.luau');
+const ENTRY_LUAU = join(__dirname, '../roblox/tests/entry_trace.luau');
+
+/** A JSON value as a Luau literal (arrays 1-based, numbers round-trip exactly). */
+const luauLiteral = (v: unknown): string =>
+  Array.isArray(v)
+    ? `{ ${v.map(luauLiteral).join(', ')} }`
+    : v && typeof v === 'object'
+      ? `{ ${Object.entries(v).map(([k, x]) => `${k} = ${luauLiteral(x)}`).join(', ')} }`
+      : typeof v === 'string'
+        ? JSON.stringify(v)
+        : String(v);
 /** Run to the end of both passes (about 2.5 min of game time). */
 const TICKS = 20000;
 const SEEDS = [1, 7, 2026];
@@ -166,6 +178,26 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     const events = ts.map((r) => String(r[33] ?? '')).join(',');
     expect(events).toContain('featureEnter');
     expect(events).toContain('slideDone');
+  });
+
+  it('feature entries (EntryResolver): side hops, clearance, slip, overshoot and safety pops trace the same', () => {
+    const trace = readFileSync(ENTRY_LUAU, 'utf8');
+    const calls = ENTRY_SCENARIOS.map((sc) => `print("#")\nentryTrace(${luauLiteral(sc)})`).join('\n');
+    const out = runLuau(`local entryTrace = (function()\n${trace}\nend)()\n${calls}`);
+    const blocks = out.trimEnd().split('#\n').slice(1);
+    expect(blocks).toHaveLength(ENTRY_SCENARIOS.length);
+    const reasons: string[] = [];
+    ENTRY_SCENARIOS.forEach((sc, i) => {
+      const ts = entryTrace(sc);
+      const lu = blocks[i]!.trimEnd().split('\n').map((l) => l.split('\t'));
+      const d = firstDivergence(ts, lu);
+      expect(d, sc.name).toBeNull();
+      const last = ts.at(-1)!;
+      reasons.push(`${String(last[last.length - 1])}/${String(ts.find((r) => r[17] !== '-')?.[17] ?? '-')}`);
+    });
+    // The scenarios cover the entry outcomes they are named for.
+    expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseHitSide/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
+    expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(3);
   });
 
   it.each([11, 23, 37])('catalogue map seed %i (all 15 wake park features): identical trace', (seed) => {

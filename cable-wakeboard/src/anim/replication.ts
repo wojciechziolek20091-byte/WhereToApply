@@ -33,6 +33,12 @@ const CRASHES = [
   'hardLanding',
   'hitFeature',
   'letGo',
+  'clippedSide',
+  'noseHitSide',
+  'overshoot',
+  'slippedOut',
+  'badAngle',
+  'landedInGap',
 ];
 
 export const PACKET_LENGTH = 50;

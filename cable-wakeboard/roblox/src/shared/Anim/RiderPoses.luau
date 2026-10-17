@@ -407,6 +407,12 @@ RiderPoses.CRASH_LEAD_IN = {
 	caughtEdgeBlind = "crashBack",
 	fellOffFeature = "crashSlipOff",
 	ropeYank = "crashYank",
+	clippedSide = "crashForward",
+	noseHitSide = "crashForward",
+	overshoot = "crashSlipOff",
+	slippedOut = "crashSlipOff",
+	badAngle = "crashSide",
+	landedInGap = "crashForward",
 }
 
 return RiderPoses

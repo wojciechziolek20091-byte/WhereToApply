@@ -15,6 +15,9 @@ import type { SimState } from '../world';
  * and how long it has been held hard, speed, rope tension and direction.
  * EntryResolver reads it; the HUD's approach guide shows it.
  */
+/** edgeAge on an approach that never had a hard edge (s). */
+const NEVER = 99;
+
 export function trackApproach(s: SimState): void {
   const { rider: r, cfg } = s;
   const A = cfg.featureRide.Approach;
@@ -32,10 +35,11 @@ export function trackApproach(s: SimState): void {
     if (best && score >= best.score) continue;
     const angle = wrapAngle(travel - f.heading);
     let side: ApproachState['side'] = 'front';
+    let featureSide = 0;
     if (l.v < sh.vMin - A.FrontMargin || l.v > sh.vMax + A.FrontMargin) {
       // The feature's side of the rider, in the rider's direction of travel.
-      const worldSide = (l.v < sh.vMin ? 1 : -1) * (cos(angle) >= 0 ? 1 : -1);
-      side = worldSide === toeSign(r) ? 'toeside' : 'heelside';
+      featureSide = (l.v < sh.vMin ? 1 : -1) * (cos(angle) >= 0 ? 1 : -1);
+      side = featureSide === toeSign(r) ? 'toeside' : 'heelside';
     }
     best = {
       score,
@@ -48,6 +52,8 @@ export function trackApproach(s: SimState): void {
         side,
         edge: edgeNorm(r, cfg.edge) * (r.edgeAngle >= 0 ? 1 : -1),
         edgeTime: 0,
+        edgeAge: 0,
+        featureSide,
         speed,
         tension: r.ropeTension,
         ropeAngle: wrapAngle(r.ropeHeading - f.heading),
@@ -60,7 +66,9 @@ export function trackApproach(s: SimState): void {
   }
   const a = best.state;
   // The edge clock runs while the edge is hard, on the same feature.
-  const prev = r.approach && r.approach.featureId === a.featureId ? r.approach.edgeTime : 0;
-  a.edgeTime = Math.abs(a.edge) >= A.HardEdge ? prev + DT : 0;
+  const same = r.approach && r.approach.featureId === a.featureId ? r.approach : null;
+  const hard = Math.abs(a.edge) >= A.HardEdge;
+  a.edgeTime = hard ? (same ? same.edgeTime : 0) + DT : 0;
+  a.edgeAge = hard ? 0 : (same ? same.edgeAge : NEVER) + DT;
   r.approach = a;
 }

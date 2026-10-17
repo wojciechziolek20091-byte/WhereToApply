@@ -8,6 +8,7 @@ local Config = require(script.Parent.Config)
 local DetMath = require(script.Parent.DetMath)
 local Edge = require(script.Parent.Edge)
 local Features = require(script.Parent.Features)
+local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
 local Handle = require(script.Parent.Handle)
@@ -111,6 +112,8 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		slideTimes = { fiftyFifty = 0, switchFiftyFifty = 0, backboard = 0, frontboard = 0, wallRide = 0 },
 		slideOrder = {},
 		entry = entry,
+		inRotation = 0,
+		entryQuality = 1,
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
@@ -164,6 +167,8 @@ local function leaveFeature(s, f, popSpeed, popQuality, from)
 		end
 	end
 	air.overFeature = f.def.id .. ":" .. tostring(if onto then onto.part elseif piece then piece.part else 0)
+	-- The part left from: landing on another one is a transfer.
+	table.insert(air.cleared, air.overFeature)
 	r.handle = if keepHandle == "passing" then "inFront" else keepHandle
 	return air
 end
@@ -250,27 +255,24 @@ function OnFeature.stepRamp(s, input, mem)
 		if piece.role ~= "Safety" then
 			ramp.releaseTimeToLip = (piece.u1 - ramp.u) / horizontalSpeed
 		else
+			-- Into the air off the safety (spec 3.6): in the window with a flush
+			-- main, no clearance check onto it; an early pop has to clear it.
 			local w = OnFeature.safetyWindow(piece, cfg)
-			if ramp.u >= w.start then
-				local centre = (w.start + w["end"]) / 2
-				local perfect = math.abs(ramp.u - centre) <= (cfg.safety.perfectFraction * (w["end"] - w.start)) / 2
-				local main = flushNext(f, piece)
-				if main then
-					mountMain(s, f, main, ramp.u, ramp.v, vt, if perfect then "popOn" else "pop", ramp.sketchy)
-					return
-				end
-				-- A water gap before the main: pop across it.
-				r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
-				local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
-				local air = leaveFeature(s, f, Pop.ollieSpeed(charge, cfg) * cfg.safety.gapPopScale, charge, piece)
-				air.pendingEntry = if perfect then "popOn" else "pop"
-				return
+			local inWindow = ramp.u >= w.start
+			local centre = (w.start + w["end"]) / 2
+			local perfect = inWindow and math.abs(ramp.u - centre) <= (cfg.safety.perfectFraction * (w["end"] - w.start)) / 2
+			local main = flushNext(f, piece)
+			r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
+			local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
+			local air = leaveFeature(s, f, Pop.ollieSpeed(charge, cfg) * cfg.safety.gapPopScale, charge, piece)
+			air.pendingEntry = if perfect then "popOn" else "pop"
+			if main and inWindow then
+				table.insert(air.cleared, f.def.id .. ":" .. tostring(main.part))
 			end
-			if f.shape.safetyMode == "Gap" then
-				Actions.crash(s, "missedSafetyPop")
-				return
+			if ramp.sketchy then
+				air.tailClip = true
 			end
-			ramp.sketchy = true
+			return
 		end
 	end
 
@@ -559,10 +561,55 @@ local function landOnRamp(s, f, air, surface, u, v)
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = false })
 end
 
+-- Ollie onto a safety (spec 3.5): landing rules, slope match, flat base; then up it.
+local function landOnSafety(s, f, air, surface, u, v)
+	local r = s.rider
+	local R = s.cfg.featureRide
+	local landing = Landing.evaluateLanding(r, air, surface.normal, s.cfg)
+	r.pos = Features.toWorld(f, u, v, surface.height)
+	local pitch = EntryResolver.safetyPitchError(air, surface.slope)
+	local reason = landing.crash
+	if not reason then
+		if pitch > R.Safety.LandingPitchCrash then
+			reason = "badAngle"
+		elseif air.entry and air.entry.roll > R.Landing.MaxRoll then
+			reason = "slippedOut"
+		end
+	end
+	if reason then
+		Actions.crash(s, reason, landing)
+		return
+	end
+	if math.abs(Scalar.round(air.rot.spinAngle / math.pi)) % 2 == 1 then
+		r.switchStance = not r.switchStance
+	end
+	if r.handle == "passing" then
+		r.handle = "inFront"
+	end
+	local keep = BodyPhysics.landingSpeedKeep(s.cfg, landing.impact, landing.clean)
+	r.vel = Vec.scale(surface.tangent, math.max(Vec.dot(r.vel, surface.tangent) * keep, s.cfg.feature.stallSpeed + 0.5))
+	r.heading = f.heading
+	r.air = nil
+	local sketchy = pitch > R.Safety.LandingPitchTolerance or air.tailClip
+	r.ramp = { featureId = f.def.id, u = u, v = v, releaseTick = -1, releaseTimeToLip = -1, sketchy = sketchy }
+	Fsm.transition(s, "onSafety", "landedOnSafety")
+	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = false })
+	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = f.def.id })
+end
+
 -- In the air over a feature: clearance check, crashes, landing on a main or a landing ramp.
 function OnFeature.airOverFeature(s, air)
 	local r = s.rider
 	local hit = Features.featureUnder(s.features, r.pos)
+	local was = air.overFeature
+	if
+		was ~= nil
+		and (not hit or hit.feature.def.id .. ":" .. tostring(hit.surface.piece.part) ~= was)
+		and EntryResolver.overshotSide(s, air, was)
+	then
+		Actions.crash(s, "overshoot")
+		return true
+	end
 	if not hit then
 		air.overFeature = nil
 		return false
@@ -571,11 +618,18 @@ function OnFeature.airOverFeature(s, air)
 	local piece = surface.piece
 	local part = feature.def.id .. ":" .. tostring(piece.part)
 	local isMain = surface.onTop and not piece.wall
-	local clearance = if isMain then s.cfg.ollie.clearance else 0
 	if air.overFeature ~= part then
-		if r.pos.y < surface.height + clearance then
-			Actions.crash(s, if isMain then "shortOllie" else "hitFeature")
-			return true
+		if not table.find(air.cleared, part) then
+			local reason = nil
+			if isMain or piece.role == "Safety" then
+				reason = EntryResolver.crossEdge(s, air, feature, l, surface, part)
+			elseif r.pos.y < surface.height then
+				reason = "hitFeature"
+			end
+			if reason then
+				Actions.crash(s, reason)
+				return true
+			end
 		end
 		air.overFeature = part
 	end
@@ -586,32 +640,32 @@ function OnFeature.airOverFeature(s, air)
 		landOnRamp(s, feature, air, surface, l.u, l.v)
 		return true
 	end
+	if piece.role == "Safety" then
+		landOnSafety(s, feature, air, surface, l.u, l.v)
+		return true
+	end
 	if not isMain then
 		Actions.crash(s, "hitFeature")
 		return true
 	end
 	local heading = if feature.shape.legacy then feature.heading else Features.pieceHeading(feature, piece)
-	local yaw = Scalar.wrapAngle(r.heading + air.rot.spinAngle - heading)
-	local quarter = Scalar.round(yaw / (math.pi / 2))
-	local boardAngle = quarter * (math.pi / 2)
-	local offQuarter = math.abs(yaw - boardAngle)
-	local level = table.clone(air)
-	level.rot = table.clone(air.rot)
-	level.rot.spinAngle = Scalar.round(air.rot.spinAngle / math.pi) * math.pi
-	local landing = Landing.evaluateLanding(r, level, surface.normal, s.cfg)
-	if offQuarter > s.cfg.landing.maxYawError or landing.crash then
-		Actions.crash(s, landing.crash or "badLandingYaw", landing)
+	local e = EntryResolver.resolveLanding(s, air, feature, surface, l, heading)
+	local landing = e.landing
+	if not e.success then
+		Actions.crash(s, e.failReason or "badAngle", landing)
 		return true
 	end
 	if r.handle == "passing" then
 		r.handle = "inFront"
 	end
-	local speed = math.max(
-		Vec.dot(r.vel, surface.tangent) * BodyPhysics.landingSpeedKeep(s.cfg, landing.impact, landing.clean),
-		s.cfg.feature.stallSpeed + 0.5
-	)
+	local keep = BodyPhysics.landingSpeedKeep(s.cfg, landing.impact, landing.clean) * e.speedKeep
+	local speed = math.max(Vec.dot(r.vel, surface.tangent) * keep, s.cfg.feature.stallSpeed + 0.5)
 	r.air = nil
-	mountMain(s, feature, piece, l.u, l.v, speed, air.pendingEntry or "ollieOn", false, boardAngle)
+	mountMain(s, feature, piece, l.u, l.v, speed, e.kind, e.sketchy, e.boardAngle)
+	local j = r.jib
+	j.balance = e.balance
+	j.inRotation = e.inRotation
+	j.entryQuality = e.quality
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true

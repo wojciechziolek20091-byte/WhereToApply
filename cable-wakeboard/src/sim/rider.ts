@@ -48,7 +48,19 @@ export type CrashReason =
   /** Rode or flew into a feature the wrong way. */
   | 'hitFeature'
   /** Let go of the handle (X). */
-  | 'letGo';
+  | 'letGo'
+  /** Side ollie-on short of the side edge, or landed short of the balance width (feature riding spec 3.3). */
+  | 'clippedSide'
+  /** Side ollie-on at too big an angle to the feature. */
+  | 'noseHitSide'
+  /** Side hop past the far edge of the balance width. */
+  | 'overshoot'
+  /** A hard edge held to takeoff rolled the base on landing. */
+  | 'slippedOut'
+  /** Board too far off a slide angle at contact. */
+  | 'badAngle'
+  /** Popped off a gap safety into the gap. */
+  | 'landedInGap';
 
 export type TakeoffSource = 'flat' | 'kicker' | 'feature' | 'waterTrick' | 'lineLift' | 'blindPop';
 
@@ -153,6 +165,26 @@ export interface AirState {
   overFeature: string | null;
   /** Popped off a gap safety: landing on its main is this entry (Pop-on / pop). */
   pendingEntry: 'popOn' | 'pop' | null;
+  /** Water takeoff near a feature (EntryResolver): how the rider came at it. */
+  entry: AirEntry | null;
+  /** The last feature part flown onto across an edge, and which edge: 0 its front, +-1 its right / left side. */
+  crossing: { featureId: string; part: string; side: number; height: number } | null;
+  /** Feature parts already left from (no clearance check flying over them). */
+  cleared: string[];
+  /** Crossed an edge short by less than the tail-clip tolerance: the landing is sketchy. */
+  tailClip: boolean;
+}
+
+/** How the rider came at a feature when popping off the water (ApproachTracker at takeoff). */
+export interface AirEntry {
+  featureId: string;
+  side: ApproachState['side'];
+  /** Approach angle to the feature axis (rad, 0..PI/2). */
+  angle: number;
+  /** Sideways hop toward the feature (m/s), 0 if none. */
+  hop: number;
+  /** Roll of the base left by a hard edge held to takeoff (rad). */
+  roll: number;
 }
 
 /** Contact with a feature surface (kicker ramp or the safety of a box or rail). */
@@ -189,12 +221,19 @@ export interface JibState {
   /** Slides in the order they were first held. */
   slideOrder: SlideId[];
   /** How the rider got on: a perfect pop off the safety, a pop in its window, an ollie or air onto it, or rode on. */
-  entry: 'popOn' | 'pop' | 'ollieOn' | 'rideOn';
+  entry: JibEntry;
+  /** Spin in the air before landing on the feature (rad, signed; 0 for ride-ons). */
+  inRotation: number;
+  /** 0..1 entry quality (EntryResolver). */
+  entryQuality: number;
   /** Early pop onto a flush main: combo multiplier x0.8. */
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */
   rot: RotationState;
 }
+
+/** How the rider got onto a feature (EntryResolver). */
+export type JibEntry = 'popOn' | 'pop' | 'ollieOn' | 'sideOllieOn' | 'transfer' | 'rideOn';
 
 /** How the rider is coming at the nearest feature (featureRide/approachTracker.ts). */
 export interface ApproachState {
@@ -213,6 +252,10 @@ export interface ApproachState {
   edge: number;
   /** Seconds the edge has been held past FeatureRide.Approach.HardEdge (0 once flat). */
   edgeTime: number;
+  /** Seconds since the edge was last past HardEdge (0 while it is; large if never on this approach). */
+  edgeAge: number;
+  /** The feature's side of the direction of travel: +1 right, -1 left, 0 dead ahead. */
+  featureSide: number;
   speed: number;
   tension: number;
   /** Rope direction relative to the feature axis (rad). */

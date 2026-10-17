@@ -5,11 +5,13 @@ local Cable = require(script.Parent.Cable)
 local Config = require(script.Parent.Config)
 local Edge = require(script.Parent.Edge)
 local FeatureRideApproachTracker = require(script.Parent.FeatureRideApproachTracker)
+local FeatureRideEntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local Fsm = require(script.Parent.Fsm)
 local Hydro = require(script.Parent.Hydro)
 local Input = require(script.Parent.Input)
 local OnFeature = require(script.Parent.OnFeature)
 local Pop = require(script.Parent.Pop)
+local Scalar = require(script.Parent.Scalar)
 local Posture = require(script.Parent.Posture)
 local Vec = require(script.Parent.Vec)
 local WaterTrick = require(script.Parent.WaterTrick)
@@ -92,7 +94,8 @@ local function stepWater(s, input)
 			air.trick = trick
 			return
 		end
-		Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, Pop.ollieSpeed(charge, cfg), charge)
+		local air = Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, Pop.ollieSpeed(charge, cfg), charge)
+		FeatureRideEntryResolver.startEntry(s, air, Scalar.sign(input.steer), charge)
 		return
 	end
 	if r.mode == "riding" and WaterTrick.canArm(r, cfg) then
@@ -129,7 +132,11 @@ local function stepAirborne(s, input)
 		return
 	end
 	if r.pos.y <= 0 and r.vel.y < 0 then
-		Actions.touchDown(s, air, Vec.UP, 0)
+		if FeatureRideEntryResolver.landedInGap(s, air) then
+			Actions.crash(s, "landedInGap")
+		else
+			Actions.touchDown(s, air, Vec.UP, 0)
+		end
 	end
 end
 

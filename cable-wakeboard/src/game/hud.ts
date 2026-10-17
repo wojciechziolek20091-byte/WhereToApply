@@ -30,6 +30,12 @@ const CRASH_NAMES: Record<CrashReason, string> = {
   hardLanding: 'Landed too hard',
   hitFeature: 'Hit the feature',
   letGo: 'Let go of the handle',
+  clippedSide: 'Clipped the side',
+  noseHitSide: 'Nose hit the side: approach too steep',
+  overshoot: 'Overshot the feature',
+  slippedOut: 'Slipped out: edge still on',
+  badAngle: 'Bad angle on the feature',
+  landedInGap: 'Landed in the gap',
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, text = ''): HTMLElementTagNameMap[K] => {
