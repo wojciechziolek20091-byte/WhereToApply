@@ -196,6 +196,29 @@ export interface JibState {
   rot: RotationState;
 }
 
+/** How the rider is coming at the nearest feature (featureRide/approachTracker.ts). */
+export interface ApproachState {
+  featureId: string;
+  /** Metres before the feature's start along its axis (negative once alongside it). */
+  toStart: number;
+  /** Offset from the feature's centre line (m, + to the feature's right). */
+  lateral: number;
+  /** Gap to the feature's nearest side edge (m; 0 when in line with it). */
+  sideGap: number;
+  /** Direction of travel relative to the feature axis (rad, + turning toward its right). */
+  angle: number;
+  /** Where the feature is: dead ahead (riding at its end), on the heelside or the toeside. */
+  side: 'front' | 'heelside' | 'toeside';
+  /** Edge 0..1, + heelside. */
+  edge: number;
+  /** Seconds the edge has been held past FeatureRide.Approach.HardEdge (0 once flat). */
+  edgeTime: number;
+  speed: number;
+  tension: number;
+  /** Rope direction relative to the feature axis (rad). */
+  ropeAngle: number;
+}
+
 export interface RiderState {
   mode: RiderMode;
   /** Board contact point. y = 0 on the water. */
@@ -239,6 +262,8 @@ export interface RiderState {
   air: AirState | null;
   ramp: RampState | null;
   jib: JibState | null;
+  /** The approach to the nearest feature while on the water, else null. */
+  approach: ApproachState | null;
   /** Seconds left before the respawn while crashed. */
   crashTimer: number;
   lastCrash: CrashReason | null;

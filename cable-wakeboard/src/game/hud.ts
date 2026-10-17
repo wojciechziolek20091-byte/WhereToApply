@@ -84,6 +84,8 @@ export class Hud {
   private seenCrashes = 0;
   private helpOpen = false;
   private debugOpen = false;
+  private readonly guide: HTMLElement;
+  private guideOpen = false;
   private lastRun: RunState | null = null;
   private readonly el: HTMLElement;
 
@@ -158,6 +160,8 @@ export class Hud {
     this.help.hidden = true;
     this.debug = el('div', 'debug-panel', root);
     this.debug.hidden = true;
+    this.guide = el('div', 'approach-guide', root);
+    this.guide.hidden = true;
 
     this.status = el('div', 'status-line', root);
     this.result = el('div', 'result', root);
@@ -172,6 +176,12 @@ export class Hud {
   toggleDebug(): void {
     this.debugOpen = !this.debugOpen;
     this.debug.hidden = !this.debugOpen;
+  }
+
+  /** F8: the approach guide (feature riding spec 3.1): what ApproachTracker sees. */
+  toggleGuide(): void {
+    this.guideOpen = !this.guideOpen;
+    this.guide.hidden = !this.guideOpen;
   }
 
   private flash(text: string, kind: 'trick' | 'fall', now: number): void {
@@ -308,6 +318,22 @@ export class Hud {
       ]
         .map(([k, v]) => `<div><span>${k}</span><b>${escape(String(v))}</b></div>`)
         .join('');
+    }
+
+    if (this.guideOpen) {
+      const a = r.approach;
+      this.guide.innerHTML = a
+        ? [
+            ['Feature', `${a.featureId} (${a.side})`],
+            ['To start', `${a.toStart.toFixed(1)} m`],
+            ['Lateral / gap', `${a.lateral.toFixed(2)} / ${a.sideGap.toFixed(2)} m`],
+            ['Angle', degs(a.angle)],
+            ['Edge / held', `${a.edge.toFixed(2)} / ${a.edgeTime.toFixed(2)} s`],
+            ['Speed', `${a.speed.toFixed(1)} m/s`],
+          ]
+            .map(([k, v]) => `<div><span>${k}</span><b>${escape(String(v))}</b></div>`)
+            .join('')
+        : '<div><span>No feature ahead</span></div>';
     }
 
     if (run.finished && run.score) {

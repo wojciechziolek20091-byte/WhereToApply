@@ -256,6 +256,21 @@ ridden in `onFeature.ts`.
     the board's angle on the feature (`air.spinStart`), so leaving a boardslide
     needs a "90 Off" or "270 Off" spin to land.
 
+**Feature riding** (`src/sim/featureRide/`, the feature riding spec; Luau
+twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
+(`featureRide/config.ts`, `FeatureRideConfig.luau`).
+
+- **ApproachTracker** (`approachTracker.ts`, every water step): picks the
+  nearest feature ahead within `Approach.Range` (25 m) and
+  `Approach.LateralRange` (8 m) of its side. `rider.approach` holds the
+  distance to its start, the lateral offset from its centre line, the gap to
+  its nearest side, and the approach angle (travel minus feature heading).
+  It also holds the side: `front` within `FrontMargin` (0.3 m) of its width,
+  otherwise `toeside` or `heelside` by the rider's stance. It holds the edge
+  (signed, +1 heelside), how long the edge has been held at least
+  `HardEdge` (0.5), and speed, rope tension and rope angle. F8 in the web game
+  shows it (the approach guide).
+
 **The default park** (`parkLayout.ts`): the cable layout is the user's sketch
 (`docs/park-sketch.jpg`), a five-tower "house" loop with tall sides and a
 peaked roof to the north, about 586 m a lap, run counter-clockwise so the

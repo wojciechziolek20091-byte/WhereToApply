@@ -117,6 +117,7 @@ function frame(now: number): void {
   if (keys.consume('KeyP')) paused = !paused;
   if (keys.consume('KeyH')) hud.toggleHelp();
   if (keys.consume('F3')) hud.toggleDebug();
+  if (keys.consume('F8')) hud.toggleGuide();
   if (keys.consume('Enter')) {
     run = createRun(CONFIG, PARK);
     prev = snapshotOf(run.sim);

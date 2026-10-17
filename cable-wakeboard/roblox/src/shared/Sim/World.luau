@@ -39,6 +39,7 @@ function World.createRider(cfg, pos, vel, heading)
 		air = nil,
 		ramp = nil,
 		jib = nil,
+		approach = nil,
 		crashTimer = 0,
 		lastCrash = nil,
 		modeTime = 0,

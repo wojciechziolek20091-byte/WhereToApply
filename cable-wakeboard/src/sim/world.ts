@@ -53,6 +53,7 @@ export function createRider(cfg: SimConfig, pos: Vec3, vel: Vec3, heading: numbe
     air: null,
     ramp: null,
     jib: null,
+    approach: null,
     crashTimer: 0,
     lastCrash: null,
     modeTime: 0,

@@ -9,6 +9,7 @@ import { edgeNorm } from './edge';
 import { type InputFrame, updateInputMemory } from './input';
 import { addScaled, horizontalLength, scale, UP, vec3, add } from './math/vec';
 import { airOverFeature, stepRamp, stepSlide, tryEnterFeature } from './onFeature';
+import { trackApproach } from './featureRide/approachTracker';
 import { ollieCharge, ollieSpeed, waterTrickTiming } from './pop';
 import { updatePosture } from './posture';
 import { canArm, planWaterTrick, shouldDisarm } from './waterTrick';
@@ -54,6 +55,7 @@ function stepWater(s: SimState, input: InputFrame): void {
   r.pos = addScaled(r.pos, r.vel, DT);
   r.pos = vec3(r.pos.x, 0, r.pos.z);
   updateHeading(r, r.ropeHeading, rope.tension, horizontalLength(r.vel), cfg.edge, DT);
+  trackApproach(s);
   if (input.pop) r.popCharge = ollieCharge(mem.popHeldTime, cfg);
 
   if (r.spinOut) {

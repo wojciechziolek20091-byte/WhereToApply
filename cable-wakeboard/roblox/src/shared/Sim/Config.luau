@@ -115,6 +115,7 @@ Config.DEFAULT_CONFIG = {
 		landingCostPerMS = 0.012,
 		sketchyCost = 2,
 	},
+	featureRide = { Approach = { Range = 25, LateralRange = 8, FrontMargin = 0.3, HardEdge = 0.5, FlattenDistance = 1.5 } },
 	debug = { enabled = true },
 }
 

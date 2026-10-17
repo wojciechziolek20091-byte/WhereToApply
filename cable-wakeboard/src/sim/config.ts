@@ -3,6 +3,8 @@
  * section models. Defaults are starting points for tuning, not measurements.
  */
 
+import { DEFAULT_FEATURE_RIDE, type FeatureRideConfig } from './featureRide/config';
+
 export const DT = 1 / 60;
 export const GRAVITY = 9.81;
 
@@ -387,6 +389,8 @@ export interface SimConfig {
   run: RunConfig;
   scoring: ScoringConfig;
   physics: PhysicsConfig;
+  /** Feature riding (feature riding spec): FeatureRideConfig. */
+  featureRide: FeatureRideConfig;
   debug: DebugConfig;
 }
 
@@ -542,6 +546,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     landingCostPerMS: 0.012,
     sketchyCost: 2,
   },
+  featureRide: DEFAULT_FEATURE_RIDE,
   debug: { enabled: true },
 };
 
