@@ -10,11 +10,11 @@ local FeatureChallenges = {}
 export type Challenge = { id: string, feature: string, text: string, kind: string, slide: string?, entry: string?, time: number?, full: boolean? }
 
 FeatureChallenges.LIST = {
-	{ id = "C_PipeBackboard", feature = "S2_PipeRail", text = "Backboard the full pipe rail", kind = "slide", slide = "backboard", full = true },
+	{ id = "C_PipeBackboard", feature = "S2_PipeRail", text = "Backside boardslide the full pipe rail", kind = "slide", slide = "backboard", full = true },
 	{ id = "C_MediumAir", feature = "S1_MediumKicker", text = "Air over 1.1 s off the medium kicker", kind = "airtime", time = 1.1 },
 	{ id = "C_FunboxFull", feature = "S1_Funbox", text = "50-50 the funbox top to bottom", kind = "slide", slide = "fiftyFifty", full = true },
 	{ id = "C_GapPopOn", feature = "S2_GapBox", text = "Pop-on the gap box", kind = "entry", entry = "popOn" },
-	{ id = "C_KinkFrontboard", feature = "S2_FlatDownRail", text = "Frontboard the flat-down rail for 1 s", kind = "slide", slide = "frontboard", time = 1.0 },
+	{ id = "C_KinkFrontboard", feature = "S2_FlatDownRail", text = "Frontside boardslide the flat-down rail for 1 s", kind = "slide", slide = "frontboard", time = 1.0 },
 	{ id = "C_Transfer", feature = "S3_Transfer", text = "Transfer from box A to box B", kind = "entry", entry = "transfer" },
 	{ id = "C_ProAir", feature = "S3_ProKicker", text = "Air over 1.5 s off the pro kicker", kind = "airtime", time = 1.5 },
 	{ id = "C_StepUp", feature = "S4_StepUp", text = "Pop up to the high rail of the step-up", kind = "entry", entry = "transfer" },

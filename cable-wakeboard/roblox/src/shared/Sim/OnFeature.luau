@@ -10,9 +10,9 @@ local Edge = require(script.Parent.Edge)
 local Features = require(script.Parent.Features)
 local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local SlideController = require(script.Parent.FeatureRideSlideController)
+local FeatureRotation = require(script.Parent.FeatureRideFeatureRotation)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
-local Handle = require(script.Parent.Handle)
 local Landing = require(script.Parent.Landing)
 local Pop = require(script.Parent.Pop)
 local Posture = require(script.Parent.Posture)
@@ -109,7 +109,7 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		targetAngle = boardAngle,
 		entryAngle = boardAngle,
 		time = 0,
-		slideTimes = { fiftyFifty = 0, switchFiftyFifty = 0, backboard = 0, frontboard = 0, wallRide = 0 },
+		slideTimes = { fiftyFifty = 0, switchFiftyFifty = 0, backboard = 0, frontboard = 0, backLip = 0, frontLip = 0, wallRide = 0 },
 		slideOrder = {},
 		entry = entry,
 		inRotation = 0,
@@ -118,24 +118,16 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		pitch = 0,
 		lift = 0,
 		spiked = false,
+		entrySlide = nil,
+		rotations = {},
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
 	}
 end
 
-function OnFeature.slideIdAt(boardAngle, featureHeading, travelHeading, r)
-	local k = Scalar.round(boardAngle / (math.pi / 2))
-	local m = Scalar.mod(k, 4)
-	if m == 0 then
-		return if r.switchStance then "switchFiftyFifty" else "fiftyFifty"
-	end
-	if m == 2 then
-		return if r.switchStance then "fiftyFifty" else "switchFiftyFifty"
-	end
-	local chest = featureHeading + boardAngle + (Edge.toeSign(r) * math.pi) / 2
-	return if DetMath.cos(chest - travelHeading) > 0 then "backboard" else "frontboard"
-end
+-- Slide name for a board angle on the feature (FeatureRotation).
+OnFeature.slideIdAt = FeatureRotation.slideIdAt
 
 local function endSlide(s)
 	local j = s.rider.jib
@@ -448,27 +440,10 @@ function OnFeature.stepSlide(s, input, mem)
 		return
 	end
 
-	local stepRate = math.pi / 2 / cfg.feature.rotateTimePer90
-	if j.boardAngle == j.targetAngle and mem.steerDir ~= 0 and mem.steerHeldTime >= cfg.feature.tapTime then
-		local dir = mem.steerDir
-		if j.rot.spinSide == nil then
-			j.rot.spinSide = Rotation.rotationSide(dir, heading + j.boardAngle, Edge.toeSign(r), r.ropeHeading)
-			j.rot.startDir = dir
-		end
-		j.rot.spinDir = dir
-		j.targetAngle = j.boardAngle + (dir * math.pi) / 2
-	end
-	j.boardAngle = Scalar.approach(j.boardAngle, j.targetAngle, stepRate * DT)
-	j.rot.spinAngle = j.boardAngle - j.entryAngle
-	j.rot.maxSpin = math.max(j.rot.maxSpin, math.abs(j.rot.spinAngle))
-	local handle, result = Handle.updateHandle(r.handle, j.rot, mem.passPressed, { rate = stepRate, inAir = false }, cfg, DT)
-	r.handle = handle
-	if result.passed then
-		table.insert(s.events, { type = "handlePass", tick = s.tick })
-	end
-	if result.dropped then
+	local turned = FeatureRotation.stepFeatureRotation(s, j, heading, mem)
+	if turned then
 		endSlide(s)
-		Actions.crash(s, "handleDropped")
+		Actions.crash(s, turned)
 		return
 	end
 
@@ -487,7 +462,7 @@ function OnFeature.stepSlide(s, input, mem)
 	j.time += DT
 	local nearest = Scalar.round(j.boardAngle / (math.pi / 2)) * (math.pi / 2)
 	if math.abs(j.boardAngle - nearest) < deg(20) then
-		local id = OnFeature.slideIdAt(j.boardAngle, heading, heading, r)
+		local id = FeatureRotation.slideIdAt(j.boardAngle, heading, heading, r, j)
 		j.slideTimes[id] += DT
 		if #j.slideOrder == 0 or j.slideOrder[#j.slideOrder] ~= id then
 			table.insert(j.slideOrder, id)
@@ -517,6 +492,15 @@ function OnFeature.stepSlide(s, input, mem)
 		ramp.v += Vec.dot(vel, Vec.rightOf(f.heading)) * DT
 	end
 	local nextSurface = Features.surfaceAt(f, { u = ramp.u, v = ramp.v })
+	if
+		(not nextSurface or not nextSurface.onTop or nextSurface.height < 0)
+		and FeatureRotation.midRotation(j)
+		and math.abs(Features.offCentre(piece, ramp)) <= piece.width / 2 + 0.3
+	then
+		endSlide(s)
+		Actions.crash(s, "ranOutMidRotation")
+		return
+	end
 	if nextSurface and nextSurface.height < 0 then
 		r.vel = Vec.add(Vec.scale(t, vt), Vec.scale(right, vl))
 		rideOut(s, f)
@@ -679,6 +663,7 @@ function OnFeature.airOverFeature(s, air)
 	j.balance = e.balance
 	j.inRotation = e.inRotation
 	j.entryQuality = e.quality
+	j.entrySlide = e.slide
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true

@@ -86,14 +86,14 @@ describe('obstacles (milestone 7)', () => {
     expect(crashOf(play(box('gap'), (t) => ({ pop: between(1.7, 2.3)(t) }), noBalance).events)).toMatchObject({ reason: 'shortOllie' });
   });
 
-  it('holding A/D rotates the board 90 degrees: backboard (chest forward) and frontboard', () => {
+  it('holding A/D rotates the board 90 degrees: backside boardslide (chest forward) and frontside boardslide', () => {
     const name = (steer: number) => {
       const { s, events } = play(box('flush'), (t) => ({ steer: between(3.6, 3.8)(t) ? steer : 0 }), noBalance);
       const slide = events.find((e) => e.type === 'slideDone');
       return slide?.type === 'slideDone' ? classifySlide(slide.jib, s.cfg)?.name : null;
     };
-    expect(name(-1)).toBe('50-50 to Backboard');
-    expect(name(1)).toBe('50-50 to Frontboard');
+    expect(name(-1)).toBe('50-50 to Backside Boardslide');
+    expect(name(1)).toBe('50-50 to Frontside Boardslide');
   });
 
   it('a backside 180 on the feature needs a handle pass in its window, else the handle drops', () => {

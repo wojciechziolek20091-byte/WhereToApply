@@ -33,6 +33,10 @@ export const ENTRY_SCENARIOS: EntryScenario[] = [
   { name: 'ollie onto the safety', def: { offset: 1.3, entryLength: 6, safety: 'gap' }, stance: 'regular', steps: [[3.0, 3.1, 1, 0], [3.1 - T, 3.1 + T, 0, 1], [3.65, 3.9, 1, 0]] },
   { name: 'early hop, gap', def: { safety: 'gap' }, stance: 'regular', steps: [[3.15, 3.2, 1, 0]] },
   { name: 'early pop, flush tail clip', def: {}, stance: 'regular', steps: [[2.9, 3.25, 1, 0]] },
+  { name: 'heelside 90-in boardslide', def: { offset: -1.6 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.6, 0, -1]] },
+  { name: 'toeside 90-in lipslide', def: { offset: 1.6 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1], [3.4 + T, 3.6, 0, -1]] },
+  { name: '50-50 180 on the box', def: {}, stance: 'goofy', steps: [[3.6, 3.95, 0, -1]] },
+  { name: 'rotation into the end', def: {}, stance: 'regular', steps: [[4.3, 4.6, 0, -1]] },
 ];
 
 /** One row per tick until a crash or 6 s: state, approach, entry. */
@@ -80,6 +84,8 @@ export function entryTrace(sc: EntryScenario): TraceRow[] {
       r.jib?.sketchy ? 1 : 0,
       r.jib ? r.jib.balance : 0,
       r.jib ? r.jib.inRotation : 0,
+      r.jib ? r.jib.slideOrder.join('/') : '-',
+      r.jib ? r.jib.rotations.map((x) => `${x.deg}${x.hardWay ? 'h' : ''}`).join('/') : '-',
       crash?.type === 'crash' ? crash.reason : '-',
     ]);
     if (crash) break;

@@ -4,6 +4,9 @@ import { surfaceAt, toWorld } from '../src/sim/features';
 import { trackApproach } from '../src/sim/featureRide/approachTracker';
 import { balanceHalfWidth } from '../src/sim/featureRide/entryResolver';
 import { slideFriction, stepBalance } from '../src/sim/featureRide/slideController';
+import { sideEntrySlide, slideSide } from '../src/sim/featureRide/featureRotation';
+import { cos } from '../src/sim/math/detmath';
+import { SLIDES } from '../src/sim/tricks/data';
 import type { SimEvent } from '../src/sim/events';
 import type { InputFrame } from '../src/sim/input';
 import { add, forwardOf, normalize, scale, vec3 } from '../src/sim/math/vec';
@@ -98,7 +101,8 @@ function play(def: FeatureDef, script: (t: number) => Partial<InputFrame>, setup
   const events: SimEvent[] = [];
   runUntil(s, seconds, script, (e) => {
     events.push(e);
-    return e.type === 'crash' || e.type === 'slideDone';
+    // A crash ends the slide in the same tick: keep it.
+    return e.type === 'crash' || (e.type === 'slideDone' && !s.events.some((x) => x.type === 'crash'));
   });
   const crash = events.find((e) => e.type === 'crash');
   const slide = events.find((e) => e.type === 'slideDone');
@@ -449,5 +453,111 @@ describe('SlideController: balance (feature ride M4, spec 5.6, 5.7)', () => {
     expect(pipe).toBeGreaterThan(rail);
     expect(drift(slider({ style: 'tube', width: 0.4 }), Math.PI / 2)).toBeLessThan(pipe);
     expect(drift(slider(), Math.PI / 2)).toBeGreaterThan(box);
+  });
+});
+
+describe('FeatureRotation: boardslide / lipslide and frontside / backside (feature ride M5, spec 5.2, 12.1)', () => {
+  it('every approach side, rotation direction and stance (regular / goofy, normal / switch)', () => {
+    const rows: string[] = [];
+    for (const stance of ['regular', 'goofy'] as const)
+      for (const sw of [false, true])
+        for (const featureRight of [true, false])
+          for (const dir of [1, -1]) {
+            const heading = 0.3;
+            const toes = (stance === 'regular' ? 1 : -1) * (sw ? -1 : 1);
+            // The rider is on the feature's left when it is on their right (feature axis = travel).
+            const fromSide = featureRight ? -1 : 1;
+            const yaw = heading + (dir * Math.PI) / 2;
+            const id = sideEntrySlide(yaw, heading, fromSide, toes, heading);
+            const toeside = (toes > 0) === featureRight;
+            const noseOver = (dir > 0) === featureRight;
+            expect(slideSide(id)).toBe(toeside ? 'frontside' : 'backside');
+            expect(id === 'backLip' || id === 'frontLip').toBe(!noseOver);
+            // Backside boardslide: chest forward; frontside: back forward. Lipslides the other way round.
+            const chestForward = cos(yaw + (toes * Math.PI) / 2 - heading) > 0;
+            expect(chestForward).toBe((slideSide(id) === 'backside') === noseOver);
+            rows.push(`${stance}${sw ? ' switch' : ''} feature ${featureRight ? 'right' : 'left'} turn ${dir > 0 ? '+' : '-'}: ${SLIDES[id].name}`);
+          }
+    expect(new Set(rows).size).toBe(16);
+  });
+});
+
+describe('Rotations on and onto the feature (feature ride M5, spec 5.3, 5.4)', () => {
+  const side90 = (offset: number, turn: 1 | -1, stance: 'regular' | 'goofy' = 'regular') => {
+    const toward = offset > 0 ? 1 : -1;
+    return play(
+      slider({ offset }),
+      (t) => ({
+        pop: between(3.2, 3.4)(t),
+        steer: between(3.4 - 1 / 60, 3.4 + 1 / 60)(t) ? toward : between(3.4 + 1 / 60, 3.6)(t) ? toward * turn : 0,
+      }),
+      (s) => (s.rider.stance = stance),
+    );
+  };
+
+  it('pass 3: side ollie-on with a 90 turning the nose over: heelside a backside boardslide, toeside a frontside boardslide', () => {
+    expect(side90(-1.6, 1).jib?.slideOrder).toEqual(['backboard']);
+    expect(side90(1.6, 1).jib?.slideOrder).toEqual(['frontboard']);
+    expect(side90(1.6, 1, 'goofy').jib?.slideOrder).toEqual(['backboard']);
+    // The tail over first: lipslides.
+    expect(side90(-1.6, -1).jib?.slideOrder).toEqual(['backLip']);
+    expect(side90(1.6, -1).jib?.slideOrder).toEqual(['frontLip']);
+    expect(SLIDES.backboard.name).toBe('Backside Boardslide');
+  });
+
+  it('pass 7: 50-50, then A/D on the feature: backside or frontside boardslide by direction', () => {
+    const turn = (dir: number) => play(slider(), (t) => ({ steer: between(3.6, 3.8)(t) ? dir : 0 })).jib?.slideOrder;
+    expect(turn(-1)).toEqual(['fiftyFifty', 'backboard']);
+    expect(turn(1)).toEqual(['fiftyFifty', 'frontboard']);
+  });
+
+  it('holding A/D chains the 90-degree steps into one rotation (50-50 180 switch 50-50)', () => {
+    const { jib, crash } = play(slider(), (t) => ({ steer: between(3.6, 3.95)(t) ? -1 : 0 }));
+    expect(crash).toBeNull();
+    expect(jib?.rotations.map((x) => x.deg)).toEqual([180]);
+    expect(jib?.slideOrder.at(-1)).toBe('switchFiftyFifty');
+  });
+
+  it('hard way: a rotation against the slide it comes out of is marked (and allowed)', () => {
+    const out = (dir: number) => {
+      const r = play(slider({ offset: 1.6 }), (t) => ({
+        pop: between(3.2, 3.4)(t),
+        steer: between(3.4 - 1 / 60, 3.4 + 1 / 60)(t) ? 1 : between(3.4 + 1 / 60, 3.6)(t) ? 1 : between(4.3, 4.5)(t) ? dir : 0,
+        pass: between(4.35, 4.6)(t),
+      }));
+      return r.jib?.rotations[0];
+    };
+    const a = out(1);
+    const b = out(-1);
+    expect(a?.from).toBe('frontboard');
+    expect(b?.from).toBe('frontboard');
+    expect([a?.hardWay, b?.hardWay].sort()).toEqual([false, true]);
+    expect((a?.hardWay ? a : b)?.side).toBe('backside');
+  });
+
+  it('a rotation started too close to the end runs out mid-rotation (RanOutMidRotation)', () => {
+    const s = featureSim(slider(), noBalance);
+    let crash: string | null = null;
+    runUntil(s, 6, (_t, st) => ({ steer: st.rider.ramp && st.rider.mode === 'onFeature' && st.rider.ramp.u > 9.2 ? -1 : 0 }), (e) => {
+      if (e.type === 'crash') crash = e.reason;
+      return e.type === 'crash';
+    });
+    expect(crash).toBe('ranOutMidRotation');
+    // With room to finish (the step starts about 2 m before the end) it is fine.
+    const ok = featureSim(slider(), noBalance);
+    let c2: string | null = null;
+    let started = false;
+    runUntil(ok, 6, (_t, st) => {
+      if (st.rider.ramp && st.rider.mode === 'onFeature' && st.rider.ramp.u > 7.6) started = true;
+      return { steer: started && st.rider.mode === 'onFeature' && st.rider.jib!.rotations.length === 0 ? -1 : 0 };
+    }, (e) => {
+      if (e.type === 'crash') c2 = e.reason;
+      return e.type === 'crash' || e.type === 'featureExit';
+    });
+    expect(c2).toBeNull();
+  });
+
+  it('fail 7: a backside rotation on the feature without Q drops the handle', () => {
+    expect(play(slider(), (t) => ({ steer: between(3.6, 4.0)(t) ? 1 : 0 })).crash).toBe('handleDropped');
   });
 });

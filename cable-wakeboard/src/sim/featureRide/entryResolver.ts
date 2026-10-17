@@ -6,6 +6,10 @@ import { clamp, lerp, sign, wrapAngle } from '../math/scalar';
 import { add, dot, forwardOf, rightOf, scale } from '../math/vec';
 import type { ResolvedFeature } from '../park';
 import type { AirState, CrashReason, JibEntry } from '../rider';
+import type { SlideId } from '../tricks/data';
+import { toeSign } from '../edge';
+import { sideEntrySlide } from './featureRotation';
+import { isBoardslide } from './slideController';
 import type { SimState } from '../world';
 
 /**
@@ -37,6 +41,8 @@ export interface EntryResult {
   balance: number;
   /** Speed kept along the feature. */
   speedKeep: number;
+  /** A side entry across the feature: its slide by approach side and which end crossed (else null: named on the feature). */
+  slide: SlideId | null;
   landing: LandingResult;
 }
 
@@ -167,6 +173,7 @@ export function resolveLanding(s: SimState, air: AirState, f: ResolvedFeature, s
     sketchy: air.tailClip,
     balance: 0,
     speedKeep: air.tailClip ? cfg.featureRide.Entry.TailClipSpeedKeep : 1,
+    slide: null,
     landing,
   };
   const fail = (reason: CrashReason): EntryResult => {
@@ -212,6 +219,10 @@ export function resolveLanding(s: SimState, air: AirState, f: ResolvedFeature, s
     hit += L.SkidHit;
   }
   result.success = true;
+  if (crossSide !== 0 && isBoardslide(boardAngle)) {
+    const toes = toeSign({ stance: r.stance, switchStance: air.takeoffSwitch });
+    result.slide = sideEntrySlide(boardYawInAir(air), heading, crossSide, toes, air.takeoffHeading);
+  }
   // The hit throws the rider toward the side they are off-centre on (or came in from).
   const dir = off !== 0 ? sign(off) : crossSide !== 0 ? crossSide : 1;
   result.balance = clamp(dir * hit, -L.MaxHit, L.MaxHit);

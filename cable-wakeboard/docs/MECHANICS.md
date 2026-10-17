@@ -247,15 +247,15 @@ ridden in `onFeature.ts`.
     to clear the main like an ollie (short of it by a little is a tail clip,
     sketchy, combo x0.8; more is `shortOllie`). No pop: gap crashes
     (`missedSafetyPop`), flush rides on.
-  - **On the main** (`onFeature`, `rider.jib`): A/D held past `feature.tapTime`
-    turns the board in 90-degree steps (`rotateTimePer90`, 0.18 s); taps correct
-    the balance instead. Board angle names the slide (`slideIdAt()`): parallel
-    is a **50-50** (a **Switch 50-50** after a half turn), perpendicular with
-    the chest toward the direction of travel a **Backboard**, with the back
-    toward it a **Frontboard**. Rotations through a backside pass zone need Q in
-    the 0.35 s window, or the handle drops. Balance drifts with smooth noise
-    (`valueNoise()`, faster on rails) and the rope's sideways pull; past +-1 the
-    rider falls off. `feature.balanceEnabled` turns it off.
+  - **On the main** (`onFeature`, `rider.jib`): A/D held past
+    `feature.tapTime` turns the board in 90-degree hop steps
+    (`rotateTimePer90`, 0.18 s); taps correct the balance instead. The board
+    angle names the slide (FeatureRotation, below): parallel is a **50-50**
+    (a **Switch 50-50** after a half turn), across it a **Backside
+    Boardslide** (chest forward) or **Frontside Boardslide** (back forward),
+    or from a side entry a **Backside / Frontside Lipslide**. Speed and
+    balance are the SlideController's (below); `feature.balanceEnabled`
+    turns the balance off.
   - **Exit**: Space pops off; riding off the end rolls off. The air starts with
     the board's angle on the feature (`air.spinStart`), so leaving a boardslide
     needs a "90 Off" or "270 Off" spin to land.
@@ -325,6 +325,24 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     `Safety.LandingPitchTolerance` (15 degrees, sketchy beyond, `badAngle`
     past 30). Then the rider rides on up it and can pop in the window.
   - Popped off a safety and down on the water before its main: `landedInGap`.
+- **FeatureRotation** (`featureRotation.ts`, spec 5.2-5.4).
+  - *Naming a side entry's 90* (`sideEntrySlide`): the feature on the
+    heelside is backside, on the toeside frontside. The nose over the
+    feature first is a boardslide, the tail a lipslide. So a backside
+    boardslide ends chest forward and a frontside one back forward.
+  - *Front entries and turns on the feature* use the chest rule: chest
+    forward is a backside boardslide, back forward a frontside one.
+    Lipslides only come from side entries; the name stays until the board
+    turns (`jib.entrySlide`).
+  - *Turning on the feature* (`stepFeatureRotation`): held A/D chains the
+    steps into one rotation (`jib.rotations`: degrees, direction, side, hard
+    way, the slide it came out of). A step whose side (frontside / backside,
+    against the rope as in the air) differs from the boardslide it comes
+    out of is the **hard way**: allowed, with a balance hit
+    (`Rotation.HardWayHit`, 0.3). Backside rotations through the pass zone
+    need Q in `handlePass.featureWindow` (0.35 s) or the handle drops.
+    Running off the end with the board still turning is
+    `ranOutMidRotation`; at the park's speed a step needs about 1.5 m.
 - **SlideController** (`slideController.ts`, spec 5.1, 5.6, 5.7): what the
   feature does to a slide.
   - *Speed along the feature*: rope pull along it, gravity along the slope,
@@ -398,6 +416,7 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 | `landedInGap` | Popped off a gap safety and came down in the gap |
 | `stalled` | Slower than 1 m/s along a feature (up a rooftop with the rope slack) |
 | `kinkThrow` | Over a kink sharper than 12 degrees too fast |
+| `ranOutMidRotation` | Off the end of the feature with the board still turning |
 
 ## 9. Tricks, names and points
 
@@ -411,7 +430,7 @@ slides per second (50-50 80, boardslides 120), ollie 50.
 (`classifySlide()`) into a `TrickResult` with **tokens** (`Entry`, `Slide`,
 `Spin`, `Flip`, `Invert`, `Grab`, `HandlePass`, `Blind`, `Exit`, `Pop`) and a
 name: "Backside 360 Indy", "Tantrum to Blind", "Mobe Stalefish", "Front Flip
-Nose", "Blind 180 Out", "Pop-on 50-50 to Backboard", "270 Off".
+Nose", "Blind 180 Out", "Pop-on 50-50 to Backside Boardslide", "270 Off".
 
 ## 10. Combos and scoring
 

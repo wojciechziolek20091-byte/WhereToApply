@@ -16,6 +16,14 @@ local function emit(row)
 	print(table.concat(out, "\t"))
 end
 
+local function rotationsOf(j)
+	local out = {}
+	for _, x in j.rotations do
+		table.insert(out, tostring(x.deg) .. (if x.hardWay then "h" else ""))
+	end
+	return table.concat(out, "/")
+end
+
 local function entryTrace(sc)
 	local def = {
 		kind = "slider",
@@ -82,6 +90,8 @@ local function entryTrace(sc)
 			if r.jib and r.jib.sketchy then 1 else 0,
 			if r.jib then r.jib.balance else 0,
 			if r.jib then r.jib.inRotation else 0,
+			if r.jib then table.concat(r.jib.slideOrder, "/") else "-",
+			if r.jib then rotationsOf(r.jib) else "-",
 			if crash then crash.reason else "-",
 		})
 		if crash then

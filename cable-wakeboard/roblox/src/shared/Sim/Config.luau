@@ -181,6 +181,7 @@ Config.DEFAULT_CONFIG = {
 			ForeDecay = 2,
 			LastMetre = 1,
 		},
+		Rotation = { HardWayHit = 0.3 },
 		Safety = { LandingPitchTolerance = 0.2617993877991494, LandingPitchCrash = 0.5235987755982988 },
 	},
 	debug = { enabled = true },

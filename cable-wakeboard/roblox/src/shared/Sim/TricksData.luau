@@ -20,8 +20,13 @@ TricksData.INVERTS = {
 TricksData.SLIDES = {
 	fiftyFifty = { id = "fiftyFifty", name = "50-50", pointsPerSecond = 80 },
 	switchFiftyFifty = { id = "switchFiftyFifty", name = "Switch 50-50", pointsPerSecond = 80 },
-	backboard = { id = "backboard", name = "Backboard", pointsPerSecond = 120 },
-	frontboard = { id = "frontboard", name = "Frontboard", pointsPerSecond = 120 },
+	-- Chest forward down the feature (ids kept from the old Backboard / Frontboard names).
+	backboard = { id = "backboard", name = "Backside Boardslide", pointsPerSecond = 120 },
+	-- Back forward.
+	frontboard = { id = "frontboard", name = "Frontside Boardslide", pointsPerSecond = 120 },
+	-- Tail first over the feature from a side approach (feature riding spec 1.2, 5.2).
+	backLip = { id = "backLip", name = "Backside Lipslide", pointsPerSecond = 140 },
+	frontLip = { id = "frontLip", name = "Frontside Lipslide", pointsPerSecond = 140 },
 	-- Riding up a wall ride's transition onto the wall (wake park features).
 	wallRide = { id = "wallRide", name = "Wall Ride", pointsPerSecond = 150 },
 }

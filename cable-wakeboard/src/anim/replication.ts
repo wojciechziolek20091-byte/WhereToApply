@@ -41,6 +41,7 @@ const CRASHES = [
   'landedInGap',
   'stalled',
   'kinkThrow',
+  'ranOutMidRotation',
 ];
 
 export const PACKET_LENGTH = 50;

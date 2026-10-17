@@ -140,6 +140,11 @@ export interface FeatureRideConfig {
     /** Losing balance within this of the end (m) is a sketchy exit, not a crash. */
     LastMetre: number;
   };
+  /** Rotations on the feature (spec 5.4). */
+  Rotation: {
+    /** Balance hit of a hard-way step (a shorter balance window). */
+    HardWayHit: number;
+  };
   /** Ollie onto the safety and pop off it (spec 3.5, 3.6). */
   Safety: {
     /** Board pitch off the safety's slope: sketchy beyond the tolerance, a crash beyond the limit (rad). */
@@ -219,5 +224,6 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     ForeDecay: 2,
     LastMetre: 1.0,
   },
+  Rotation: { HardWayHit: 0.3 },
   Safety: { LandingPitchTolerance: deg(15), LandingPitchCrash: deg(30) },
 };

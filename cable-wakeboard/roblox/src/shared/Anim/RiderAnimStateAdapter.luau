@@ -24,7 +24,16 @@ local MODE = {
 	crashed = "Crashed",
 }
 local GRAB = { indy = "Indy", stalefish = "Stalefish", nose = "Nose", tail = "Tail" }
-local SLIDE = { fiftyFifty = "FiftyFifty", backboard = "Backboard", frontboard = "Frontboard", switchFiftyFifty = "SwitchFiftyFifty", wallRide = "WallRide" }
+-- A lipslide faces the other way from the boardslide of its side.
+local SLIDE = {
+	fiftyFifty = "FiftyFifty",
+	backboard = "Backboard",
+	frontboard = "Frontboard",
+	backLip = "Frontboard",
+	frontLip = "Backboard",
+	switchFiftyFifty = "SwitchFiftyFifty",
+	wallRide = "WallRide",
+}
 local HANDLE = { inFront = "InFront", behind = "Behind", passing = "Passing", dropped = "Dropped" }
 
 -- Board rotation from yaw, an optional invert (board-frame axis, angle) and the edge tilt.
@@ -186,7 +195,7 @@ function Adapter.fromSim(sim, events, prev)
 	if jib then
 		local f = findFeature(sim, jib.featureId)
 		if f then
-			local slide = Sim.OnFeature.slideIdAt(jib.boardAngle, f.heading, r.heading, r)
+			local slide = Sim.OnFeature.slideIdAt(jib.boardAngle, f.heading, r.heading, r, jib)
 			feature = { slide = SLIDE[slide], balance = jib.balance }
 			-- Narrow mains (rails, pipes) look like rails; the old defs keep their style.
 			if f.def.kind == "slider" then

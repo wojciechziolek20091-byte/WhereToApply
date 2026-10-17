@@ -63,6 +63,8 @@ export type CrashReason =
   | 'stalled'
   /** Over a sharp kink too fast: thrown off the line. */
   | 'kinkThrow'
+  /** Ran off the end of the feature in the middle of a rotation on it. */
+  | 'ranOutMidRotation'
   /** Popped off a gap safety into the gap. */
   | 'landedInGap';
 
@@ -238,10 +240,30 @@ export interface JibState {
   lift: number;
   /** Rope tension above the spike threshold (one impulse per spike). */
   spiked: boolean;
+  /** A side entry's 90-degree slide (named by approach side and which end crossed), while the board stays at its entry angle. */
+  entrySlide: SlideId | null;
+  /** Rotations on the feature, in order (FeatureRotation). */
+  rotations: FeatureRotationRecord[];
   /** Early pop onto a flush main: combo multiplier x0.8. */
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */
   rot: RotationState;
+}
+
+/** One rotation on a feature: 90-degree steps chained while A/D is held (FeatureRotation). */
+export interface FeatureRotationRecord {
+  deg: number;
+  /** A/D direction (-1, 1). */
+  dir: number;
+  side: RotationSide;
+  /** Against the slide it came out of (a backside rotation out of a frontside slide). */
+  hardWay: boolean;
+  /** The slide it came out of. */
+  from: SlideId;
+  /** Tick its last step finished, -1 while turning. */
+  endTick: number;
+  /** Jib time when it started (s). */
+  atTime: number;
 }
 
 /** How the rider got onto a feature (EntryResolver). */

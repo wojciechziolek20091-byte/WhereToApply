@@ -1,26 +1,25 @@
 import { atan, cos } from './math/detmath';
 import type { SimConfig } from './config';
 import { deg, DT, GRAVITY } from './config';
-import { edgeNorm, toeSign, updateEdge } from './edge';
+import { edgeNorm, updateEdge } from './edge';
 import { type FeatureSurface, featureUnder, offCentre, pieceHeading, surfaceAt, toWorld } from './features';
 import { type RidePiece, wallHeightAt } from './featureShapes';
 import { transition } from './fsm';
-import { updateHandle } from './handle';
 import type { InputFrame, InputMemory } from './input';
-import { approach, mod, sign, wrapAngle } from './math/scalar';
+import { sign, wrapAngle } from './math/scalar';
 import { add, dot, forwardOf, headingOf, horizontal, horizontalLength, rightOf, scale, vec3 } from './math/vec';
 import type { ResolvedFeature } from './park';
 import { ollieCharge, ollieSpeed } from './pop';
 import { updatePosture } from './posture';
-import type { AirState, JibState, RiderState } from './rider';
-import { createRotation, rotationSide } from './rotation';
-import type { SlideId } from './tricks/data';
+import type { AirState, JibState } from './rider';
+import { createRotation } from './rotation';
 import type { SimState } from './world';
 import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
 import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
 import { slideFriction, stepBalance, stepKink } from './featureRide/slideController';
+import { midRotation, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
 
 /**
  * Kickers and obstacles (spec section 9), on any feature's ride pieces
@@ -95,7 +94,7 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     targetAngle: boardAngle,
     entryAngle: boardAngle,
     time: 0,
-    slideTimes: { fiftyFifty: 0, switchFiftyFifty: 0, backboard: 0, frontboard: 0, wallRide: 0 },
+    slideTimes: { fiftyFifty: 0, switchFiftyFifty: 0, backboard: 0, frontboard: 0, backLip: 0, frontLip: 0, wallRide: 0 },
     slideOrder: [],
     entry,
     inRotation: 0,
@@ -104,25 +103,16 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     pitch: 0,
     lift: 0,
     spiked: false,
+    entrySlide: null,
+    rotations: [],
     sketchy,
     rot,
     noiseSeed: s.tick,
   };
 }
 
-/**
- * Slide name for a board angle on the feature (spec section 2.6): parallel is
- * a 50-50 (switch after a half turn), perpendicular with the chest toward the
- * direction of travel is a backboard, with the back toward it a frontboard.
- */
-export function slideIdAt(boardAngle: number, featureHeading: number, travelHeading: number, r: RiderState): SlideId {
-  const k = Math.round(boardAngle / (Math.PI / 2));
-  const m = mod(k, 4);
-  if (m === 0) return r.switchStance ? 'switchFiftyFifty' : 'fiftyFifty';
-  if (m === 2) return r.switchStance ? 'fiftyFifty' : 'switchFiftyFifty';
-  const chest = featureHeading + boardAngle + (toeSign(r) * Math.PI) / 2;
-  return cos(chest - travelHeading) > 0 ? 'backboard' : 'frontboard';
-}
+/** Slide name for a board angle on the feature (FeatureRotation). */
+export { slideIdAt } from './featureRide/featureRotation';
 
 function endSlide(s: SimState): void {
   const j = s.rider.jib;
@@ -343,26 +333,11 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
     return;
   }
 
-  // Board rotation in 90-degree steps: holding A/D past a tap rotates.
-  const stepRate = Math.PI / 2 / cfg.feature.rotateTimePer90;
-  if (j.boardAngle === j.targetAngle && mem.steerDir !== 0 && mem.steerHeldTime >= cfg.feature.tapTime) {
-    const dir = mem.steerDir;
-    if (j.rot.spinSide === null) {
-      j.rot.spinSide = rotationSide(dir, heading + j.boardAngle, toeSign(r), r.ropeHeading);
-      j.rot.startDir = dir;
-    }
-    j.rot.spinDir = dir;
-    j.targetAngle = j.boardAngle + (dir * Math.PI) / 2;
-  }
-  j.boardAngle = approach(j.boardAngle, j.targetAngle, stepRate * DT);
-  j.rot.spinAngle = j.boardAngle - j.entryAngle;
-  j.rot.maxSpin = Math.max(j.rot.maxSpin, Math.abs(j.rot.spinAngle));
-  const h = updateHandle(r.handle, j.rot, mem.passPressed, { rate: stepRate, inAir: false }, cfg, DT);
-  r.handle = h.handle;
-  if (h.result.passed) s.events.push({ type: 'handlePass', tick: s.tick });
-  if (h.result.dropped) {
+  // Rotations in 90-degree hop steps, hard way, handle passes (FeatureRotation).
+  const turned = stepFeatureRotation(s, j, heading, mem);
+  if (turned) {
     endSlide(s);
-    crash(s, 'handleDropped');
+    crash(s, turned);
     return;
   }
 
@@ -382,7 +357,7 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   j.time += DT;
   const nearest = Math.round(j.boardAngle / (Math.PI / 2)) * (Math.PI / 2);
   if (Math.abs(j.boardAngle - nearest) < deg(20)) {
-    const id = slideIdAt(j.boardAngle, heading, heading, r);
+    const id = slideIdAt(j.boardAngle, heading, heading, r, j);
     j.slideTimes[id] += DT;
     if (j.slideOrder.length === 0 || j.slideOrder[j.slideOrder.length - 1] !== id) j.slideOrder.push(id);
   }
@@ -407,6 +382,12 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
     ramp.v += dot(vel, rightOf(f.heading)) * DT;
   }
   const next = surfaceAt(f, { u: ramp.u, v: ramp.v });
+  if ((!next || !next.onTop || next.height < 0) && midRotation(j) && Math.abs(offCentre(piece, ramp)) <= piece.width / 2 + 0.3) {
+    // Off the end with the board still turning (spec 5.4).
+    endSlide(s);
+    crash(s, 'ranOutMidRotation');
+    return;
+  }
   if (next && next.height < 0) {
     // Slid down into the water (a down rail or an exit ramp).
     r.vel = add(scale(t, vt), scale(right, vl));
@@ -632,6 +613,7 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   j.balance = e.balance;
   j.inRotation = e.inRotation;
   j.entryQuality = e.quality;
+  j.entrySlide = e.slide;
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
   return true;

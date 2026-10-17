@@ -4,10 +4,13 @@
 --   crossEdge      flying onto a part across its front or side edge: clearance
 --   resolveLanding contact with a main: roll, snap, balance width, impact, skid
 local DetMath = require(script.Parent.DetMath)
+local Edge = require(script.Parent.Edge)
+local FeatureRotation = require(script.Parent.FeatureRideFeatureRotation)
 local Features = require(script.Parent.Features)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Landing = require(script.Parent.Landing)
 local Scalar = require(script.Parent.Scalar)
+local SlideController = require(script.Parent.FeatureRideSlideController)
 local Vec = require(script.Parent.Vec)
 
 local EntryResolver = {}
@@ -157,6 +160,7 @@ function EntryResolver.resolveLanding(s, air, f, surface, l, heading)
 		sketchy = air.tailClip,
 		balance = 0,
 		speedKeep = if air.tailClip then cfg.featureRide.Entry.TailClipSpeedKeep else 1,
+		slide = nil,
 		landing = landing,
 	}
 	local function fail(reason)
@@ -214,6 +218,10 @@ function EntryResolver.resolveLanding(s, air, f, surface, l, heading)
 		hit += L.SkidHit
 	end
 	result.success = true
+	if crossSide ~= 0 and SlideController.isBoardslide(boardAngle) then
+		local toes = Edge.toeSign({ stance = r.stance, switchStance = air.takeoffSwitch })
+		result.slide = FeatureRotation.sideEntrySlide(EntryResolver.boardYawInAir(air), heading, crossSide, toes, air.takeoffHeading)
+	end
 	local dir = if off ~= 0 then Scalar.sign(off) elseif crossSide ~= 0 then crossSide else 1
 	result.balance = Scalar.clamp(dir * hit, -L.MaxHit, L.MaxHit)
 	if result.sketchy then

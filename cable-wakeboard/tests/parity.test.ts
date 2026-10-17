@@ -197,7 +197,8 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     });
     // The scenarios cover the entry outcomes they are named for.
     expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseHitSide/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
-    expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(3);
+    expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(5);
+    expect(reasons.some((x) => x.startsWith('ranOutMidRotation/'))).toBe(true);
   });
 
   it.each([11, 23, 37])('catalogue map seed %i (all 15 wake park features): identical trace', (seed) => {

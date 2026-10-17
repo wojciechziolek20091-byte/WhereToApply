@@ -114,6 +114,9 @@ const SLIDE: Record<string, SlideName> = {
   fiftyFifty: 'FiftyFifty',
   backboard: 'Backboard',
   frontboard: 'Frontboard',
+  // A lipslide faces the other way from the boardslide of its side.
+  backLip: 'Frontboard',
+  frontLip: 'Backboard',
   switchFiftyFifty: 'SwitchFiftyFifty',
   wallRide: 'WallRide',
 };
@@ -239,7 +242,7 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
   if (jib) {
     const f = sim.features.find((x) => x.def.id === jib.featureId);
     if (f) {
-      const slide = slideIdAt(jib.boardAngle, f.heading, r.heading, r);
+      const slide = slideIdAt(jib.boardAngle, f.heading, r.heading, r, jib);
       feature = { slide: SLIDE[slide] ?? null, balance: jib.balance };
       // Narrow mains (rails, pipes) look like rails; the old defs keep their style.
       rail = f.def.kind === 'slider' ? f.def.style !== 'box' : f.def.kind === 'feature' && f.shape.pieces.some((p) => p.slide && p.width < 0.6);
