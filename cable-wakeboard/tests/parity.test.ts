@@ -15,6 +15,7 @@ import { bundleSim } from './parity/luauBundle';
 import { type TraceRow, traceRun } from './parity/trace';
 import { ENTRY_SCENARIOS, entryTrace } from './parity/entryTrace';
 import { MORE_NAMES, SPEC_EXAMPLES } from './parity/namerCases';
+import { maxReachableHeight } from '../src/sim/featureRide/slideOnConfig';
 
 const LUAU = process.env.LUAU;
 const TRACE_LUAU = join(__dirname, '../roblox/tests/sim_trace.luau');
@@ -200,6 +201,16 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseHitSide/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
     expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(5);
     expect(reasons.some((x) => x.startsWith('ranOutMidRotation/'))).toBe(true);
+  });
+
+  it('SlideOnConfig.maxReachableHeight gives the same heights (charge x nose lift x edge)', () => {
+    const grid: [number, number, string][] = [];
+    for (const c of [0, 0.25, 0.5, 0.75, 1]) for (const l of [0, 0.31, 0.52]) for (const t of ['Rounded', 'Coping', 'Round', 'Rail']) grid.push([c, l, t]);
+    const lu = runLuau(grid.map(([c, l, t]) => `print(string.format("%.17g", Sim.FeatureRideSlideOnConfig.maxReachableHeight(Sim.Config.DEFAULT_CONFIG, ${c}, ${l}, "${t}")))`).join('\n'))
+      .trimEnd()
+      .split('\n')
+      .map(Number);
+    expect(lu).toEqual(grid.map(([c, l, t]) => maxReachableHeight(DEFAULT_CONFIG, c, l, t as 'Rounded')));
   });
 
   it('FeatureTrickNamer names every line the same as the TypeScript one (spec 8 examples and more)', () => {

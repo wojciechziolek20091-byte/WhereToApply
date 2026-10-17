@@ -4,6 +4,7 @@
  */
 
 import { DEFAULT_FEATURE_RIDE, type FeatureRideConfig } from './featureRide/config';
+import { DEFAULT_SLIDE_ON, type SlideOnConfig } from './featureRide/slideOnConfig';
 
 export const DT = 1 / 60;
 export const GRAVITY = 9.81;
@@ -383,6 +384,8 @@ export interface SimConfig {
   physics: PhysicsConfig;
   /** Feature riding (feature riding spec): FeatureRideConfig. */
   featureRide: FeatureRideConfig;
+  /** Side approaches: the nose-lift slide-on (featureRide/slideOnConfig.ts). */
+  slideOn: SlideOnConfig;
   debug: DebugConfig;
 }
 
@@ -534,6 +537,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     sketchyCost: 2,
   },
   featureRide: DEFAULT_FEATURE_RIDE,
+  slideOn: DEFAULT_SLIDE_ON,
   debug: { enabled: true },
 };
 

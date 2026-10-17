@@ -27,6 +27,7 @@ local Sim = {
 	FeatureRideFeatureSpecials = require(script.FeatureRideFeatureSpecials),
 	FeatureRideFeatureTrickNamer = require(script.FeatureRideFeatureTrickNamer),
 	FeatureRidePressController = require(script.FeatureRidePressController),
+	FeatureRideSlideOnConfig = require(script.FeatureRideSlideOnConfig),
 	FeatureRideSlideController = require(script.FeatureRideSlideController),
 	Fsm = require(script.Fsm),
 	Handle = require(script.Handle),

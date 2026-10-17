@@ -396,6 +396,9 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
   - *End taps*: a W/S tap in the last `EndTapZone` (0.5 m) of the feature is
     a nose / tail tap (`jib.endTap`, a small bonus).
   - The animation state carries `feature.press` and `feature.fore`.
+- **Slide-on** (side approaches, docs/SLIDE_ON.md): side entries lift the nose
+  over the edge and slide the base on; `SlideOnConfig` and the reachable-height
+  calculator are in `slideOnConfig.ts`.
 - **SlideController** (`slideController.ts`, spec 5.1, 5.6, 5.7): what the
   feature does to a slide.
   - *Speed along the feature*: rope pull along it, gravity along the slope,
