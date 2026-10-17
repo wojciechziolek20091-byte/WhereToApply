@@ -7,6 +7,7 @@ local BodyPhysics = require(script.Parent.BodyPhysics)
 local Config = require(script.Parent.Config)
 local DetMath = require(script.Parent.DetMath)
 local Edge = require(script.Parent.Edge)
+local FeatureCatalog = require(script.Parent.FeatureCatalog)
 local Features = require(script.Parent.Features)
 local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local SlideController = require(script.Parent.FeatureRideSlideController)
@@ -103,6 +104,17 @@ function OnFeature.tryEnterFeature(s)
 	return true
 end
 
+-- Points multiplier of a feature's catalogue difficulty (the old defs count as 1).
+local function difficultyOf(f, s)
+	local S = s.cfg.featureRide.Scoring
+	local level = 1
+	if f.def.kind == "feature" then
+		local e = FeatureCatalog.FEATURE_CATALOG[f.def.catalog]
+		level = if e then e.meta.difficulty else 1
+	end
+	return S.DifficultyBase + S.DifficultyPerLevel * level
+end
+
 startJib = function(s, feature, boardAngle, entry, sketchy)
 	local rot = Rotation.createRotation(s.cfg.handlePass.featureWindow)
 	return {
@@ -129,6 +141,12 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		pressTimes = { nose = 0, tail = 0 },
 		endTap = nil,
 		chain = {},
+		switchStance = s.rider.switchStance,
+		slideMetres = { fiftyFifty = 0, switchFiftyFifty = 0, backboard = 0, frontboard = 0, backLip = 0, frontLip = 0, wallRide = 0 },
+		uMin = if s.rider.ramp then s.rider.ramp.u else 0,
+		uMax = if s.rider.ramp then s.rider.ramp.u else 0,
+		partLength = 0,
+		difficulty = difficultyOf(feature, s),
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
@@ -223,6 +241,7 @@ local function mountMain(s, f, main, u, v, speed, entry, sketchy, boardAngle)
 	r.heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, if top then top.piece else main)
 	r.jib = startJib(s, f, boardAngle, entry, sketchy)
 	r.jib.pitch = DetMath.atan(if top then top.slope else 0)
+	r.jib.partLength = SlideController.partEnd(f, main.part) - start.u0
 	r.popCharge = 0
 	Fsm.transition(s, "onFeature", entry)
 end
@@ -381,6 +400,7 @@ stepWall = function(s, input, mem, f)
 	end
 	j.time += DT
 	j.slideTimes.wallRide += DT
+	j.slideMetres.wallRide += math.max(vu, 0) * DT
 	if #j.slideOrder == 0 then
 		table.insert(j.slideOrder, "wallRide")
 	end
@@ -496,6 +516,7 @@ function OnFeature.stepSlide(s, input, mem)
 	if math.abs(j.boardAngle - nearest) < deg(20) then
 		local id = FeatureRotation.slideIdAt(j.boardAngle, heading, heading, r, j)
 		j.slideTimes[id] += DT
+		j.slideMetres[id] += vt * DT
 		if #j.slideOrder == 0 or j.slideOrder[#j.slideOrder] ~= id then
 			table.insert(j.slideOrder, id)
 		end
@@ -565,6 +586,8 @@ function OnFeature.stepSlide(s, input, mem)
 	r.pos = Features.toWorld(f, ramp.u, ramp.v, nextSurface.height)
 	r.vel = Vec.add(Vec.scale(nextSurface.tangent, vt), Vec.scale(right, vl))
 	r.heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, nextSurface.piece)
+	j.uMin = math.min(j.uMin, ramp.u)
+	j.uMax = math.max(j.uMax, ramp.u)
 end
 
 -- Land on a landing ramp: an ordinary landing, then ride down it.
@@ -623,7 +646,7 @@ local function landOnSafety(s, f, air, surface, u, v)
 	local sketchy = pitch > R.Safety.LandingPitchTolerance or air.tailClip
 	r.ramp = { featureId = f.def.id, u = u, v = v, releaseTick = -1, releaseTimeToLip = -1, sketchy = sketchy }
 	Fsm.transition(s, "onSafety", "landedOnSafety")
-	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = false })
+	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = f.def.id })
 end
 

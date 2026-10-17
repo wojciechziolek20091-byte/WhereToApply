@@ -154,6 +154,25 @@ export interface FeatureRideConfig {
     /** A W/S tap within this of the end (m) is a nose / tail tap. */
     EndTapZone: number;
   };
+  /** Feature scoring (spec 9). */
+  Scoring: {
+    /** Points per metre slid, by slide; presses take their share of the 50-50. */
+    PerMetre: Record<'fiftyFifty' | 'switchFiftyFifty' | 'backboard' | 'frontboard' | 'backLip' | 'frontLip' | 'wallRide' | 'press', number>;
+    /** Share of the feature's main ridden for the "Full Feature" bonus. */
+    FullCoverage: number;
+    FullFeatureBonus: number;
+    /** Rotations in, on and out: points per 90 degrees; hard way, pretzel and switch factors. */
+    PerQuarter: number;
+    HardWayFactor: number;
+    PretzelFactor: number;
+    SwitchFactor: number;
+    /** Entry bonus by kind. */
+    EntryBonus: Record<'popOn' | 'pop' | 'ollieOn' | 'sideOllieOn' | 'transfer' | 'rideOn', number>;
+    EndTapBonus: number;
+    /** Feature difficulty (catalogue 1-4) to a points multiplier: Base + PerLevel x difficulty. */
+    DifficultyBase: number;
+    DifficultyPerLevel: number;
+  };
   /** Feature specials (spec 7). */
   Specials: {
     /** Funbox: pop speed off the down end. */
@@ -260,6 +279,19 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     LastMetre: 1.0,
   },
   Press: { Pitch: deg(10), RampTime: 0.15, NarrowRate: 0.25, MinWindow: 0.2, Lean: 0.4, EndTapZone: 0.5 },
+  Scoring: {
+    PerMetre: { fiftyFifty: 10, switchFiftyFifty: 10, backboard: 15, frontboard: 15, backLip: 18, frontLip: 18, wallRide: 15, press: 20 },
+    FullCoverage: 0.9,
+    FullFeatureBonus: 150,
+    PerQuarter: 40,
+    HardWayFactor: 1.3,
+    PretzelFactor: 1.2,
+    SwitchFactor: 1.1,
+    EntryBonus: { popOn: 100, pop: 40, ollieOn: 50, sideOllieOn: 80, transfer: 60, rideOn: 0 },
+    EndTapBonus: 50,
+    DifficultyBase: 0.85,
+    DifficultyPerLevel: 0.15,
+  },
   Specials: { DownEndPopScale: 0.7, SlopedTurnPitch: deg(5), SlopedTurnHit: 0.2, WallSketchyHeight: 0.6, SpineFlatCrash: 6.5 },
   Exit: { PopOffZone: 1.0, AssistAngle: deg(45), AssistRate: deg(360) },
   Rotation: { HardWayHit: 0.3 },

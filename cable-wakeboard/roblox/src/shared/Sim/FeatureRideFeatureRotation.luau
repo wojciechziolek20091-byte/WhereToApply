@@ -70,8 +70,9 @@ function FeatureRotation.stepFeatureRotation(s, j, heading, mem)
 		if last and last.dir == dir and last.endTick >= s.tick - 1 then
 			last.deg += 90
 			last.hardWay = last.hardWay or hardWay
+			last.to = nil
 		else
-			table.insert(j.rotations, { deg = 90, dir = dir, side = side, hardWay = hardWay, from = from, endTick = -1, atTime = j.time })
+			table.insert(j.rotations, { deg = 90, dir = dir, side = side, hardWay = hardWay, from = from, endTick = -1, to = nil, atTime = j.time })
 		end
 		local hit = (if hardWay then R.HardWayHit else 0) + FeatureSpecials.slopedTurnHit(j, s)
 		if hit > 0 and cfg.feature.balanceEnabled then
@@ -83,7 +84,9 @@ function FeatureRotation.stepFeatureRotation(s, j, heading, mem)
 	local was = j.boardAngle
 	j.boardAngle = Scalar.approach(j.boardAngle, j.targetAngle, stepRate * DT)
 	if was ~= j.boardAngle and j.boardAngle == j.targetAngle and #j.rotations > 0 then
-		j.rotations[#j.rotations].endTick = s.tick
+		local last = j.rotations[#j.rotations]
+		last.endTick = s.tick
+		last.to = FeatureRotation.slideIdAt(j.boardAngle, heading, heading, r, j)
 	end
 	j.rot.spinAngle = j.boardAngle - j.entryAngle
 	j.rot.maxSpin = math.max(j.rot.maxSpin, math.abs(j.rot.spinAngle))

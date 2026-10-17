@@ -63,6 +63,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #7fb2e0; fon
 .points-gain.gain-show { animation: gain 1.5s ease-out forwards; }
 @keyframes gain { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-8px); } }
 
+.line-name { position: absolute; left: 50%; top: 24%; transform: translateX(-50%); max-width: calc(100vw - 32px); padding: 4px 12px; border-radius: 8px; background: rgba(10, 16, 24, 0.7); color: #ffd84a; font-weight: 700; font-size: 16px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .popup {
   position: absolute;
   left: 50%;

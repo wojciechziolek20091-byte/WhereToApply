@@ -14,6 +14,7 @@ import { DEFAULT_PARK } from '../src/sim/park';
 import { bundleSim } from './parity/luauBundle';
 import { type TraceRow, traceRun } from './parity/trace';
 import { ENTRY_SCENARIOS, entryTrace } from './parity/entryTrace';
+import { MORE_NAMES, SPEC_EXAMPLES } from './parity/namerCases';
 
 const LUAU = process.env.LUAU;
 const TRACE_LUAU = join(__dirname, '../roblox/tests/sim_trace.luau');
@@ -199,6 +200,13 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseHitSide/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
     expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(5);
     expect(reasons.some((x) => x.startsWith('ranOutMidRotation/'))).toBe(true);
+  });
+
+  it('FeatureTrickNamer names every line the same as the TypeScript one (spec 8 examples and more)', () => {
+    const cases = [...SPEC_EXAMPLES, ...MORE_NAMES];
+    const calls = cases.map(([, jibs, out]) => `print(Sim.FeatureRideFeatureTrickNamer.featureTrickName(${luauLiteral(jibs)}, ${out ? luauLiteral(out) : 'nil'}))`).join('\n');
+    const lu = runLuau(calls).trimEnd().split('\n');
+    expect(lu).toEqual(cases.map((c) => c[3]));
   });
 
   it.each([11, 23, 37])('catalogue map seed %i (all 15 wake park features): identical trace', (seed) => {

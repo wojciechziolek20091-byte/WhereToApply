@@ -1,3 +1,4 @@
+import { liveLineName } from '../sim/featureRide/featureScoring';
 import { edgeNorm, toeSign } from '../sim/edge';
 import { handleProgress, passWindowOf } from '../sim/handle';
 import { clamp01 } from '../sim/math/scalar';
@@ -74,6 +75,7 @@ export class Hud {
   private readonly points: HTMLElement;
   private readonly feed: HTMLElement;
   private readonly popup: HTMLElement;
+  private readonly lineName: HTMLElement;
   private readonly timing: HTMLElement;
   private readonly timingLabel: HTMLElement;
   private readonly timingWindow: HTMLElement;
@@ -140,6 +142,8 @@ export class Hud {
 
     this.feed = el('div', 'feed', root);
     this.popup = el('div', 'popup', root);
+    // The feature line as it builds (feature riding spec 8).
+    this.lineName = el('div', 'line-name', root);
     this.pausedTag = el('div', 'paused-tag', root, 'Paused (P)');
 
     // Pop timing bar (safety pops and water tricks).
@@ -280,6 +284,9 @@ export class Hud {
       this.flash(escape(CRASH_NAMES[c.reason]), 'fall', now);
     }
     if (now > this.popupUntil) this.popup.classList.remove('popup-show');
+    const lineNow = liveLineName(r);
+    this.lineName.textContent = lineNow ?? '';
+    this.lineName.hidden = !lineNow;
     this.pausedTag.hidden = !paused || run.finished;
 
     // Pop timing bar.

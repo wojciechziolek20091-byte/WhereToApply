@@ -480,11 +480,46 @@ raley (300), tantrum and front flip (400), rolls (450), S-bend (600), spins
 up to 4), landing to blind (+150), blind out (+200), Mobe (+350), pop-on (+150),
 slides per second (50-50 80, boardslides 120), ollie 50.
 
-`tricks/classify.ts` turns one air (`classifyAir()`) or one slide
-(`classifySlide()`) into a `TrickResult` with **tokens** (`Entry`, `Slide`,
-`Spin`, `Flip`, `Invert`, `Grab`, `HandlePass`, `Blind`, `Exit`, `Pop`) and a
-name: "Backside 360 Indy", "Tantrum to Blind", "Mobe Stalefish", "Front Flip
-Nose", "Blind 180 Out", "Pop-on 50-50 to Backside Boardslide", "270 Off".
+`tricks/classify.ts` turns one air (`classifyAir()`) into a `TrickResult`
+with **tokens** (`Entry`, `Slide`, `Spin`, `Flip`, `Invert`, `Grab`,
+`HandlePass`, `Blind`, `Exit`, `Pop`) and a name: "Backside 360 Indy",
+"Tantrum to Blind", "Mobe Stalefish", "Front Flip Nose", "Blind 180 Out".
+(`classifySlide()` is the older one-slide namer; the session now scores
+feature lines instead.)
+
+**Feature lines** (feature riding spec 8, 9). Everything from getting on a
+feature to landing back on the water is one trick, reported as a
+`featureLine` event: in-air entry, slides, rotations on it, transfers and the
+out-air. The session scores that event, not the slide or the airs onto or
+off the feature.
+- *Name* (`featureTrickNamer.ts`):
+  `[Entry] [<deg>-in] <Slide> [[Hard Way] <deg> <Slide>]... [<deg>-out] [Pretzel] [to Fakie/Forward]`,
+  with `Transfer` between the slides of two features.
+  - A 90-in is implied by a boardslide; a 90-out is "to Fakie" / "to
+    Forward".
+  - Entry words: Ollie-on, Side Ollie-on, and Pop-on for a clean pop (the
+    centre of the window). There is none for ride-ons and other safety
+    pops.
+  - `Switch` prefixes slides ridden switch. Nose / Tail Press replaces
+    50-50 when held over 40% of it.
+  - The spec's nine examples come out exactly (`tests/featureNames.test.ts`,
+    plus 17 more and the Luau twin).
+- *Points* (`featureScoring.ts`):
+  - Slides per metre: 50-50 10, boardslide 15, lipslide 18, press 20, wall
+    ride 15. Switch x1.1.
+  - Full Feature +150 for at least 90% of the main ridden.
+  - Rotations in, on and out: 40 per 90 degrees; hard way x1.3, pretzel
+    x1.2.
+  - Entry bonus: pop-on 100, side ollie-on 80, transfer 60, ollie-on 50,
+    pop 40, ride-on 0.
+  - End taps +50, handle passes 100.
+  - Each slide's points take its feature's difficulty multiplier (0.85 +
+    0.15 x catalogue difficulty).
+  - Quality: a clean water landing x1.10; any sketchy entry or exit x0.8.
+- *HUD*: the web HUD shows the line's name as it builds (the in-part on
+  landing on the feature, on-feature parts as they happen, the out-part in
+  the air), and the full name with its points on the water. The Roblox
+  client shows it in the feed.
 
 ## 10. Combos and scoring
 

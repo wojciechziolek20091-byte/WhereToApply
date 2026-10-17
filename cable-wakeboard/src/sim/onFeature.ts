@@ -1,4 +1,5 @@
 import { atan, cos } from './math/detmath';
+import { FEATURE_CATALOG } from './featureCatalog';
 import type { SimConfig } from './config';
 import { deg, DT, GRAVITY } from './config';
 import { edgeNorm, updateEdge } from './edge';
@@ -88,6 +89,13 @@ export function tryEnterFeature(s: SimState): boolean {
   return true;
 }
 
+/** Points multiplier of a feature's catalogue difficulty (the old defs count as 1). */
+function difficultyOf(f: ResolvedFeature, s: SimState): number {
+  const S = s.cfg.featureRide.Scoring;
+  const level = f.def.kind === 'feature' ? (FEATURE_CATALOG[f.def.catalog]?.meta.difficulty ?? 1) : 1;
+  return S.DifficultyBase + S.DifficultyPerLevel * level;
+}
+
 function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, entry: JibState['entry'], sketchy: boolean): JibState {
   const rot = createRotation(s.cfg.handlePass.featureWindow);
   return {
@@ -114,6 +122,12 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     pressTimes: { nose: 0, tail: 0 },
     endTap: null,
     chain: [],
+    switchStance: s.rider.switchStance,
+    slideMetres: { fiftyFifty: 0, switchFiftyFifty: 0, backboard: 0, frontboard: 0, backLip: 0, frontLip: 0, wallRide: 0 },
+    uMin: s.rider.ramp ? s.rider.ramp.u : 0,
+    uMax: s.rider.ramp ? s.rider.ramp.u : 0,
+    partLength: 0,
+    difficulty: difficultyOf(feature, s),
     sketchy,
     rot,
     noiseSeed: s.tick,
@@ -310,6 +324,7 @@ function mountMain(
   r.heading = f.shape.legacy ? f.heading : pieceHeading(f, top ? top.piece : main);
   r.jib = startJib(s, f, boardAngle, entry, sketchy);
   r.jib.pitch = atan(top ? top.slope : 0);
+  r.jib.partLength = partEnd(f, main.part) - start.u0;
   r.popCharge = 0;
   transition(s, 'onFeature', entry);
 }
@@ -387,6 +402,7 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   if (Math.abs(j.boardAngle - nearest) < deg(20)) {
     const id = slideIdAt(j.boardAngle, heading, heading, r, j);
     j.slideTimes[id] += DT;
+    j.slideMetres[id] += vt * DT;
     if (j.slideOrder.length === 0 || j.slideOrder[j.slideOrder.length - 1] !== id) j.slideOrder.push(id);
   }
 
@@ -450,6 +466,8 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   r.pos = toWorld(f, ramp.u, ramp.v, next.height);
   r.vel = add(scale(next.tangent, vt), scale(right, vl));
   r.heading = f.shape.legacy ? f.heading : pieceHeading(f, next.piece);
+  j.uMin = Math.min(j.uMin, ramp.u);
+  j.uMax = Math.max(j.uMax, ramp.u);
 }
 
 /**
@@ -498,6 +516,7 @@ function stepWall(s: SimState, input: InputFrame, mem: InputMemory, f: ResolvedF
   }
   j.time += DT;
   j.slideTimes.wallRide += DT;
+  j.slideMetres.wallRide += Math.max(vu, 0) * DT;
   if (j.slideOrder.length === 0) j.slideOrder.push('wallRide');
   const along = (u: number, wsNow: number, c: number, sn: number) => add(add(scale(fwd, u), scale(right, w.side * wsNow * c)), vec3(0, wsNow * sn, 0));
 
@@ -582,7 +601,7 @@ function landOnSafety(s: SimState, f: ResolvedFeature, air: AirState, surface: F
   const sketchy = pitch > R.Safety.LandingPitchTolerance || air.tailClip;
   r.ramp = { featureId: f.def.id, u, v, releaseTick: -1, releaseTimeToLip: -1, sketchy };
   transition(s, 'onSafety', 'landedOnSafety');
-  s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: false });
+  s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: f.def.id });
 }
 

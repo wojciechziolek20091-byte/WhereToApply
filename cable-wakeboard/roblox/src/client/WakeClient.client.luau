@@ -893,7 +893,11 @@ RunService.RenderStepped:Connect(function(rawDt)
 	local slow = AC.Debug.TimeScales[timeScaleIndex]
 	local slowText = if slow < 1 then `   SLOW x{slow}` else ""
 	status.Text = `  {total} pts   best combo {run.bestCombo}   pass {run.pass + 1}/{sim.cfg.run.passesPerRun}   crashes {#run.crashes}/{sim.cfg.run.maxFalls}{slowText}\n  {math.floor(speed * 3.6)} km/h   {r.mode}   {statusText}`
-	if run.combo and live then
+	-- The feature line as it builds (feature riding spec 8).
+	local lineNow = Sim.FeatureRideFeatureScoring.liveLineName(r)
+	if lineNow then
+		feed.Text = lineNow
+	elseif run.combo and live then
 		feed.Text = `{Sim.ScoringCombo.comboName(run.combo.entries)}   x{string.format("%.2f", live.multiplier)} = {live.total}`
 	elseif lastCrash ~= "" and r.mode == "crashed" then
 		-- Feature crash volumes carry a message per reason (FeatureConfig.CrashMessages).

@@ -13,7 +13,7 @@ export type TrickFamily = 'jump' | 'spin' | 'invert' | 'raley' | 'jib';
 
 /** Building blocks of a trick, kept for the HUD feed and server validation. */
 export interface TrickToken {
-  kind: 'Entry' | 'Slide' | 'Spin' | 'Flip' | 'Invert' | 'Grab' | 'HandlePass' | 'Blind' | 'Exit' | 'Pop';
+  kind: 'Entry' | 'Slide' | 'Spin' | 'Flip' | 'Invert' | 'Grab' | 'HandlePass' | 'Blind' | 'Exit' | 'Pop' | 'Rotation' | 'Bonus';
   name: string;
   degrees: number | null;
   direction: RotationSide | null;

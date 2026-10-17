@@ -2,6 +2,7 @@
 -- Mirrors src/sim/session.ts.
 local Cable = require(script.Parent.Cable)
 local Config = require(script.Parent.Config)
+local FeatureScoring = require(script.Parent.FeatureRideFeatureScoring)
 local Fsm = require(script.Parent.Fsm)
 local Park = require(script.Parent.Park)
 local ScoringCombo = require(script.Parent.ScoringCombo)
@@ -96,7 +97,8 @@ function Session.stepRun(run, input)
 
 	for _, e in s.events do
 		if e.type == "landed" then
-			local trick = TricksClassify.classifyAir(e.air, e.landing, s.cfg)
+			-- Airs onto a feature or off one belong to its feature line (scored on the water).
+			local trick = if e.onFeature or e.air.exit then nil else TricksClassify.classifyAir(e.air, e.landing, s.cfg)
 			if trick then
 				addTrick(run, {
 					tick = e.tick,
@@ -111,22 +113,22 @@ function Session.stepRun(run, input)
 					featureId = e.air.featureId,
 				})
 			end
-		elseif e.type == "slideDone" then
-			local trick = TricksClassify.classifySlide(e.jib, s.cfg)
-			if trick then
-				addTrick(run, {
-					tick = e.tick,
-					pass = run.pass,
-					trick = trick,
-					airTime = 0,
-					height = 0,
-					distance = 0,
-					landingQuality = 1 - math.min(1, math.abs(e.jib.balance)),
-					popQuality = if e.jib.entry == "popOn" then 1 else 0,
-					clean = not e.jib.sketchy,
-					featureId = e.jib.featureId,
-				})
-			end
+		elseif e.type == "featureLine" then
+			-- A whole feature line: entry, slides, rotations, transfers, exit (feature riding spec 8, 9).
+			local trick = FeatureScoring.scoreFeatureLine(e.exit, e.air, e.landing, s.cfg)
+			local last = e.exit.jibs[#e.exit.jibs]
+			addTrick(run, {
+				tick = e.tick,
+				pass = run.pass,
+				trick = trick,
+				airTime = if e.air then e.air.time else 0,
+				height = if e.air then e.air.peakHeight else 0,
+				distance = 0,
+				landingQuality = if e.landing then e.landing.quality else 1 - math.min(1, math.abs(last.balance)),
+				popQuality = if e.exit.jibs[1].entry == "popOn" then 1 else 0,
+				clean = trick.quality > 1,
+				featureId = last.featureId,
+			})
 		elseif e.type == "featureEnter" or e.type == "takeoff" then
 			run.sinceAction = 0
 		elseif e.type == "crash" then

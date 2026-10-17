@@ -9,7 +9,8 @@ import { type ComboEntry, comboName, scoreCombo } from './scoring/combo';
 import { computeRunMetrics, type CrashRecord, type TrickRecord } from './scoring/metrics';
 import { type RunScore, scoreRun } from './scoring/judges';
 import { stepSim } from './step';
-import { classifyAir, classifySlide } from './tricks/classify';
+import { classifyAir } from './tricks/classify';
+import { scoreFeatureLine } from './featureRide/featureScoring';
 import { createSim, type SimState, spawnRiderBehindCarrier } from './world';
 
 /** The combo being built: tricks chained within the link window. */
@@ -126,6 +127,8 @@ export function stepRun(run: RunState, input: InputFrame): void {
 
   for (const e of s.events) {
     if (e.type === 'landed') {
+      // Airs onto a feature or off one belong to its feature line (scored on the water).
+      if (e.onFeature || e.air.exit) continue;
       const trick = classifyAir(e.air, e.landing, s.cfg);
       if (!trick) continue;
       addTrick(run, {
@@ -140,20 +143,21 @@ export function stepRun(run: RunState, input: InputFrame): void {
         clean: e.landing.clean,
         featureId: e.air.featureId,
       });
-    } else if (e.type === 'slideDone') {
-      const trick = classifySlide(e.jib, s.cfg);
-      if (!trick) continue;
+    } else if (e.type === 'featureLine') {
+      // A whole feature line: entry, slides, rotations, transfers, exit (feature riding spec 8, 9).
+      const trick = scoreFeatureLine(e.exit, e.air, e.landing, s.cfg);
+      const last = e.exit.jibs[e.exit.jibs.length - 1]!;
       addTrick(run, {
         tick: e.tick,
         pass: run.pass,
         trick,
-        airTime: 0,
-        height: 0,
+        airTime: e.air ? e.air.time : 0,
+        height: e.air ? e.air.peakHeight : 0,
         distance: 0,
-        landingQuality: 1 - Math.min(1, Math.abs(e.jib.balance)),
-        popQuality: e.jib.entry === 'popOn' ? 1 : 0,
-        clean: !e.jib.sketchy,
-        featureId: e.jib.featureId,
+        landingQuality: e.landing ? e.landing.quality : 1 - Math.min(1, Math.abs(last.balance)),
+        popQuality: e.exit.jibs[0]!.entry === 'popOn' ? 1 : 0,
+        clean: trick.quality > 1,
+        featureId: last.featureId,
       });
     } else if (e.type === 'featureEnter' || e.type === 'takeoff') {
       run.sinceAction = 0;

@@ -269,6 +269,16 @@ export interface JibState {
   endTap: 'nose' | 'tail' | null;
   /** Earlier slides of this line (transfers, hops back on), oldest first. */
   chain: JibState[];
+  /** Riding switch when it got on. */
+  switchStance: boolean;
+  /** Metres slid in each slide (FeatureScoring). */
+  slideMetres: Record<SlideId, number>;
+  /** Range of the main ridden (m along the feature) and the main's length, for coverage. */
+  uMin: number;
+  uMax: number;
+  partLength: number;
+  /** Points multiplier of the feature's difficulty. */
+  difficulty: number;
   /** Early pop onto a flush main: combo multiplier x0.8. */
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */
@@ -287,6 +297,8 @@ export interface FeatureRotationRecord {
   from: SlideId;
   /** Tick its last step finished, -1 while turning. */
   endTick: number;
+  /** The slide it ended in (null while turning). */
+  to: SlideId | null;
   /** Jib time when it started (s). */
   atTime: number;
 }

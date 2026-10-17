@@ -89,8 +89,9 @@ export function stepFeatureRotation(s: SimState, j: JibState, heading: number, m
       // Held on through the step: the same rotation goes on.
       last.deg += 90;
       last.hardWay = last.hardWay || hardWay;
+      last.to = null;
     } else {
-      j.rotations.push({ deg: 90, dir, side, hardWay, from, endTick: -1, atTime: j.time });
+      j.rotations.push({ deg: 90, dir, side, hardWay, from, endTick: -1, to: null, atTime: j.time });
     }
     const hit = (hardWay ? R.HardWayHit : 0) + slopedTurnHit(j, s);
     if (hit > 0 && cfg.feature.balanceEnabled) j.balance += hit * (j.balance >= 0 ? 1 : -1);
@@ -99,7 +100,11 @@ export function stepFeatureRotation(s: SimState, j: JibState, heading: number, m
   }
   const was = j.boardAngle;
   j.boardAngle = approach(j.boardAngle, j.targetAngle, stepRate * DT);
-  if (was !== j.boardAngle && j.boardAngle === j.targetAngle && j.rotations.length > 0) j.rotations[j.rotations.length - 1]!.endTick = s.tick;
+  if (was !== j.boardAngle && j.boardAngle === j.targetAngle && j.rotations.length > 0) {
+    const last = j.rotations[j.rotations.length - 1]!;
+    last.endTick = s.tick;
+    last.to = slideIdAt(j.boardAngle, heading, heading, r, j);
+  }
   j.rot.spinAngle = j.boardAngle - j.entryAngle;
   j.rot.maxSpin = Math.max(j.rot.maxSpin, Math.abs(j.rot.spinAngle));
   const h = updateHandle(r.handle, j.rot, mem.passPressed, { rate: stepRate, inAir: false }, cfg, DT);
