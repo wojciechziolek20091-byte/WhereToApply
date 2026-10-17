@@ -11,6 +11,7 @@ local Features = require(script.Parent.Features)
 local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local SlideController = require(script.Parent.FeatureRideSlideController)
 local FeatureRotation = require(script.Parent.FeatureRideFeatureRotation)
+local PressController = require(script.Parent.FeatureRidePressController)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
 local Landing = require(script.Parent.Landing)
@@ -120,6 +121,11 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		spiked = false,
 		entrySlide = nil,
 		rotations = {},
+		press = 0,
+		pressTime = 0,
+		pressAmount = 0,
+		pressTimes = { nose = 0, tail = 0 },
+		endTap = nil,
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
@@ -447,6 +453,7 @@ function OnFeature.stepSlide(s, input, mem)
 		return
 	end
 
+	PressController.stepPress(s, j, mem, SlideController.partEnd(f, piece.part) - ramp.u)
 	local fell = SlideController.stepBalance(s, j, f, piece, surface, ramp.u, ropeLat, Vec.dot(rope.force, t), mem)
 	if fell == "fell" then
 		endSlide(s)

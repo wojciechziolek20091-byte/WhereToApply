@@ -55,7 +55,12 @@ export interface RiderAnimState {
   };
   handle: 'InFront' | 'Behind' | 'Passing' | 'Dropped';
   passProgress: number | null;
-  feature: { slide: SlideName | null; balance: number } | null;
+  /**
+   * On a feature: the slide pose, balance across (-1..1) and fore-aft, press
+   * (-1 tail .. +1 nose, how far the board has rocked onto it) and how the
+   * rider got on (feature riding spec 11: exposed for poses; not replicated).
+   */
+  feature: { slide: SlideName | null; balance: number; fore?: number; press?: number; entry?: string } | null;
   landing: { impactSpeed: number; quality: 'Clean' | 'Sketchy' | null } | null;
   crashReason: string | null;
   ext: {
@@ -243,7 +248,7 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
     const f = sim.features.find((x) => x.def.id === jib.featureId);
     if (f) {
       const slide = slideIdAt(jib.boardAngle, f.heading, r.heading, r, jib);
-      feature = { slide: SLIDE[slide] ?? null, balance: jib.balance };
+      feature = { slide: SLIDE[slide] ?? null, balance: jib.balance, fore: jib.fore, press: jib.pressAmount, entry: jib.entry };
       // Narrow mains (rails, pipes) look like rails; the old defs keep their style.
       rail = f.def.kind === 'slider' ? f.def.style !== 'box' : f.def.kind === 'feature' && f.shape.pieces.some((p) => p.slide && p.width < 0.6);
       const wall = f.shape.pieces[0]!.wall;

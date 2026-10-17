@@ -181,6 +181,7 @@ Config.DEFAULT_CONFIG = {
 			ForeDecay = 2,
 			LastMetre = 1,
 		},
+		Press = { Pitch = 0.17453292519943295, RampTime = 0.15, NarrowRate = 0.25, MinWindow = 0.2, Lean = 0.4, EndTapZone = 0.5 },
 		Rotation = { HardWayHit = 0.3 },
 		Safety = { LandingPitchTolerance = 0.2617993877991494, LandingPitchCrash = 0.5235987755982988 },
 	},

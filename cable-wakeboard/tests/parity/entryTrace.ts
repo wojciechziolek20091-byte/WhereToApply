@@ -15,8 +15,8 @@ export interface EntryScenario {
   /** Slider def fields over a 1 m box, 8 m long, 0.5 m high, 3 m flush safety, at s 135 on the line. */
   def: { offset?: number; yaw?: number; entryLength?: number; safety?: 'flush' | 'gap' };
   stance: 'regular' | 'goofy';
-  /** [from, to) seconds: pop held (0/1) and steer (-1, 0, 1; the last non-zero one wins). */
-  steps: [number, number, number, number][];
+  /** [from, to) seconds: pop held (0/1) and steer (-1, 0, 1; the last non-zero one wins); optional W/S (+1 / -1). */
+  steps: ([number, number, number, number] | [number, number, number, number, number])[];
 }
 
 const T = 1 / 60;
@@ -37,6 +37,8 @@ export const ENTRY_SCENARIOS: EntryScenario[] = [
   { name: 'toeside 90-in lipslide', def: { offset: 1.6 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1], [3.4 + T, 3.6, 0, -1]] },
   { name: '50-50 180 on the box', def: {}, stance: 'goofy', steps: [[3.6, 3.95, 0, -1]] },
   { name: 'rotation into the end', def: {}, stance: 'regular', steps: [[4.3, 4.6, 0, -1]] },
+  { name: 'nose press', def: {}, stance: 'regular', steps: [[3.6, 4.4, 0, 0, 1]] },
+  { name: 'tail press, end tap', def: {}, stance: 'goofy', steps: [[3.6, 4.2, 0, 0, -1], [4.45, 4.5, 0, 0, 1]] },
 ];
 
 /** One row per tick until a crash or 6 s: state, approach, entry. */
@@ -51,10 +53,12 @@ export function entryTrace(sc: EntryScenario): TraceRow[] {
   for (let i = 0; i < 360; i++) {
     const t = i / 60;
     const input = neutralInput();
-    for (const [from, to, pop, steer] of sc.steps) {
+    for (const [from, to, pop, steer, fore] of sc.steps) {
       if (t >= from && t < to) {
         if (pop === 1) input.pop = true;
         if (steer !== 0) input.steer = steer;
+        if (fore === 1) input.forward = true;
+        if (fore === -1) input.back = true;
       }
     }
     stepSim(s, input);
@@ -86,6 +90,9 @@ export function entryTrace(sc: EntryScenario): TraceRow[] {
       r.jib ? r.jib.inRotation : 0,
       r.jib ? r.jib.slideOrder.join('/') : '-',
       r.jib ? r.jib.rotations.map((x) => `${x.deg}${x.hardWay ? 'h' : ''}`).join('/') : '-',
+      r.jib ? r.jib.pressAmount : 0,
+      r.jib ? r.jib.fore : 0,
+      r.jib?.endTap ?? '-',
       crash?.type === 'crash' ? crash.reason : '-',
     ]);
     if (crash) break;

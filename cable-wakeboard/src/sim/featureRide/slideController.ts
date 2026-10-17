@@ -24,7 +24,7 @@ export const isBoardslide = (boardAngle: number): boolean => mod(Math.round(boar
 export function slideFriction(f: ResolvedFeature, j: JibState, s: SimState): number {
   const S = s.cfg.featureRide.Slide;
   const mu = f.shape.friction ?? S.MaterialFriction[f.shape.material] ?? s.cfg.feature.friction;
-  return mu * (isBoardslide(j.boardAngle) ? S.BoardslideFriction : 1);
+  return mu * (isBoardslide(j.boardAngle) ? S.BoardslideFriction : Math.abs(j.pressAmount) >= 0.5 ? S.PressFriction : 1);
 }
 
 /** Any input held: the knees are not soft over a kink. */
@@ -56,6 +56,12 @@ export function stepKink(s: SimState, j: JibState, pitch: number, speed: number,
   const lift = Math.min(S.KinkLiftPerRadSpeed * d * speed, S.KinkLiftMax);
   if (lift >= S.KinkLiftMin) j.lift = lift;
   return null;
+}
+
+/** Fore-aft limit: 1, narrowing with the time a press is held (spec 5.5), to at least Press.MinWindow. */
+export function foreLimit(j: JibState, s: SimState): number {
+  const P = s.cfg.featureRide.Press;
+  return j.press === 0 ? 1 : Math.max(P.MinWindow, 1 - P.NarrowRate * j.pressTime);
 }
 
 /** End of the slideable part a piece belongs to, along the feature axis. */
@@ -96,13 +102,14 @@ export function stepBalance(
   const bySlide = round ? (board ? B.PipeBoardslideFactor : B.PipeFiftyFactor) : board ? B.BoardslideFactor : 1;
   const noise = valueNoise(j.time * B.NoiseRate, j.noiseSeed);
   j.balance += (noise * top * bySlide + ropeLat / B.RopeTip + surface.crossSlope * B.CrossSlopeGain) * DT + mem.steerTap * B.TapStrength;
-  if (board) {
+  if (board || j.press !== 0) {
     const n2 = valueNoise(j.time * B.NoiseRate + 57.3, j.noiseSeed + 1);
-    j.fore += (n2 * B.ForeNoise + ropeAlong / B.ForeRopeTip - surface.slope * B.ForeSlopeGain) * DT + mem.foreTap * B.ForeTapStrength;
+    const lean = j.press * cfg.featureRide.Press.Lean;
+    j.fore += (n2 * B.ForeNoise + ropeAlong / B.ForeRopeTip - surface.slope * B.ForeSlopeGain + lean) * DT + mem.foreTap * B.ForeTapStrength;
   } else {
     j.fore = approach(j.fore, 0, B.ForeDecay * DT);
   }
   j.fore = clamp(j.fore, -2, 2);
-  if (Math.abs(j.balance) <= 1 && Math.abs(j.fore) <= 1) return null;
+  if (Math.abs(j.balance) <= 1 && Math.abs(j.fore) <= foreLimit(j, s)) return null;
   return partEnd(f, piece.part) - u < B.LastMetre ? 'sketchyExit' : 'fell';
 }

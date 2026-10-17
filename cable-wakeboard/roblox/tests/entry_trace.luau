@@ -55,6 +55,11 @@ local function entryTrace(sc)
 				if st[4] ~= 0 then
 					input.steer = st[4]
 				end
+				if st[5] == 1 then
+					input.forward = true
+				elseif st[5] == -1 then
+					input.back = true
+				end
 			end
 		end
 		Sim.Step.stepSim(s, input)
@@ -92,6 +97,9 @@ local function entryTrace(sc)
 			if r.jib then r.jib.inRotation else 0,
 			if r.jib then table.concat(r.jib.slideOrder, "/") else "-",
 			if r.jib then rotationsOf(r.jib) else "-",
+			if r.jib then r.jib.pressAmount else 0,
+			if r.jib then r.jib.fore else 0,
+			if r.jib and r.jib.endTap then r.jib.endTap else "-",
 			if crash then crash.reason else "-",
 		})
 		if crash then

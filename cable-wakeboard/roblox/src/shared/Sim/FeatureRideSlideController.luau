@@ -15,7 +15,11 @@ end
 function SlideController.slideFriction(f, j, s)
 	local S = s.cfg.featureRide.Slide
 	local mu = f.shape.friction or S.MaterialFriction[f.shape.material] or s.cfg.feature.friction
-	return mu * (if SlideController.isBoardslide(j.boardAngle) then S.BoardslideFriction else 1)
+	local k = if SlideController.isBoardslide(j.boardAngle)
+		then S.BoardslideFriction
+		elseif math.abs(j.pressAmount) >= 0.5 then S.PressFriction
+		else 1
+	return mu * k
 end
 
 local function busy(input)
@@ -52,6 +56,11 @@ function SlideController.stepKink(s, j, pitch, speed, input)
 	return nil
 end
 
+function SlideController.foreLimit(j, s)
+	local P = s.cfg.featureRide.Press
+	return if j.press == 0 then 1 else math.max(P.MinWindow, 1 - P.NarrowRate * j.pressTime)
+end
+
 function SlideController.partEnd(f, part)
 	local u1 = -math.huge
 	for _, q in f.shape.pieces do
@@ -85,14 +94,15 @@ function SlideController.stepBalance(s, j, f, piece, surface, u, ropeLat, ropeAl
 		else 1
 	local noise = Noise.valueNoise(j.time * B.NoiseRate, j.noiseSeed)
 	j.balance += (noise * top * bySlide + ropeLat / B.RopeTip + surface.crossSlope * B.CrossSlopeGain) * DT + mem.steerTap * B.TapStrength
-	if board then
+	if board or j.press ~= 0 then
 		local n2 = Noise.valueNoise(j.time * B.NoiseRate + 57.3, j.noiseSeed + 1)
-		j.fore += (n2 * B.ForeNoise + ropeAlong / B.ForeRopeTip - surface.slope * B.ForeSlopeGain) * DT + mem.foreTap * B.ForeTapStrength
+		local lean = j.press * cfg.featureRide.Press.Lean
+		j.fore += (n2 * B.ForeNoise + ropeAlong / B.ForeRopeTip - surface.slope * B.ForeSlopeGain + lean) * DT + mem.foreTap * B.ForeTapStrength
 	else
 		j.fore = Scalar.approach(j.fore, 0, B.ForeDecay * DT)
 	end
 	j.fore = Scalar.clamp(j.fore, -2, 2)
-	if math.abs(j.balance) <= 1 and math.abs(j.fore) <= 1 then
+	if math.abs(j.balance) <= 1 and math.abs(j.fore) <= SlideController.foreLimit(j, s) then
 		return nil
 	end
 	return if SlideController.partEnd(f, piece.part) - u < B.LastMetre then "sketchyExit" else "fell"

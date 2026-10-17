@@ -343,6 +343,19 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     need Q in `handlePass.featureWindow` (0.35 s) or the handle drops.
     Running off the end with the board still turning is
     `ranOutMidRotation`; at the park's speed a step needs about 1.5 m.
+- **PressController** (`pressController.ts`, spec 5.5).
+  - *Presses*: on a 50-50 or switch 50-50, W held past `feature.tapTime` is
+    a nose press and S a tail press. The board rocks onto that end
+    (`jib.pressAmount` to +-1 over `Press.RampTime`, 0.15 s; pitch
+    `Press.Pitch`, 10 degrees) and slides on x0.8 friction.
+  - *Fore-aft balance while pressing*: it leans toward the pressed end
+    (`Press.Lean`, 0.4 per s), and its window narrows by `NarrowRate` (0.25)
+    per second held, to `MinWindow` (0.2). So the rider has to let go
+    before the meter runs out. `jib.pressTimes` counts the seconds on each
+    end.
+  - *End taps*: a W/S tap in the last `EndTapZone` (0.5 m) of the feature is
+    a nose / tail tap (`jib.endTap`, a small bonus).
+  - The animation state carries `feature.press` and `feature.fore`.
 - **SlideController** (`slideController.ts`, spec 5.1, 5.6, 5.7): what the
   feature does to a slide.
   - *Speed along the feature*: rope pull along it, gravity along the slope,

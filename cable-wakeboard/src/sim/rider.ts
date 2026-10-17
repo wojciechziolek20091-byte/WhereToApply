@@ -244,6 +244,14 @@ export interface JibState {
   entrySlide: SlideId | null;
   /** Rotations on the feature, in order (FeatureRotation). */
   rotations: FeatureRotationRecord[];
+  /** Press held: +1 nose (W), -1 tail (S), 0 none; for how long (s); how far the board has rocked onto it (-1..1). */
+  press: number;
+  pressTime: number;
+  pressAmount: number;
+  /** Seconds pressed on each end. */
+  pressTimes: { nose: number; tail: number };
+  /** A nose or tail tap at the very end. */
+  endTap: 'nose' | 'tail' | null;
   /** Early pop onto a flush main: combo multiplier x0.8. */
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */

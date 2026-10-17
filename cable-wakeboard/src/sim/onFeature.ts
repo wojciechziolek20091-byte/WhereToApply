@@ -18,7 +18,8 @@ import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
 import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
-import { slideFriction, stepBalance, stepKink } from './featureRide/slideController';
+import { partEnd, slideFriction, stepBalance, stepKink } from './featureRide/slideController';
+import { stepPress } from './featureRide/pressController';
 import { midRotation, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
 
 /**
@@ -105,6 +106,11 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     spiked: false,
     entrySlide: null,
     rotations: [],
+    press: 0,
+    pressTime: 0,
+    pressAmount: 0,
+    pressTimes: { nose: 0, tail: 0 },
+    endTap: null,
     sketchy,
     rot,
     noiseSeed: s.tick,
@@ -341,6 +347,8 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
     return;
   }
 
+  // Presses (W/S held on a 50-50) and end taps.
+  stepPress(s, j, mem, partEnd(f, piece.part) - ramp.u);
   // Balance across and fore-aft (SlideController); out near the end is a sketchy exit.
   const fell = stepBalance(s, j, f, piece, surface, ramp.u, ropeLat, dot(rope.force, t), mem);
   if (fell === 'fell') {

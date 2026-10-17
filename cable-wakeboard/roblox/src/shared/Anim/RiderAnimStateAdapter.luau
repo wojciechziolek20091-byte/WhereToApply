@@ -196,7 +196,7 @@ function Adapter.fromSim(sim, events, prev)
 		local f = findFeature(sim, jib.featureId)
 		if f then
 			local slide = Sim.OnFeature.slideIdAt(jib.boardAngle, f.heading, r.heading, r, jib)
-			feature = { slide = SLIDE[slide], balance = jib.balance }
+			feature = { slide = SLIDE[slide], balance = jib.balance, fore = jib.fore, press = jib.pressAmount, entry = jib.entry }
 			-- Narrow mains (rails, pipes) look like rails; the old defs keep their style.
 			if f.def.kind == "slider" then
 				rail = f.def.style ~= "box"

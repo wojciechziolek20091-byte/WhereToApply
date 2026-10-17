@@ -140,6 +140,20 @@ export interface FeatureRideConfig {
     /** Losing balance within this of the end (m) is a sketchy exit, not a crash. */
     LastMetre: number;
   };
+  /** Nose and tail presses (spec 5.5). */
+  Press: {
+    /** Board pitch at full press (rad). */
+    Pitch: number;
+    /** Seconds to rock onto the end. */
+    RampTime: number;
+    /** The fore-aft window narrows this much per second held, to at least MinWindow. */
+    NarrowRate: number;
+    MinWindow: number;
+    /** Weight on one end leans the fore-aft balance that way (per s). */
+    Lean: number;
+    /** A W/S tap within this of the end (m) is a nose / tail tap. */
+    EndTapZone: number;
+  };
   /** Rotations on the feature (spec 5.4). */
   Rotation: {
     /** Balance hit of a hard-way step (a shorter balance window). */
@@ -224,6 +238,7 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     ForeDecay: 2,
     LastMetre: 1.0,
   },
+  Press: { Pitch: deg(10), RampTime: 0.15, NarrowRate: 0.25, MinWindow: 0.2, Lean: 0.4, EndTapZone: 0.5 },
   Rotation: { HardWayHit: 0.3 },
   Safety: { LandingPitchTolerance: deg(15), LandingPitchCrash: deg(30) },
 };

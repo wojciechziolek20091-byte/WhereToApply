@@ -3,7 +3,7 @@ import type { FeatureDef } from '../src/sim/park';
 import { surfaceAt, toWorld } from '../src/sim/features';
 import { trackApproach } from '../src/sim/featureRide/approachTracker';
 import { balanceHalfWidth } from '../src/sim/featureRide/entryResolver';
-import { slideFriction, stepBalance } from '../src/sim/featureRide/slideController';
+import { foreLimit, slideFriction, stepBalance } from '../src/sim/featureRide/slideController';
 import { sideEntrySlide, slideSide } from '../src/sim/featureRide/featureRotation';
 import { cos } from '../src/sim/math/detmath';
 import { SLIDES } from '../src/sim/tricks/data';
@@ -559,5 +559,69 @@ describe('Rotations on and onto the feature (feature ride M5, spec 5.3, 5.4)', (
 
   it('fail 7: a backside rotation on the feature without Q drops the handle', () => {
     expect(play(slider(), (t) => ({ steer: between(3.6, 4.0)(t) ? 1 : 0 })).crash).toBe('handleDropped');
+  });
+});
+
+describe('PressController: presses and taps (feature ride M6, spec 5.5)', () => {
+  it('W held on a 50-50 is a nose press, S a tail press: the board rocks 10 degrees onto that end', () => {
+    const nose = play(slider(), (t) => ({ forward: between(3.6, 4.4)(t) }));
+    expect(nose.crash).toBeNull();
+    expect(nose.jib!.pressTimes.nose).toBeGreaterThan(0.5);
+    expect(nose.jib!.pressTimes.tail).toBe(0);
+    const tail = play(slider(), (t) => ({ back: between(3.6, 4.4)(t) }));
+    expect(tail.jib!.pressTimes.tail).toBeGreaterThan(0.5);
+    expect(nose.s.cfg.featureRide.Press.Pitch).toBeCloseTo(deg(10), 9);
+  });
+
+  it('a press rides on less base: friction x0.8', () => {
+    const s = featureSim(slider());
+    const f = s.features[0]!;
+    const j = { boardAngle: 0, pressAmount: 1 } as Parameters<typeof slideFriction>[1];
+    expect(slideFriction(f, j, s)).toBeCloseTo(0.06 * 0.8, 9);
+  });
+
+  it('no press in a boardslide; a W/S tap is not a press', () => {
+    const board = play(slider(), (t) => ({ steer: between(3.6, 3.8)(t) ? -1 : 0, forward: between(4.0, 4.4)(t) }));
+    expect(board.jib!.pressTimes.nose).toBe(0);
+    const tap = play(slider(), (t) => ({ forward: between(3.7, 3.75)(t) }));
+    expect(tap.jib!.pressTimes.nose).toBe(0);
+  });
+
+  it('the fore-aft window narrows the longer the press is held: let go in time or fall off', () => {
+    const s = featureSim(slider());
+    const j = { press: 1, pressTime: 0 } as Parameters<typeof foreLimit>[0];
+    expect(foreLimit(j, s)).toBe(1);
+    j.pressTime = 2;
+    expect(foreLimit(j, s)).toBeCloseTo(0.5, 9);
+    j.pressTime = 10;
+    expect(foreLimit(j, s)).toBeCloseTo(s.cfg.featureRide.Press.MinWindow, 9);
+    // A long box: holding the press the whole way falls off; letting go after a second is fine.
+    const long = slider({ length: 16 });
+    const withBalance = (s: SimState) => (s.cfg.feature.balanceEnabled = true);
+    const held = play(long, (t) => ({ forward: between(3.6, 6)(t) }), withBalance, 7);
+    expect(held.crash).toBe('fellOffFeature');
+    expect(held.jib!.pressTimes.nose).toBeGreaterThan(1);
+    const brief = play(long, (t) => ({ forward: between(3.6, 4.4)(t) }), withBalance, 7);
+    expect(brief.jib!.pressTimes.nose).toBeGreaterThan(0.5);
+    expect(brief.crash).not.toBe('fellOffFeature');
+  });
+
+  it('a W tap in the last 0.5 m is a nose tap, S a tail tap; earlier it is not', () => {
+    const tapAt = (key: 'forward' | 'back', fromEnd: number) => {
+      const s = featureSim(slider(), noBalance);
+      let slide: SimEvent | undefined;
+      // Down for 0.3 m (under feature.tapTime at this speed), let go `fromEnd` before the end.
+      runUntil(s, 6, (_t, st) => {
+        const u = st.rider.mode === 'onFeature' && st.rider.ramp ? st.rider.ramp.u : -1;
+        return { [key]: u >= 11 - fromEnd - 0.3 && u < 11 - fromEnd };
+      }, (e) => {
+        if (e.type === 'slideDone') slide = e;
+        return e.type === 'slideDone';
+      });
+      return slide?.type === 'slideDone' ? slide.jib.endTap : 'none';
+    };
+    expect(tapAt('forward', 0.2)).toBe('nose');
+    expect(tapAt('back', 0.2)).toBe('tail');
+    expect(tapAt('forward', 2)).toBeNull();
   });
 });
