@@ -13,6 +13,7 @@ local SlideController = require(script.Parent.FeatureRideSlideController)
 local FeatureRotation = require(script.Parent.FeatureRideFeatureRotation)
 local PressController = require(script.Parent.FeatureRidePressController)
 local ExitResolver = require(script.Parent.FeatureRideExitResolver)
+local FeatureSpecials = require(script.Parent.FeatureRideFeatureSpecials)
 local FeatureShapes = require(script.Parent.FeatureShapes)
 local Fsm = require(script.Parent.Fsm)
 local Landing = require(script.Parent.Landing)
@@ -366,8 +367,16 @@ stepWall = function(s, input, mem, f)
 	ws += (-GRAVITY * sinT + (Vec.dot(rope.force, right) * w.side * cosT) / m - fr * ws) * DT
 	r.edgeLoad = 0
 	if vu < cfg.feature.stallSpeed then
+		-- Too slow along the wall (spec 7): low down it slides back into the water, higher up down the wall.
+		local slow = FeatureSpecials.wallTooSlow(x, s)
+		if slow == "sketchy" then
+			j.sketchy = true
+			r.vel = Vec.add(Vec.scale(fwd, math.max(vu, 0)), Vec.scale(right, -w.side * 0.5))
+			rideOut(s, f)
+			return
+		end
 		endSlide(s)
-		Actions.crash(s, "fellOffFeature")
+		Actions.crash(s, slow)
 		return
 	end
 	j.time += DT
@@ -502,7 +511,7 @@ function OnFeature.stepSlide(s, input, mem)
 			r.vel = Vec.add(r.vel, Vec.scale(right, mem.steerDir * cfg.feature.sideHop))
 		end
 		local kind = ExitResolver.popKind(s, SlideController.partEnd(f, piece.part) - ramp.u, mem.steerDir)
-		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg), charge, piece, kind)
+		leaveFeature(s, f, Pop.ollieSpeed(charge, cfg) * FeatureSpecials.popScaleOn(piece, s), charge, piece, kind)
 		return
 	end
 

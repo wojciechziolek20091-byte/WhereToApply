@@ -12,6 +12,7 @@ import { airOverFeature, stepRamp, stepSlide, tryEnterFeature } from './onFeatur
 import { trackApproach } from './featureRide/approachTracker';
 import { landedInGap, startEntry } from './featureRide/entryResolver';
 import { stepExitAssist } from './featureRide/exitResolver';
+import { markSpineFlat, spineFlatLanding } from './featureRide/featureSpecials';
 import { sign } from './math/scalar';
 import { ollieCharge, ollieSpeed, waterTrickTiming } from './pop';
 import { updatePosture } from './posture';
@@ -114,8 +115,13 @@ function stepAirborne(s: SimState, input: InputFrame): void {
   stepExitAssist(s, air, input);
   if (airOverFeature(s, air)) return;
   if (r.pos.y <= 0 && r.vel.y < 0) {
+    const spine = spineFlatLanding(s, air);
     if (landedInGap(s, air)) crash(s, 'landedInGap');
-    else touchDown(s, air, UP, 0);
+    else if (spine === 'hard') crash(s, 'hardLanding');
+    else {
+      const landing = touchDown(s, air, UP, 0);
+      if (spine === 'flat') markSpineFlat(landing);
+    }
   }
 }
 

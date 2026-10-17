@@ -39,6 +39,7 @@ const CRASH_NAMES: Record<CrashReason, string> = {
   stalled: 'Stalled: too slow',
   kinkThrow: 'Thrown off at the kink',
   ranOutMidRotation: 'Ran out of feature mid-rotation',
+  wallSlideDown: 'Too slow: slid down the wall',
 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement, text = ''): HTMLElementTagNameMap[K] => {

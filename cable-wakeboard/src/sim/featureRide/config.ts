@@ -154,6 +154,18 @@ export interface FeatureRideConfig {
     /** A W/S tap within this of the end (m) is a nose / tail tap. */
     EndTapZone: number;
   };
+  /** Feature specials (spec 7). */
+  Specials: {
+    /** Funbox: pop speed off the down end. */
+    DownEndPopScale: number;
+    /** Rotations started on a slope steeper than this (rad) cost SlopedTurnHit. */
+    SlopedTurnPitch: number;
+    SlopedTurnHit: number;
+    /** Wall ride too slow at most this far up the profile (m) slides back down (sketchy); higher, wallSlideDown. */
+    WallSketchyHeight: number;
+    /** Spine: missing the far slope and landing flat on the water faster than this (m/s) crashes. */
+    SpineFlatCrash: number;
+  };
   /** Exits (spec 6). */
   Exit: {
     /** Space within this of the end (m) is a pop-off; earlier it is a hop (or a side pop with A/D). */
@@ -248,6 +260,7 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     LastMetre: 1.0,
   },
   Press: { Pitch: deg(10), RampTime: 0.15, NarrowRate: 0.25, MinWindow: 0.2, Lean: 0.4, EndTapZone: 0.5 },
+  Specials: { DownEndPopScale: 0.7, SlopedTurnPitch: deg(5), SlopedTurnHit: 0.2, WallSketchyHeight: 0.6, SpineFlatCrash: 6.5 },
   Exit: { PopOffZone: 1.0, AssistAngle: deg(45), AssistRate: deg(360) },
   Rotation: { HardWayHit: 0.3 },
   Safety: { LandingPitchTolerance: deg(15), LandingPitchCrash: deg(30) },

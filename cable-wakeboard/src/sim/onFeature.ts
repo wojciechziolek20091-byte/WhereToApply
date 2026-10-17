@@ -21,6 +21,7 @@ import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './fea
 import { isBoardslide, partEnd, slideFriction, stepBalance, stepKink } from './featureRide/slideController';
 import { stepPress } from './featureRide/pressController';
 import { exitOf, popKind } from './featureRide/exitResolver';
+import { popScaleOn, wallTooSlow } from './featureRide/featureSpecials';
 import { midRotation, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
 
 /**
@@ -394,7 +395,7 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
     const charge = ollieCharge(mem.popHeldTime, cfg);
     // A/D pressed as the pop goes: off the side (a side pop, or across to a transfer box).
     if (mem.steerDir !== 0) r.vel = add(r.vel, scale(right, mem.steerDir * cfg.feature.sideHop));
-    leaveFeature(s, f, ollieSpeed(charge, cfg), charge, piece, popKind(s, partEnd(f, piece.part) - ramp.u, mem.steerDir));
+    leaveFeature(s, f, ollieSpeed(charge, cfg) * popScaleOn(piece, s), charge, piece, popKind(s, partEnd(f, piece.part) - ramp.u, mem.steerDir));
     return;
   }
 
@@ -483,8 +484,16 @@ function stepWall(s: SimState, input: InputFrame, mem: InputMemory, f: ResolvedF
   ws += (-GRAVITY * sinT + (dot(rope.force, right) * w.side * cosT) / m - fr * ws) * DT;
   r.edgeLoad = 0;
   if (vu < cfg.feature.stallSpeed) {
+    // Too slow along the wall (spec 7): low down it slides back into the water, higher up down the wall.
+    const slow = wallTooSlow(x, s);
+    if (slow === 'sketchy') {
+      j.sketchy = true;
+      r.vel = add(scale(fwd, Math.max(vu, 0)), scale(right, -w.side * 0.5));
+      rideOut(s, f);
+      return;
+    }
     endSlide(s);
-    crash(s, 'fellOffFeature');
+    crash(s, slow);
     return;
   }
   j.time += DT;

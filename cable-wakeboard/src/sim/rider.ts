@@ -65,6 +65,8 @@ export type CrashReason =
   | 'kinkThrow'
   /** Ran off the end of the feature in the middle of a rotation on it. */
   | 'ranOutMidRotation'
+  /** Too slow on a wall ride: slid down the wall. */
+  | 'wallSlideDown'
   /** Popped off a gap safety into the gap. */
   | 'landedInGap';
 

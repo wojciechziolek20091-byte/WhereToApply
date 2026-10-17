@@ -365,6 +365,24 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
   - *Line event*: the whole line (every slide, how it was left, the air)
     is one `featureLine` event when the rider lands on the water, or rides
     straight in.
+- **FeatureSpecials** (`featureSpecials.ts`, spec 7). Most of the table
+  falls out of the shapes and shared rules:
+  - gap boxes: `missedSafetyPop`, `landedInGap`;
+  - pipes: balance width and noise;
+  - kinks and rooftops: the SlideController;
+  - step-ups and transfer boxes: clearance at the next part, named as
+    transfers;
+  - pyramids: ride as a kicker or a box.
+
+  The rest:
+  - *Funbox*: a pop off the down end gets x0.7 of the pop speed.
+  - *Rotations on a slope* steeper than 5 degrees (rooftop sides, kinks)
+    cost 0.2 balance; the flat top is the place for them.
+  - *Wall ride too slow* (below `feature.stallSpeed` along it): within
+    0.6 m up the profile it slides back into the water, sketchy; higher it
+    is `wallSlideDown`.
+  - *Spine*: missing the far down slope and landing flat on the water is
+    never clean, and faster than 6.5 m/s down it is `hardLanding`.
 - **PressController** (`pressController.ts`, spec 5.5).
   - *Presses*: on a 50-50 or switch 50-50, W held past `feature.tapTime` is
     a nose press and S a tail press. The board rocks onto that end
@@ -452,6 +470,7 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 | `stalled` | Slower than 1 m/s along a feature (up a rooftop with the rope slack) |
 | `kinkThrow` | Over a kink sharper than 12 degrees too fast |
 | `ranOutMidRotation` | Off the end of the feature with the board still turning |
+| `wallSlideDown` | Too slow high on a wall ride: slid down the wall |
 
 ## 9. Tricks, names and points
 

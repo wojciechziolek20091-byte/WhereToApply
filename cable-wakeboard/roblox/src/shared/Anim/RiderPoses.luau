@@ -416,6 +416,7 @@ RiderPoses.CRASH_LEAD_IN = {
 	stalled = "crashSitBack",
 	kinkThrow = "crashForward",
 	ranOutMidRotation = "crashSide",
+	wallSlideDown = "crashSlipOff",
 }
 
 return RiderPoses

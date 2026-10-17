@@ -5,6 +5,7 @@ import { trackApproach } from '../src/sim/featureRide/approachTracker';
 import { balanceHalfWidth } from '../src/sim/featureRide/entryResolver';
 import { foreLimit, slideFriction, stepBalance } from '../src/sim/featureRide/slideController';
 import { stepExitAssist } from '../src/sim/featureRide/exitResolver';
+import { slopedTurnHit, spineFlatLanding, wallTooSlow } from '../src/sim/featureRide/featureSpecials';
 import { dot, rightOf } from '../src/sim/math/vec';
 import { toLocal } from '../src/sim/features';
 import { neutralInput } from '../src/sim/input';
@@ -15,7 +16,7 @@ import type { SimEvent } from '../src/sim/events';
 import type { InputFrame } from '../src/sim/input';
 import { add, forwardOf, normalize, scale, vec3 } from '../src/sim/math/vec';
 import { airOverFeature } from '../src/sim/onFeature';
-import type { AirState } from '../src/sim/rider';
+import type { AirState, JibState } from '../src/sim/rider';
 import { takeOff } from '../src/sim/step';
 import type { SimState } from '../src/sim/world';
 import { featureSim, run, runUntil } from './helpers';
@@ -723,5 +724,58 @@ describe('ExitResolver: exits and out-rotations (feature ride M7, spec 6)', () =
     const funbox = { kind: 'feature', id: 'g', name: 'G', catalog: 'Funbox', s: 135, offset: 0 } as FeatureDef;
     expect(line(funbox, (u) => ({ steer: u > 7 && u < 8.5 ? -1 : 0 })).crash).toBe('badAngle');
     expect(line(funbox, () => ({})).line?.exit.kind).toBe('rideOff');
+  });
+});
+
+describe('FeatureSpecials (feature ride M8, spec 7)', () => {
+  const cat = (name: string) => ({ kind: 'feature', id: 'g', name, catalog: name, s: 135, offset: 0 }) as FeatureDef;
+
+  it('funbox: a pop off the down end gets less air than one off the flat top', () => {
+    // The same 0.12 s charge, released past `from`.
+    const popAt = (from: number, _to: number) => {
+      const s = featureSim(cat('Funbox'), noBalance);
+      let speed = -1;
+      let down = -1;
+      runUntil(s, 8, (t, st) => {
+        const u = st.rider.mode === 'onFeature' && st.rider.ramp ? st.rider.ramp.u : -1;
+        if (down < 0 && u > from) down = t;
+        return { pop: down >= 0 && t < down + 0.12 };
+      }, (e) => {
+        if (e.type === 'takeoff' && e.source === 'feature') speed = e.popSpeed;
+        return e.type === 'takeoff' && e.source === 'feature';
+      });
+      return speed;
+    };
+    const top = popAt(7.6, 0);
+    const down = popAt(10.6, 0);
+    expect(down / top).toBeCloseTo(0.7, 6);
+  });
+
+  it('rooftop: a rotation started on a slope costs balance; on the flat top it does not', () => {
+    const s = featureSim(cat('Rooftop'));
+    expect(slopedTurnHit({ pitch: deg(15) } as JibState, s)).toBeGreaterThan(0);
+    expect(slopedTurnHit({ pitch: 0 } as JibState, s)).toBe(0);
+  });
+
+  it('wall ride too slow: low on the transition it is a sketchy slide back, higher up WallSlideDown', () => {
+    const s = featureSim(cat('WallRide'));
+    expect(wallTooSlow(0.3, s)).toBe('sketchy');
+    expect(wallTooSlow(1.5, s)).toBe('wallSlideDown');
+  });
+
+  it('spine: missing the far slope and landing flat on the water: a hard impact', () => {
+    const s = featureSim(cat('Spine'), noBalance);
+    run(s, 1);
+    const air = takeOff(s, 'kicker', 'g', 0, 0);
+    s.rider.vel = vec3(8, -4, 0);
+    expect(spineFlatLanding(s, air)).toBe('flat');
+    s.rider.vel = vec3(8, -7.5, 0);
+    expect(spineFlatLanding(s, air)).toBe('hard');
+    air.source = 'flat';
+    expect(spineFlatLanding(s, air)).toBeNull();
+  });
+
+  it('step-up: rolling off the low rail without a pop into the high one is a ShortOllie', () => {
+    expect(line(cat('StepUp'), () => ({})).crash).toBe('shortOllie');
   });
 });

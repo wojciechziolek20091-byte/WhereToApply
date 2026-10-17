@@ -8,6 +8,7 @@ local Handle = require(script.Parent.Handle)
 local Rotation = require(script.Parent.Rotation)
 local Scalar = require(script.Parent.Scalar)
 local SlideController = require(script.Parent.FeatureRideSlideController)
+local FeatureSpecials = require(script.Parent.FeatureRideFeatureSpecials)
 local Vec = require(script.Parent.Vec)
 
 local DT = Config.DT
@@ -72,8 +73,9 @@ function FeatureRotation.stepFeatureRotation(s, j, heading, mem)
 		else
 			table.insert(j.rotations, { deg = 90, dir = dir, side = side, hardWay = hardWay, from = from, endTick = -1, atTime = j.time })
 		end
-		if hardWay and cfg.feature.balanceEnabled then
-			j.balance += R.HardWayHit * (if j.balance >= 0 then 1 else -1)
+		local hit = (if hardWay then R.HardWayHit else 0) + FeatureSpecials.slopedTurnHit(j, s)
+		if hit > 0 and cfg.feature.balanceEnabled then
+			j.balance += hit * (if j.balance >= 0 then 1 else -1)
 		end
 		j.entrySlide = nil
 		j.targetAngle = j.boardAngle + (dir * math.pi) / 2

@@ -7,6 +7,7 @@ local Edge = require(script.Parent.Edge)
 local FeatureRideApproachTracker = require(script.Parent.FeatureRideApproachTracker)
 local FeatureRideEntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local FeatureRideExitResolver = require(script.Parent.FeatureRideExitResolver)
+local FeatureRideFeatureSpecials = require(script.Parent.FeatureRideFeatureSpecials)
 local Fsm = require(script.Parent.Fsm)
 local Hydro = require(script.Parent.Hydro)
 local Input = require(script.Parent.Input)
@@ -134,10 +135,16 @@ local function stepAirborne(s, input)
 		return
 	end
 	if r.pos.y <= 0 and r.vel.y < 0 then
+		local spine = FeatureRideFeatureSpecials.spineFlatLanding(s, air)
 		if FeatureRideEntryResolver.landedInGap(s, air) then
 			Actions.crash(s, "landedInGap")
+		elseif spine == "hard" then
+			Actions.crash(s, "hardLanding")
 		else
-			Actions.touchDown(s, air, Vec.UP, 0)
+			local landing = Actions.touchDown(s, air, Vec.UP, 0)
+			if spine == "flat" then
+				FeatureRideFeatureSpecials.markSpineFlat(landing)
+			end
 		end
 	end
 end

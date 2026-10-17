@@ -10,6 +10,7 @@ import type { SlideId } from '../tricks/data';
 import type { SimState } from '../world';
 import { cos } from '../math/detmath';
 import { isBoardslide } from './slideController';
+import { slopedTurnHit } from './featureSpecials';
 
 /**
  * FeatureRotation (feature riding spec 5.2-5.4): which slide a board angle
@@ -91,7 +92,8 @@ export function stepFeatureRotation(s: SimState, j: JibState, heading: number, m
     } else {
       j.rotations.push({ deg: 90, dir, side, hardWay, from, endTick: -1, atTime: j.time });
     }
-    if (hardWay && cfg.feature.balanceEnabled) j.balance += R.HardWayHit * (j.balance >= 0 ? 1 : -1);
+    const hit = (hardWay ? R.HardWayHit : 0) + slopedTurnHit(j, s);
+    if (hit > 0 && cfg.feature.balanceEnabled) j.balance += hit * (j.balance >= 0 ? 1 : -1);
     j.entrySlide = null;
     j.targetAngle = j.boardAngle + (dir * Math.PI) / 2;
   }

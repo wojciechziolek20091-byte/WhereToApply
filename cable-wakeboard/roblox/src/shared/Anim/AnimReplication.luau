@@ -41,6 +41,7 @@ local CRASHES = {
 	"stalled",
 	"kinkThrow",
 	"ranOutMidRotation",
+	"wallSlideDown",
 }
 
 R.PACKET_LENGTH = 50
