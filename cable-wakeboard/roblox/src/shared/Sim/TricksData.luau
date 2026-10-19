@@ -33,6 +33,7 @@ TricksData.SLIDES = {
 
 TricksData.POINTS = {
 	ollie = 50,
+	overBonus = 40,
 	spinPer180 = 150,
 	backsideSpinFactor = 1.2,
 	handlePass = 100,

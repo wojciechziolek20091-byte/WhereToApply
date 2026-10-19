@@ -275,25 +275,28 @@ export const SCENARIOS: Scenario[] = [
     }),
   },
   {
-    id: 'F2', kind: 'fail', what: 'Side ollie too low: ClippedSide (or a TailClip within tolerance)',
-    run: (fc) => search(grid(0.8, 1.6, 0.2).flatMap((gap) => grid(0, 3, 0.5).map((rel) => [gap, rel] as const)), ([gap, rel]) => {
-      const r = sideRun(fc, 1, 'regular', gap, rel, 0.02, 0, 0);
-      return { ok: r.crash === 'clippedSide', note: `${gap} m beside, a tap at ${rel} m: ${r.crash ?? desc(r)}` };
+    // Side approach v2 spec 2: a little short scrapes up; well short the nose digs in (was ClippedSide).
+    id: 'F2', kind: 'fail', what: 'Side ollie well short of the top: NoseDig',
+    run: (fc) => search(grid(0.2, 2.0, 0.1).flatMap((gap) => grid(0, 4, 0.5).flatMap((rel) => [0.02, 0.05, 0.1].map((ch) => [gap, rel, ch] as const))), ([gap, rel, ch]) => {
+      const r = sideRun(fc, 1, 'regular', gap, rel, ch, 0, 0);
+      return { ok: r.crash === 'noseDig', note: `${gap} m beside, a ${ch} s tap at ${rel} m: ${r.crash ?? desc(r)}` };
     }),
   },
   {
-    id: 'F3', kind: 'fail', what: 'Side approach at 40 degrees: NoseDig',
+    // Side approach v2 spec 2: steep is more air, never a crash (was NoseDig).
+    id: 'F3', kind: 'pass', what: 'Side approach at 40 degrees: slides on (v2; was a NoseDig fail)',
     run: (fc) => search([[-1, 0.7], [1, -0.7]].flatMap(([side, yaw]) => [2, 2.5, 3, 3.5, 4].flatMap((off) => [3.0, 2.6, 2.8].map((t0) => [side!, yaw!, off, t0] as const))), ([side, yaw, off, t0]) => {
       const def = offsetDef(fc.def, side * off, yaw);
       const r = ride(def, (c) => ({ pop: held(c, t0, t0 + 0.3), steer: held(c, t0 + 0.3 - T, t0 + 0.3 + T) ? side : 0 }));
-      return { ok: r.crash === 'noseDig', note: `${off} m ${side > 0 ? 'right' : 'left'}, turned 40 degrees: ${r.crash ?? desc(r)}` };
+      return { ok: !r.crash && r.jibs[0]?.entry === 'slideOn', note: `${off} m ${side > 0 ? 'right' : 'left'}, turned 40 degrees: ${r.crash ?? desc(r)}` };
     }),
   },
   {
-    id: 'F4', kind: 'fail', what: 'Side hop too strong: Overshoot',
+    // Side approach v2 spec 3 C/D: over the far side is a slide-off or a jump over (was Overshoot).
+    id: 'F4', kind: 'pass', what: 'Side hop too strong: over it into the water, no crash (v2; was an Overshoot fail)',
     run: (fc) => search(grid(0.1, 0.8, 0.1).flatMap((gap) => grid(-0.5, 2, 0.5).flatMap((rel) => [0.1, 0.2, 0.3].map((ch) => [gap, rel, ch] as const))), ([gap, rel, ch]) => {
       const r = sideRun(fc, 1, 'regular', gap, rel, ch, 0, 0);
-      return { ok: r.crash === 'overshoot', note: `${gap} m beside, pop at ${rel} m, ${ch} s: ${r.crash ?? desc(r)}` };
+      return { ok: !r.crash && r.jibs.length === 0 && r.events.some((e) => e.type === 'landed' && !e.onFeature), note: `${gap} m beside, pop at ${rel} m, ${ch} s: ${r.crash ?? desc(r)}` };
     }),
   },
   {
@@ -305,15 +308,16 @@ export const SCENARIOS: Scenario[] = [
     },
   },
   {
-    id: 'F6', kind: 'fail', what: 'Hard edge held to takeoff on a backside entry: SlippedOut',
-    run: (fc) => search(grid(0.6, 1.8, 0.2).flatMap((gap) => grid(-0.5, 2, 0.5).flatMap((rel) => [0.1, 0.2].map((ch) => [gap, rel, ch] as const))), ([gap, rel, ch]) => {
+    // Side approach v2 spec 1: the edge loads the pop, it never slips out (was SlippedOut).
+    id: 'F6', kind: 'pass', what: 'Hard edge held to takeoff on a backside entry: on, no SlippedOut (v2; was a fail)',
+    run: (fc) => search(grid(0.6, 1.8, 0.2).flatMap((gap) => grid(-0.5, 2, 0.5).flatMap((rel) => [0.1, 0.2, 0.3, 0.4].map((ch) => [gap, rel, ch] as const))), ([gap, rel, ch]) => {
       const def = offsetDef(fc.def, -(FEATURES_HALF(fc) + gap));
       const r = ride(def, (c) => ({
         pop: c.mode === 'riding' && c.u >= rel - ch * 8 && c.u < rel,
         // Carving hard toward it (heelside edge) right up to the pop.
         steer: c.mode === 'riding' && c.u >= rel - 3 && c.u < rel + 0.2 ? -1 : 0,
       }));
-      return { ok: r.crash === 'slippedOut', note: `${gap} m beside on the heelside, carving into the pop at ${rel} m: ${r.crash ?? desc(r)}` };
+      return { ok: !r.crash && r.jibs.length > 0, note: `${gap} m beside on the heelside, carving into the pop at ${rel} m: ${r.crash ?? desc(r)}` };
     }),
   },
   {

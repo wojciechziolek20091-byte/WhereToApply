@@ -1,4 +1,4 @@
-import { atan, atan2 } from '../math/detmath';
+import { atan } from '../math/detmath';
 import { type FeatureLocal, type FeatureSurface, toLocal } from '../features';
 import { pieceCentre, type RidePiece } from '../featureShapes';
 import { evaluateLanding, type LandingResult } from '../landing';
@@ -10,6 +10,7 @@ import type { SlideId } from '../tricks/data';
 import { toeSign } from '../edge';
 import { sideEntrySlide } from './featureRotation';
 import { isBoardslide } from './slideController';
+import { alignSlide } from './slideOnConfig';
 import type { SimState } from '../world';
 
 /**
@@ -43,6 +44,8 @@ export interface EntryResult {
   speedKeep: number;
   /** A side entry across the feature: its slide by approach side and which end crossed (else null: named on the feature). */
   slide: SlideId | null;
+  /** From the side: speed still carrying it across (m/s). */
+  carry: number;
   landing: LandingResult;
 }
 
@@ -64,10 +67,12 @@ export function startEntry(s: SimState, air: AirState, steer: number, charge: nu
   const R = cfg.featureRide;
   const f = s.features.find((x) => x.def.id === a.featureId);
   if (!f) return;
-  const slipping = a.edgeAge <= R.Landing.SlipWindow;
+  // A side approach pops off its edge (v2 spec 1.1): only a front approach slips out.
+  const slipping = a.side === 'front' && a.edgeAge <= R.Landing.SlipWindow;
   const slip = a.side === 'heelside' ? R.Landing.SlipRollHeelside : a.side === 'toeside' ? R.Landing.SlipRollToeside : R.Landing.SlipRollFront;
   let hop = 0;
-  if (a.side !== 'front' && a.sideGap <= R.SideEntry.MaxLateral && steer !== 0 && steer === a.featureSide) {
+  // The hop toward it, unless the edge's release already carries the slide-on there.
+  if (!air.slideOn && a.side !== 'front' && a.sideGap <= R.SideEntry.MaxLateral && steer !== 0 && steer === a.featureSide) {
     hop = lerp(R.SideEntry.HopLateralVMin, R.SideEntry.HopLateralVMax, charge);
     // Across the feature axis, toward its centre line.
     r.vel = add(r.vel, scale(rightOf(f.heading), -sign(a.lateral) * hop));
@@ -87,8 +92,9 @@ const partU0 = (f: ResolvedFeature, part: number): number => {
  * last tick. Which edge did it cross? The one it crossed most recently, from
  * the distance in and the speed through each. Then the clearance: the base
  * must be `Entry.Clearance` above the top; short by up to
- * `TailClipTolerance` is a tail clip (sketchy), more is a crash. A side
- * crossing at more than SideEntry.MaxAngle to the axis hits the nose.
+ * `TailClipTolerance` is a tail clip (sketchy), more is a crash. Over a
+ * side edge the nose tolerance and the scrape band are added (side approach
+ * v2 spec 2: a scrape-up), and any angle goes; lower is a NoseDig.
  */
 export function crossEdge(s: SimState, air: AirState, f: ResolvedFeature, local: FeatureLocal, surface: FeatureSurface, part: string): CrashReason | null {
   const { rider: r, cfg } = s;
@@ -103,31 +109,12 @@ export function crossEdge(s: SimState, air: AirState, f: ResolvedFeature, local:
   const side = tSide < tFront ? (off >= 0 ? 1 : -1) : 0;
   air.crossing = { featureId: f.def.id, part, side, height: surface.height };
   const short = surface.height + E.Clearance - r.pos.y;
-  if (short > E.TailClipTolerance) return side === 0 ? 'shortOllie' : 'clippedSide';
-  if (side !== 0) {
-    const angle = air.entry && air.entry.featureId === f.def.id ? air.entry.angle : axisAngle(atan2(vv, vu));
-    if (angle > cfg.featureRide.SideEntry.MaxAngle) return 'noseHitSide';
-  }
+  const S = cfg.slideOn;
+  // From the side (v2 spec 2) a board a little low scrapes up the edge; well below it the nose digs in.
+  const allow = E.TailClipTolerance + (side !== 0 ? S.NoseTolerance.Rounded + S.ScrapeBand : 0);
+  if (short > allow) return side === 0 ? 'shortOllie' : 'noseDig';
   if (short > 0) air.tailClip = true;
   return null;
-}
-
-/**
- * The board has left the part it was over. Across the far side from a side
- * entry, on the way down and low over its edge, it catches it (spec 3.3):
- * overshoot. A high hop clean over the feature is not a crash.
- */
-export function overshotSide(s: SimState, air: AirState, part: string): boolean {
-  const c = air.crossing;
-  const r = s.rider;
-  if (!c || c.part !== part || c.side === 0 || r.vel.y >= 0) return false;
-  const f = s.features.find((x) => x.def.id === c.featureId);
-  if (!f) return false;
-  const l = toLocal(f, r.pos);
-  const p = f.shape.pieces.find((q) => `${f.def.id}:${q.part}` === part && q.axis === 'u' && l.u >= q.u0 && l.u <= q.u1);
-  if (!p) return false;
-  const off = l.v - pieceCentre(p, l.u);
-  return sign(off) === -c.side && r.pos.y < c.height + s.cfg.featureRide.SideEntry.OvershootCatch;
 }
 
 /** Half-width either side of the centre line the board has to land in (spec 3.3, 4.6). */
@@ -160,7 +147,9 @@ export function resolveLanding(s: SimState, air: AirState, f: ResolvedFeature, s
         ? 'sideOllieOn'
         : 'ollieOn';
   const yaw = wrapAngle(boardYawInAir(air) - heading);
-  const boardAngle = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
+  // From the side any angle lines up into a slide (v2 spec 2); else the nearest 90.
+  const aligned = crossSide !== 0 ? alignSlide(yaw, cfg) : null;
+  const boardAngle = aligned ? aligned.boardAngle : Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
   const level = { ...air, rot: { ...air.rot, spinAngle: Math.round(air.rot.spinAngle / Math.PI) * Math.PI } };
   const landing = evaluateLanding(r, level, surface.normal, cfg);
   const result: EntryResult = {
@@ -174,6 +163,7 @@ export function resolveLanding(s: SimState, air: AirState, f: ResolvedFeature, s
     balance: 0,
     speedKeep: air.tailClip ? cfg.featureRide.Entry.TailClipSpeedKeep : 1,
     slide: null,
+    carry: 0,
     landing,
   };
   const fail = (reason: CrashReason): EntryResult => {
@@ -192,21 +182,27 @@ export function resolveLanding(s: SimState, air: AirState, f: ResolvedFeature, s
     result.sketchy = true;
     hit += L.RollHit;
   }
-  // 2. Board angle to the axis: snap to the nearest slide.
+  // 2. Board angle to the axis: snap to the nearest slide (from the side, alignSlide: never a crash).
   const offAngle = Math.abs(yaw - boardAngle);
-  if (offAngle > L.SketchyAngle) return fail('badAngle');
-  if (offAngle > L.SnapTolerance) {
+  if (aligned) hit += aligned.hit; else if (offAngle > L.SketchyAngle) return fail('badAngle');
+  else if (offAngle > L.SnapTolerance) {
     result.sketchy = true;
     hit += L.AngleHit;
   }
   // 3. Across the feature: within the balance width (pipes: near the top centre).
   const off = local.v - pieceCentre(surface.piece, local.u);
   const half = balanceHalfWidth(surface.piece, s);
-  if (Math.abs(off) > half) {
-    if (crossSide !== 0 && sign(off) === crossSide) return fail('clippedSide');
+  if (crossSide !== 0) {
+    // From the side: what it carries across keeps going (it may slide off the far side, v2 spec 3 C).
+    result.carry = Math.max(0, -crossSide * dot(r.vel, rightOf(heading)));
+    if (Math.abs(off) > half) {
+      result.sketchy = true;
+      hit += S.OvershootHit;
+    }
+  } else if (Math.abs(off) > half) {
     // A pipe's round top rolls the board off at once; a flat top gives a little to recover on.
     const recover = surface.piece.profile === 'Round' ? 0 : S.OvershootRecover;
-    if (Math.abs(off) - half > recover) return fail(crossSide !== 0 ? 'overshoot' : 'fellOffFeature');
+    if (Math.abs(off) - half > recover) return fail('fellOffFeature');
     result.sketchy = true;
     hit += S.OvershootHit;
   }

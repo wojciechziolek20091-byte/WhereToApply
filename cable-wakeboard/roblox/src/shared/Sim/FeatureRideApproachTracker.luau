@@ -32,7 +32,8 @@ function ApproachTracker.trackApproach(s)
 					local angle = Scalar.wrapAngle(travel - f.heading)
 					local side = "front"
 					local featureSide = 0
-					if l.v < sh.vMin - A.FrontMargin or l.v > sh.vMax + A.FrontMargin then
+					-- Alongside it (past the start, outside its width) is a side approach however close.
+					if l.v < sh.vMin - A.FrontMargin or l.v > sh.vMax + A.FrontMargin or (toStart < 0 and gap > 0) then
 						featureSide = (if l.v < sh.vMin then 1 else -1) * (if DetMath.cos(angle) >= 0 then 1 else -1)
 						side = if featureSide == Edge.toeSign(r) then "toeside" else "heelside"
 					end

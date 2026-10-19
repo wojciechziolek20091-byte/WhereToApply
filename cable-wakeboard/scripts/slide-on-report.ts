@@ -1,16 +1,16 @@
 /**
- * Prints the side approaches spec's scenario table (section 8): every
- * scripted line, what it should do and what it did.
+ * Prints the side approach v2 spec's scripted scenarios (section 6.2): what
+ * each should do and what it did.
  *   npx vite-node scripts/slide-on-report.ts
  */
-import { judgeSlideOnLine, runSlideOnLine, SLIDE_ON_LINES } from '../tests/scenarios/slideOnScenarios';
+import { judgeScenario, runScenario, SLIDE_ON_SCENARIOS } from '../tests/scenarios/slideOnScenarios';
 
-console.log('| # | Line | Result | OK |');
-console.log('| --- | --- | --- | --- |');
-for (const l of SLIDE_ON_LINES) {
-  const r = runSlideOnLine(l);
-  const bad = judgeSlideOnLine(l, r);
-  const did = r.crash ? `crash: ${r.crash}` : r.trick ? `${r.trick}${r.sketchy ? ' (sketchy)' : ''}, ${r.points} pts` : r.entry ? `${r.entry}${r.sketchy ? ' (sketchy)' : ''} ${r.name}` : r.tried ? 'tried, flew off' : 'no slide-on';
-  const lift = r.maxPitch > 0 ? `, nose ${Math.round((r.maxPitch * 180) / Math.PI)} deg` : '';
-  console.log(`| ${l.id} | ${l.what} | ${did}${lift} | ${bad ? `NO (${bad})` : 'yes'} |`);
+console.log('| # | Scenario | Wanted | Result | OK |');
+console.log('| --- | --- | --- | --- | --- |');
+for (const sc of SLIDE_ON_SCENARIOS) {
+  const r = runScenario(sc);
+  const bad = judgeScenario(sc, r);
+  const name = r.name || r.airName;
+  const did = `${r.outcome}: ${r.reason ? `crash ${r.reason}` : name || r.note}${r.air > 0 ? `, ${r.air.toFixed(2)} s air` : ''}`;
+  console.log(`| ${sc.id} | ${sc.what} | ${sc.outcome} | ${did} | ${bad ? `NO (${bad})` : 'yes'} |`);
 }

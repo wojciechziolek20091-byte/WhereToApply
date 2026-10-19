@@ -58,6 +58,8 @@ export interface InputMemory {
   popReleased: boolean;
   /** How long Space has been held, or was held when it was just released (s). */
   popHeldTime: number;
+  /** This hold already popped (coyote time, side approach v2): its release does nothing. */
+  popSpent: boolean;
   /** Q pressed this tick. */
   passPressed: boolean;
   /** Direction A/D is held (-1, 0, 1) and for how long (s). */
@@ -82,6 +84,7 @@ export const createInputMemory = (): InputMemory => ({
   popPressed: false,
   popReleased: false,
   popHeldTime: 0,
+  popSpent: false,
   passPressed: false,
   steerDir: 0,
   steerHeldTime: 0,
@@ -105,7 +108,8 @@ const steerDirOf = (steer: number): number => (steer > 0.5 ? 1 : steer < -0.5 ? 
 export function updateInputMemory(m: InputMemory, input: InputFrame, cfg: SimConfig, dt: number): void {
   const prev = m.prev;
   m.popPressed = input.pop && !prev.pop;
-  m.popReleased = !input.pop && prev.pop;
+  m.popReleased = !input.pop && prev.pop && !m.popSpent;
+  if (!input.pop) m.popSpent = false;
   if (m.popPressed) m.popHeldTime = 0;
   else if (input.pop) m.popHeldTime += dt;
   m.passPressed = input.pass && !prev.pass;

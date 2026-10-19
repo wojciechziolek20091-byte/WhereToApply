@@ -6,11 +6,17 @@ const deg = (d: number) => (d * Math.PI) / 180;
 const h = (charge: number, lift: number, type?: Parameters<typeof maxReachableHeight>[3]) => maxReachableHeight(DEFAULT_CONFIG, charge, deg(lift), type);
 
 describe('SlideOnConfig.maxReachableHeight (side approaches spec 4.3, 8.1)', () => {
-  it('full charge at 8.3 m/s: plain side ollie ~0.55-0.65 m, slide-on 18 deg ~0.80 m, 30 deg ~0.95 m', () => {
-    expect(h(1, 0)).toBeGreaterThan(0.5);
-    expect(h(1, 0)).toBeLessThan(0.65);
-    expect(h(1, 18)).toBeCloseTo(0.8, 1);
-    expect(h(1, 30)).toBeCloseTo(0.95, 1);
+  it('full charge at 8.3 m/s (v2 spec 5): air-on ~0.70 m, auto lift 18 deg ~0.90 m, W 30 deg ~1.05 m', () => {
+    expect(h(1, 0)).toBeGreaterThan(0.6);
+    expect(h(1, 0)).toBeLessThan(0.75);
+    expect(h(1, 18)).toBeCloseTo(0.9, 1);
+    expect(h(1, 30)).toBeCloseTo(1.05, 1);
+  });
+
+  it('a loaded edge at the pop reaches higher (v2 spec 1.1)', () => {
+    const at = (edge: number) => maxReachableHeight(DEFAULT_CONFIG, 1, deg(18), 'Rounded', 8.3, undefined, edge);
+    expect(at(1)).toBeGreaterThan(at(0.5));
+    expect(at(0.5)).toBeGreaterThan(at(0));
   });
 
   it('low features (0.35 m) take a slide-on with a small charge', () => {
@@ -67,13 +73,16 @@ describe('Slide-on availability (side approaches spec 3)', () => {
     expect(a.sideType).toBe('Rounded');
   });
 
-  it('blocked: too parallel, too steep, too far off, a tall wall, too near the end, too high', () => {
-    expect(approachAt(box(), 1, 2, 3).slideOnBlock).toBe('angle');
-    expect(approachAt(box(), 1, 2, 40).slideOnBlock).toBe('angle');
-    expect(approachAt(box(), 3.5, -4, 15).slideOnBlock).toBe('distance');
+  it('the v2 window (spec 2): any angle to 75 degrees, up to 4 m off; past them, a tall wall, the end or too high is blocked', () => {
+    expect(approachAt(box(), 1, 2, 40).slideOnBlock).toBe('');
+    expect(approachAt(box(), 0.5, 4, 74).slideOnBlock).toBe('');
+    expect(approachAt(box(), 0.5, 2, 80).slideOnBlock).toBe('angle');
+    expect(approachAt(box(), 3.5, -4, 15).slideOnBlock).toBe('');
+    expect(approachAt(box(), 4.5, -8, 15).slideOnBlock).toBe('distance');
     expect(approachAt(box({ sideWall: 0.5 }), 1, 2, 15).slideOnBlock).toBe('wall');
     expect(approachAt(box({ sideWall: 0.2 }), 1, 2, 15).slideOnBlock).toBe('');
-    expect(approachAt(box(), 1, 5.8, 15).slideOnBlock).toBe('end');
+    expect(approachAt(box(), 1, 5.8, 15).slideOnBlock).toBe('');
+    expect(approachAt(box(), 1, 6.3, 15).slideOnBlock).toBe('end');
     expect(approachAt(cat('Funbox'), 1, 3, 15).slideOnBlock).toBe('height');
   });
 
@@ -145,32 +154,31 @@ describe('Slide-on physics (side approaches spec 4)', () => {
     expect(r.maxPitch).toBeCloseTo(deg(18), 3);
   });
 
-  it('a 0.8 m ledge needs W: it lifts the nose to 30 degrees (and does not flip); without it the nose digs in', () => {
+  it('a 0.8 m ledge with W: the nose lifts to 30 degrees (and does not flip); a weak pop without it digs in', () => {
     const w = sideLine(0.8, 18, -2, 5, 1.2, { w: true });
     expect(w.crash).toBeNull();
     expect(w.jib?.entry).toBe('slideOn');
     expect(w.maxPitch).toBeCloseTo(deg(30), 3);
     expect(w.maxFlip).toBe(0);
-    expect(sideLine(0.8, 18, -2, 5, 1.2).crash).toBe('noseDig');
+    expect(sideLine(0.8, 18, -2, 1.5, 1.2).crash).toBe('noseDig');
   });
 
-  it('out of inward speed on the edge: a hang-up crash, or a sketchy save with most of the board on top', () => {
-    expect(sideLine(0.8, 15, -2, 5, 1.2, { w: true }).crash).toBe('hangUp');
-    const save = sideLine(0.8, 15, -2, 5, 1.0, { w: true });
-    expect(save.crash).toBeNull();
-    expect(save.jib?.entry).toBe('slideOn');
-    expect(save.jib?.sketchy).toBe(true);
+  it('popped close, the nose low at the edge: it scrapes up (v2 spec 2), no NoseDig', () => {
+    for (const g of [0.6, 0.4, 0.2]) {
+      const r = sideLine(0.5, 20, -2, g + 0.3, g);
+      expect(r.crash).toBeNull();
+      expect(r.jib?.entry).toBe('slideOn');
+    }
   });
 
-  it('popped too close at 20 degrees: the nose is still low at the edge (NoseDig)', () => {
-    expect(sideLine(0.5, 20, -2, 1.6, 0.4).crash).toBe('noseDig');
-  });
-
-  it('25 degrees in carries the board across: overshoot, unless A/D counter-steers', () => {
-    expect(sideLine(0.5, 25, -2, 2.4, 1.0).crash).toBe('overshoot');
-    const saved = sideLine(0.5, 25, -2, 2.4, 1.0, { steer: 1 });
-    expect(saved.crash).toBeNull();
-    expect(saved.jib?.entry).toBe('slideOn');
+  it('no v1 side crashes are left: no HangUp, Overshoot or SlippedOut at any angle, and steep with a full pop is no crash', () => {
+    for (const a of [10, 15, 20, 30, 45, 60]) {
+      for (const [h, w] of [[0.5, false], [0.8, true]] as const) {
+        const r = sideLine(h, a, -2, 2.4, 1.0, { w });
+        expect(['hangUp', 'overshoot', 'slippedOut']).not.toContain(r.crash);
+        if (a >= 45) expect(sideLine(h, a, -6, 8, 1.0, { w }).crash).toBeNull();
+      }
+    }
   });
 });
 

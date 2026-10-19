@@ -3,8 +3,8 @@ import { FEATURE_CATALOG } from './featureCatalog';
 import type { SimConfig } from './config';
 import { deg, DT, GRAVITY } from './config';
 import { edgeNorm, toeSign, updateEdge } from './edge';
-import { type FeatureSurface, featureUnder, offCentre, pieceHeading, surfaceAt, toWorld } from './features';
-import { type RidePiece, wallHeightAt } from './featureShapes';
+import { type FeatureSurface, featureUnder, offCentre, pieceHeading, surfaceAt, toLocal, toWorld } from './features';
+import { pieceCentre, type RidePiece, wallHeightAt } from './featureShapes';
 import { transition } from './fsm';
 import type { InputFrame, InputMemory } from './input';
 import { clamp, sign, wrapAngle } from './math/scalar';
@@ -18,13 +18,14 @@ import type { SimState } from './world';
 import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
-import { balanceHalfWidth, boardYawInAir, crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
+import { balanceHalfWidth, boardYawInAir, crossEdge, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
 import { isBoardslide, partEnd, slideFriction, stepBalance, stepKink } from './featureRide/slideController';
 import { stepPress } from './featureRide/pressController';
 import { exitOf, popKind } from './featureRide/exitResolver';
 import { popScaleOn, wallTooSlow } from './featureRide/featureSpecials';
 import { midRotation, sideEntrySlide, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
 import { stepContact, topPieceAt } from './featureRide/slideOn';
+import { alignSlide } from './featureRide/slideOnConfig';
 
 /**
  * Kickers and obstacles (spec section 9), on any feature's ride pieces
@@ -134,7 +135,9 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     noiseSeed: s.tick,
     slideOnInward: 0,
     slideOnToward: 0,
+    counterHeld: false,
     slideOnClean: false,
+    entryAir: 0,
   };
 }
 
@@ -379,9 +382,10 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
   }
 
   // A slide-on's inward speed carries the board across; A/D counter-steers it instead of rotating.
-  if (stepSlideOnCarry(s, j, piece, input.steer)) return;
+  if (stepSlideOnCarry(s, j, f, piece, input.steer)) return;
+  if (mem.steerDir === 0) j.counterHeld = false;
   // Rotations in 90-degree hop steps, hard way, handle passes (FeatureRotation).
-  const turned = j.slideOnInward > 0 ? null : stepFeatureRotation(s, j, heading, mem);
+  const turned = j.slideOnInward > 0 || j.counterHeld ? null : stepFeatureRotation(s, j, heading, mem);
   if (turned) {
     endSlide(s);
     crash(s, turned);
@@ -622,10 +626,9 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   const r = s.rider;
   const hit = featureUnder(s.features, r.pos);
   const was = air.overFeature;
-  if (was !== null && (!hit || `${hit.feature.def.id}:${hit.surface.piece.part}` !== was) && overshotSide(s, air, was)) {
-    crash(s, 'overshoot');
-    return true;
-  }
+  // Left a part it came over from the side, without landing: over the feature (v2 spec 3 D, not a crash).
+  const c = air.crossing;
+  if (was !== null && c && c.part === was && c.side !== 0 && (!hit || `${hit.feature.def.id}:${hit.surface.piece.part}` !== was)) air.over = c.featureId;
   if (!hit) {
     air.overFeature = null;
     return false;
@@ -642,10 +645,17 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
         crash(s, reason);
         return true;
       }
+      // Low across a side edge: it scrapes up onto the top and comes down on it now (v2 spec 2).
+      if (air.crossing && air.crossing.part === part && air.crossing.side !== 0 && r.pos.y < surface.height) {
+        r.pos = vec3(r.pos.x, surface.height, r.pos.z);
+        r.vel = vec3(r.vel.x, Math.min(r.vel.y, -0.1), r.vel.z);
+      }
     }
     air.overFeature = part;
   }
   if (r.pos.y > surface.height || r.vel.y >= 0) return false;
+  // Back under the top it slid off (the rope pulls it back): falling past its side, not landing on it.
+  if (air.exit && air.exit.kind === 'slideOff' && air.featureId === feature.def.id && r.pos.y < surface.height - 0.1) return false;
   if (piece.role === 'LandingRamp') {
     landOnRamp(s, feature, air, surface, local.u, local.v);
     return true;
@@ -675,6 +685,12 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   j.inRotation = e.inRotation;
   j.entryQuality = e.quality;
   j.entrySlide = e.slide;
+  // From the side: what it carries across (it may slide off the far side), and the air it took.
+  if (air.crossing && air.crossing.side !== 0 && air.crossing.featureId === feature.def.id) {
+    j.slideOnInward = Math.max(0, e.carry - s.cfg.slideOn.LandingCarryAbsorb);
+    j.slideOnToward = -air.crossing.side;
+  }
+  j.entryAir = air.time;
   // A transfer (or a hop back on) carries the line on.
   j.chain = air.exit ? air.exit.jibs : [];
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
@@ -683,11 +699,12 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
 }
 
 /**
- * A slide-on's contact phase (side approaches spec 4.2.3-4.2.5), instead of
- * the air step: the board climbs on over the side edge (slideOn.ts). With
- * the tail on top it mounts the main; out of inward speed it hangs up on
- * the edge: a sketchy save with SketchySaveShare of the board on top, else a
- * crash. Returns true while the contact phase handled the tick.
+ * A slide-on's contact phase (side approaches spec 4.2.3-4.2.5, v2 spec 2-3),
+ * instead of the air step: the board climbs on over the side edge
+ * (slideOn.ts). With the tail on top it mounts the main; stopped short it is
+ * a save with SketchySaveShare of the board on top, else it drops back into
+ * the water beside the feature. Returns true while the contact phase handled
+ * the tick.
  */
 export function stepSlideOnContact(s: SimState, air: AirState, input: InputFrame): boolean {
   const so = air.slideOn;
@@ -696,14 +713,36 @@ export function stepSlideOnContact(s: SimState, air: AirState, input: InputFrame
   const step = stepContact(s, air);
   if (step === null) return true;
   if (step === 'hang' && so.p < S.SketchySaveShare) {
-    crash(s, 'hangUp');
+    dropBack(s, air);
     return true;
   }
   mountSlideOn(s, air, input, step === 'hang');
   return true;
 }
 
-/** The slide-on lands on the main: snap the board onto the axis, check the base and the angle, then slide. */
+/**
+ * Short of the top (a hang-up): the board slips back off the edge into the water beside the
+ * feature. Not a crash: the air goes on and lands under the water rules.
+ */
+function dropBack(s: SimState, air: AirState): void {
+  const r = s.rider;
+  const so = air.slideOn!;
+  so.phase = 'cleared';
+  const f = featureById(s, so.featureId);
+  const l = toLocal(f, r.pos);
+  const p = topPieceAt(f, l.u, l.v);
+  const edgeV = p ? pieceCentre(p, l.u) - so.toward * (p.width / 2) : l.v;
+  const v = edgeV - so.toward * (s.cfg.slideOn.BaseWidth / 2 + 0.05);
+  r.pos = toWorld(f, l.u, v, Math.max(0.05, Math.min(r.pos.y, so.top - 0.1)));
+  const fw = forwardOf(f.heading);
+  const rt = rightOf(f.heading);
+  const along = dot(r.vel, fw);
+  r.vel = vec3(fw.x * along - rt.x * so.toward * 0.5, 0, fw.z * along - rt.z * so.toward * 0.5);
+  air.cleared.push(`${f.def.id}:${so.part}`);
+  air.overFeature = null;
+}
+
+/** The slide-on lands on the main: line the board up with a slide (alignSlide), then slide. */
 function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boolean): void {
   const { rider: r, cfg } = s;
   const S = cfg.slideOn;
@@ -717,41 +756,36 @@ function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boole
     return;
   }
   const heading = f.shape.legacy ? f.heading : pieceHeading(f, piece);
-  const yaw = wrapAngle(boardYawInAir(air) - heading);
-  const edge = so.lead === 'edge';
-  const boardAngle = edge ? (yaw >= 0 ? Math.PI / 2 : -Math.PI / 2) : Math.abs(yaw) > Math.PI / 2 ? Math.PI : 0;
   // A/D during the slide-on straightens the board up to YawCorrection.
-  const off = Math.max(0, Math.abs(wrapAngle(yaw - boardAngle)) - S.YawCorrection * Math.abs(input.steer));
-  const roll = air.entry ? air.entry.roll : 0;
-  if (roll > L.MaxRoll) {
-    crash(s, 'slippedOut');
-    return;
-  }
-  if (off > S.BadAngle) {
-    crash(s, 'badAngle');
-    return;
-  }
-  let hit = 0;
+  const raw = wrapAngle(boardYawInAir(air) - heading);
+  const yaw = raw - sign(raw) * Math.min(Math.abs(raw), S.YawCorrection * Math.abs(input.steer));
+  const { boardAngle, hit: alignHit } = alignSlide(yaw, cfg);
+  const edge = Math.abs(boardAngle) === Math.PI / 2;
+  // Lining up costs balance, it is not sketchy (v2 spec 2).
+  let hit = alignHit;
   let sketchy = false;
-  if (roll > L.SketchyRoll) {
-    sketchy = true;
-    hit += L.RollHit;
-  }
-  if (off > S.SketchyAngle) {
-    sketchy = true;
-    hit += L.AngleHit;
-  }
   if (hung) {
     sketchy = true;
     hit += S.SketchySaveHit;
   }
+  // A scrape-up: slower, and sketchy when it climbed the face from below the band and nearly stalled.
+  const scrapeLoss = so.scrape > 0 ? S.ScrapeSpeedLoss : 0;
+  if (so.scrape > S.ScrapeBand && so.vin < 2 * S.HangUpSpeed) {
+    sketchy = true;
+    hit += L.AngleHit;
+  }
   if (r.handle === 'passing') r.handle = 'inFront';
-  const speed = Math.max(Math.abs(so.along) * (1 - S.SpeedLoss), cfg.feature.stallSpeed + 0.5);
+  const speed = Math.max(Math.abs(so.along) * (1 - S.SpeedLoss - scrapeLoss), cfg.feature.stallSpeed + 0.5);
   const level = { ...air, rot: { ...air.rot, spinAngle: Math.round(air.rot.spinAngle / Math.PI) * Math.PI } };
-  const surface = surfaceAt(f, { u: so.u, v: so.v });
+  // Just over the near edge, the board's middle settles on the near half of the balance width; what it
+  // carries decides if it slides off. (A thin rail's balance width is wider than the rail: stay on the rail.)
+  const centre = pieceCentre(piece, so.u);
+  const bw = Math.min(balanceHalfWidth(piece, s), piece.width / 2);
+  const mv = centre - so.toward * (bw / 2);
+  const surface = surfaceAt(f, { u: so.u, v: mv });
   const landing = evaluateLanding(r, level, surface ? surface.normal : vec3(0, 1, 0), cfg);
   r.air = null;
-  mountMain(s, f, piece, so.u, so.v, speed, edge ? 'edgeSlideOn' : 'slideOn', sketchy, boardAngle);
+  mountMain(s, f, piece, so.u, mv, speed, edge ? 'edgeSlideOn' : 'slideOn', sketchy, boardAngle);
   const j = r.jib!;
   // Thrown inward, the way the board was going.
   j.balance = clamp(so.toward * hit, -L.MaxHit, L.MaxHit);
@@ -761,7 +795,7 @@ function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boole
     const toes = toeSign({ stance: r.stance, switchStance: air.takeoffSwitch });
     j.entrySlide = sideEntrySlide(boardYawInAir(air), heading, -so.toward, toes, air.takeoffHeading);
   }
-  j.slideOnInward = so.vin;
+  j.slideOnInward = Math.max(0, so.vin - S.CarryAbsorb);
   j.slideOnToward = so.toward;
   j.slideOnClean = !sketchy && so.vin0 > 0 && so.vin >= S.CleanInwardShare * so.vin0;
   j.chain = air.exit ? air.exit.jibs : [];
@@ -770,16 +804,18 @@ function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boole
 }
 
 /**
- * After a slide-on the inward speed left carries the board on across (spec
- * 4.2.5): the base sliding sideways bleeds it, counter-steer (A/D away from the
- * way it is going) bleeds CounterSteerBleed of it per 0.1 s. Past the far
- * side of the balance width within OvershootWindow is an overshoot. Returns
- * true on the crash.
+ * After getting on from the side the inward speed left carries the board on
+ * across (spec 4.2.5): the base sliding sideways bleeds it, counter-steer
+ * (A/D away from the way it is going) bleeds CounterSteerBleed of it per
+ * 0.1 s. Past the far side of the balance width within OvershootWindow it
+ * slides off the far side into the water (v2 spec 3 C; not a crash).
+ * Returns true when it left the feature.
  */
-function stepSlideOnCarry(s: SimState, j: JibState, piece: RidePiece, steer: number): boolean {
+function stepSlideOnCarry(s: SimState, j: JibState, f: ResolvedFeature, piece: RidePiece, steer: number): boolean {
   const S = s.cfg.slideOn;
   if (j.slideOnInward <= 0) return false;
-  const ramp = s.rider.ramp!;
+  const r = s.rider;
+  const ramp = r.ramp!;
   if (j.time > S.OvershootWindow) {
     j.slideOnInward = 0;
     return false;
@@ -787,11 +823,24 @@ function stepSlideOnCarry(s: SimState, j: JibState, piece: RidePiece, steer: num
   ramp.v += j.slideOnToward * j.slideOnInward * DT;
   const bite = piece.profile === 'Round' ? S.RoundInwardFriction : S.InwardFriction;
   let v = Math.max(0, j.slideOnInward - bite * GRAVITY * DT);
+  if (steer * j.slideOnToward < 0) j.counterHeld = true;
   if (steer * j.slideOnToward < 0) v *= pow(1 - S.CounterSteerBleed, (Math.abs(steer) * DT) / 0.1);
   j.slideOnInward = v;
-  if (j.slideOnToward * offCentre(piece, ramp) > balanceHalfWidth(piece, s)) {
-    endSlide(s);
-    crash(s, 'overshoot');
+  if (j.slideOnToward * offCentre(piece, ramp) > Math.min(balanceHalfWidth(piece, s), piece.width / 2)) {
+    // Off the far side: on with what it carries across.
+    const heading = f.shape.legacy ? f.heading : pieceHeading(f, piece);
+    const along = dot(r.vel, forwardOf(heading));
+    const out = Math.max(v, 1) * j.slideOnToward;
+    const rt = rightOf(f.heading);
+    const fw = forwardOf(heading);
+    // Tipping off the far edge, clear of the top; the rider swings the board back along the travel.
+    r.vel = vec3(fw.x * along + rt.x * out, -1, fw.z * along + rt.z * out);
+    ramp.v = pieceCentre(piece, ramp.u) + j.slideOnToward * (piece.width / 2 + S.BaseWidth / 2);
+    r.pos = toWorld(f, ramp.u, ramp.v, r.pos.y);
+    j.boardAngle = Math.abs(wrapAngle(j.boardAngle)) > Math.PI / 2 ? Math.PI : 0;
+    const air = leaveFeature(s, f, 0, 0, piece, 'slideOff');
+    // Drifting back over it on the way down is not a new entry.
+    for (const q of f.shape.pieces) air.cleared.push(`${f.def.id}:${q.part}`);
     return true;
   }
   return false;

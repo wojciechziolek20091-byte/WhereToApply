@@ -135,6 +135,11 @@ export function classifyAir(air: AirState, landing: LandingResult, cfg: SimConfi
     else return null;
     tokens.push(token('Pop', name, POINTS.ollie, domain, { quality: air.popQuality }));
   }
+  // Over a feature from its side (side approach v2): "Ollie Over", "Frontside 360 Over".
+  if (air.over) {
+    name = `${name} Over`;
+    tokens.push(token('Bonus', 'Over', POINTS.overBonus, domain));
+  }
 
   const points = tokens.reduce((a, t) => a + t.points, 0);
   const family: TrickFamily = invertDef ? (invertDef.invert ? 'invert' : 'raley') : degrees > 0 ? 'spin' : 'jump';

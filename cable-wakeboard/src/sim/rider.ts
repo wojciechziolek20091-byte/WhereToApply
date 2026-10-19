@@ -189,6 +189,10 @@ export interface AirState {
   tailClip: boolean;
   /** Left a feature's slide: how, and the line of slides so far (ExitResolver). */
   exit: FeatureExit | null;
+  /** Popped beside a feature: W lifts the nose, it does not flip (v2 spec 2). */
+  noFlip: boolean;
+  /** Flew over a feature from its side without landing on it (v2 spec 3 D): its id ("Ollie Over"). */
+  over: string | null;
   /** A side entry's nose-lift slide-on in progress (slideOn.ts), else null. */
   slideOn: SlideOnAir | null;
 }
@@ -231,11 +235,15 @@ export interface SlideOnAir {
   part: number;
   /** A bank (pyramid side): how far across it climbs from the bank's foot to the flat top (m), else 0. */
   bankRun: number;
+  /** How far the nose was under its tolerance at the edge (m): a scrape-up when over 0. */
+  scrape: number;
+  /** Edge load at the pop (v2 spec 1.1). */
+  edgeLoad: number;
 }
 
 /** Leaving a feature's slide (ExitResolver, spec 6). */
 export interface FeatureExit {
-  kind: 'rideOff' | 'popOff' | 'sidePop' | 'hop' | 'sketchy';
+  kind: 'rideOff' | 'popOff' | 'sidePop' | 'hop' | 'sketchy' | 'slideOff';
   /** Every slide of the line, oldest first; the last is the one just left. */
   jibs: JibState[];
   /** Board angle to the feature when leaving (rad). */
@@ -334,8 +342,12 @@ export interface JibState {
   /** Slide-on: inward speed still carrying the board across (m/s), and which way (+-1 along the feature's right). */
   slideOnInward: number;
   slideOnToward: number;
+  /** A/D held against a slide-on's carry: it starts no rotation until released. */
+  counterHeld: boolean;
   /** Slide-on kept CleanInwardShare of its inward speed (style bonus). */
   slideOnClean: boolean;
+  /** Seconds in the air before getting on (a side ollie-on's air-time bonus). */
+  entryAir: number;
 }
 
 /** One rotation on a feature: 90-degree steps chained while A/D is held (FeatureRotation). */

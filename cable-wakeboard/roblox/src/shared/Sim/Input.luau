@@ -27,6 +27,7 @@ function Input.createInputMemory()
 		popPressed = false,
 		popReleased = false,
 		popHeldTime = 0,
+		popSpent = false,
 		passPressed = false,
 		steerDir = 0,
 		steerHeldTime = 0,
@@ -56,7 +57,10 @@ end
 function Input.updateInputMemory(m, input, cfg, dt)
 	local prev = m.prev
 	m.popPressed = input.pop and not prev.pop
-	m.popReleased = not input.pop and prev.pop
+	m.popReleased = not input.pop and prev.pop and not m.popSpent
+	if not input.pop then
+		m.popSpent = false
+	end
 	if m.popPressed then
 		m.popHeldTime = 0
 	elseif input.pop then

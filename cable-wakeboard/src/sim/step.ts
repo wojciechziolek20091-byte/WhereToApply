@@ -9,7 +9,7 @@ import { edgeNorm } from './edge';
 import { type InputFrame, updateInputMemory } from './input';
 import { addScaled, horizontalLength, scale, UP, vec3, add } from './math/vec';
 import { airOverFeature, stepRamp, stepSlide, stepSlideOnContact, tryEnterFeature } from './onFeature';
-import { leadCrossing, predictSlideOn, stepNoseLift } from './featureRide/slideOn';
+import { besideFeature, coyoteContact, edgeLoadAt, leadCrossing, predictSlideOn, sideApproachOn, stepNoseLift } from './featureRide/slideOn';
 import { trackApproach } from './featureRide/approachTracker';
 import { landedInGap, startEntry } from './featureRide/entryResolver';
 import { stepExitAssist } from './featureRide/exitResolver';
@@ -81,7 +81,9 @@ function stepWater(s: SimState, input: InputFrame): void {
     else return;
   }
 
-  if (mem.popReleased) {
+  // Coyote time (side approach v2): charging into a feature's side, the pop goes off at the edge.
+  const coyote = !mem.popReleased && input.pop && r.mode === 'riding' && coyoteContact(s);
+  if (mem.popReleased || coyote) {
     const charge = ollieCharge(mem.popHeldTime, cfg);
     if (r.mode === 'waterTrickLoad') {
       const plan = planWaterTrick(r.tensionSmooth, waterTrickTiming(r, cfg, DT), input, cfg);
@@ -89,13 +91,20 @@ function stepWater(s: SimState, input: InputFrame): void {
       air.trick = plan.trick;
       return;
     }
-    const air = takeOff(s, r.mode === 'ridingBlind' ? 'blindPop' : 'flat', null, ollieSpeed(charge, cfg), charge);
+    if (coyote) mem.popSpent = true;
+    // A side approach pops off its edge (v2 spec 1.1): measure the edge before leaving the water.
+    const edgeLoad = edgeLoadAt(s);
+    const popSpeed = ollieSpeed(charge, cfg) * (coyote ? 1 - cfg.slideOn.CoyotePenalty : 1);
+    const air = takeOff(s, r.mode === 'ridingBlind' ? 'blindPop' : 'flat', null, popSpeed, charge);
+    predictSlideOn(s, air, popSpeed, edgeLoad);
+    air.noFlip = besideFeature(s);
     startEntry(s, air, sign(input.steer), charge);
-    predictSlideOn(s, air, ollieSpeed(charge, cfg));
     return;
   }
-  if (r.mode === 'riding' && canArm(r, cfg)) transition(s, 'waterTrickLoad', 'loaded');
-  else if (r.mode === 'waterTrickLoad' && shouldDisarm(r, cfg)) transition(s, 'riding', 'unloaded');
+  // On a side approach the loaded edge is for the edge ollie (v2 spec 1): no water trick arms.
+  const side = sideApproachOn(s);
+  if (r.mode === 'riding' && canArm(r, cfg) && !side) transition(s, 'waterTrickLoad', 'loaded');
+  else if (r.mode === 'waterTrickLoad' && (shouldDisarm(r, cfg) || side)) transition(s, 'riding', 'unloaded');
 
   if (tryEnterFeature(s)) return;
   if (!input.pop && rope.force.y > m * GRAVITY * cfg.hydro.liftOffFactor && r.mode !== 'ridingBlind') {
@@ -119,7 +128,7 @@ function stepAirborne(s: SimState, input: InputFrame): void {
   stepExitAssist(s, air, input);
   stepNoseLift(s, air, input);
   const lead = leadCrossing(s, air);
-  if (lead === 'noseDig' || lead === 'hangUp') {
+  if (lead === 'noseDig') {
     crash(s, lead);
     return;
   }

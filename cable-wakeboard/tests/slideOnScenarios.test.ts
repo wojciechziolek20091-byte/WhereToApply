@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { judgeSlideOnLine, runSlideOnLine, SLIDE_ON_LINES } from './scenarios/slideOnScenarios';
+import { judgeScenario, runScenario, SLIDE_ON_SCENARIOS } from './scenarios/slideOnScenarios';
 
-describe('slide-on scenarios (side approaches spec 8)', () => {
-  for (const l of SLIDE_ON_LINES) {
-    it(`${l.id} ${l.kind}: ${l.what}`, () => {
-      expect(judgeSlideOnLine(l, runSlideOnLine(l))).toBe('');
+describe('side approach scenarios (side approach v2 spec 6.2)', () => {
+  for (const sc of SLIDE_ON_SCENARIOS) {
+    it(`${sc.id}: ${sc.what}`, () => {
+      expect(judgeScenario(sc, runScenario(sc))).toBe('');
     });
   }
 });

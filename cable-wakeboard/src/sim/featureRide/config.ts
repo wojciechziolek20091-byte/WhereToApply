@@ -52,7 +52,7 @@ export interface FeatureRideConfig {
     /** Past the far edge of the balance width by up to this (m): a sketchy recovery. */
     OvershootRecover: number;
     OvershootHit: number;
-    /** Coming down past the far side this little above the top (m) catches it: overshoot. Higher is a clean hop over. */
+    /** Unused since side approach v2 (over the far side is a slide-off or a jump over, never an overshoot); kept for old configs. */
     OvershootCatch: number;
   };
   /** Landing on the feature (spec 4). */
@@ -212,7 +212,7 @@ export interface FeatureRideConfig {
 }
 
 export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
-  Approach: { Range: 25, LateralRange: 8, FrontMargin: 0.3, HardEdge: 0.5, FlattenDistance: 1.5 },
+  Approach: { Range: 25, LateralRange: 12, FrontMargin: 0.1, HardEdge: 0.5, FlattenDistance: 1.5 },
   Entry: { Clearance: 0.08, TailClipTolerance: 0.1, TailClipSpeedKeep: 0.75, TailClipHit: 0.5 },
   SideEntry: {
     MaxAngle: deg(25),

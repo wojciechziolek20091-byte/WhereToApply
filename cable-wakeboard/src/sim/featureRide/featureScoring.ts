@@ -97,6 +97,8 @@ export function scoreFeatureLine(exit: FeatureExit, air: AirState | null, landin
     }
     if (j.endTap) tokens.push(token('Bonus', j.endTap === 'nose' ? 'Nose Tap' : 'Tail Tap', S.EndTapBonus * k));
     if (j.slideOnClean) tokens.push(token('Bonus', 'Clean Slide-on', S.SlideOnCleanBonus * k));
+    // Air-on (side approach v2 spec 7): a side ollie-on earns its air time.
+    if (j.entry === 'sideOllieOn' && j.entryAir > 0) tokens.push(token('Bonus', 'Air', cfg.slideOn.AirOnBonus * j.entryAir * k));
     passes += j.rot.passes;
   }
   if (out) {

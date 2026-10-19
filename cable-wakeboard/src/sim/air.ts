@@ -69,6 +69,8 @@ export function createAirState(
     exit: null,
     preWind: 0,
     slideOn: null,
+    over: null,
+    noFlip: false,
   };
 }
 
@@ -101,7 +103,7 @@ export function stepAir(r: RiderState, air: AirState, ropeForce: Vec3, input: In
   const spinRate = cfg.spin.rate * spinRateScale(cfg, air.rot) * preWindScale(cfg, air.preWind, spinDir);
   stepSpin(air.rot, steerForSpin, () => rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading), cfg, DT, spinRate);
   // Beside a feature W lifts the nose (slide-on), it does not flip.
-  const noseLift = air.slideOn !== null && air.slideOn.phase === 'air';
+  const noseLift = air.noFlip || (air.slideOn !== null && air.slideOn.phase === 'air');
   if (!air.trick && !noseLift) stepFlip(air.rot, input.forward ? 1 : input.back ? -1 : 0, cfg, DT, flipRateScale(cfg, air.rot.flipAngle));
 
   air.grab = mem.grabChoice;

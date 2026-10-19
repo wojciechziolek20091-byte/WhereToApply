@@ -179,9 +179,10 @@ describe('EntryResolver: landing on the feature (feature ride M2, spec 4)', () =
     expect(withRoll(0).jib?.sketchy).toBe(false);
   });
 
-  it('across the feature: short of the balance width on the side it came from clips it, just past the far side is sketchy', () => {
+  it('across the feature: outside the balance width on either side is a sketchy save (v2 spec 2: no ClippedSide), inside it clean', () => {
     const side = (v: number, from: number) => drop(slider(), { v, air: (a) => (a.crossing = { featureId: 'b', part: 'b:1', side: from, height: 0.5 }) });
-    expect(side(0.45, 1).crash).toBe('clippedSide');
+    expect(side(0.45, 1).crash).toBeNull();
+    expect(side(0.45, 1).jib?.sketchy).toBe(true);
     expect(side(0.45, -1).jib?.sketchy).toBe(true);
     expect(side(0.2, -1).jib?.sketchy).toBe(false);
   });
@@ -261,17 +262,25 @@ describe('Entry scenarios (feature ride M2-M3, spec 12.2)', () => {
     expect(play(slider({ safety: 'gap' }), (t) => ({ pop: between(1.7, 2.3)(t) })).crash).toBe('shortOllie');
   });
 
-  it('fail 2: a side ollie too low clips the side (ClippedSide)', () => {
-    expect(sideHop(1.6, [3.3, 3.4]).crash).toBe('clippedSide');
+  it('fail 2: a side ollie well short of the top digs the nose in (NoseDig; a little short scrapes up, v2 spec 2)', () => {
+    expect(sideHop(1.6, [3.35, 3.4]).crash).toBe('noseDig');
+    const scrape = sideHop(1.6, [3.3, 3.4]);
+    expect(scrape.crash).toBeNull();
+    expect(scrape.jib?.sketchy).toBe(true);
   });
 
-  it('fail 3: a side approach at 40 degrees: the nose digs into the side (NoseDig; was NoseHitSide before slide-ons)', () => {
-    expect(play(slider({ offset: -3, yaw: 0.7 }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? -1 : 0 })).crash).toBe('noseDig');
-    expect(play(slider({ offset: 3, yaw: -0.7 }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? 1 : 0 })).crash).toBe('noseDig');
+  it('was fail 3: a side approach at 40 degrees slides on (v2 spec 2: steep is no crash; was NoseDig)', () => {
+    for (const [offset, yaw, steer] of [[-3, 0.7, -1], [3, -0.7, 1]] as const) {
+      const r = play(slider({ offset, yaw }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? steer : 0 }));
+      expect(r.crash).toBeNull();
+      expect(r.jib?.entry).toBe('slideOn');
+    }
   });
 
-  it('fail 4: a side hop too strong for the gap: Overshoot (just past it is a sketchy recovery)', () => {
-    expect(sideHop(1.0, [3.2, 3.4]).crash).toBe('overshoot');
+  it('was fail 4: a side hop too strong for the gap goes over it into the water (v2 spec 3 D, was Overshoot); a little less is a sketchy ride on', () => {
+    const over = sideHop(1.0, [3.2, 3.4]);
+    expect(over.crash).toBeNull();
+    expect(over.jib).toBeNull();
     const just = sideHop(1.1, [3.2, 3.4]);
     expect(just.crash).toBeNull();
     expect(just.jib?.sketchy).toBe(true);
@@ -281,9 +290,12 @@ describe('Entry scenarios (feature ride M2-M3, spec 12.2)', () => {
     expect(play(slider({ safety: 'gap' }), () => ({})).crash).toBe('missedSafetyPop');
   });
 
-  it('fail 6: a hard edge held to takeoff on a backside entry: SlippedOut', () => {
+  it('was fail 6: a hard edge held to the pop beside a feature never slips out (v2 spec 1: the edge loads the pop)', () => {
     // Heelside approach (regular, feature on the left), carving hard toward it right up to the pop.
-    expect(sideHop(-2.2, [3.2, 3.4], 'regular', [3.0, 3.39]).crash).toBe('slippedOut');
+    expect(sideHop(-2.2, [3.2, 3.4], 'regular', [3.0, 3.39]).crash).not.toBe('slippedOut');
+    const r = sideHop(-2.2, [3.0, 3.4], 'regular', [2.8, 3.39]);
+    expect(r.crash).toBeNull();
+    expect(r.jib?.entry).toBe('slideOn');
   });
 
   it('popped off a gap safety and down in the gap: LandedInGap (early pops off the 17-degree safety still carry, so set it up)', () => {

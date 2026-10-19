@@ -38,7 +38,8 @@ export function trackApproach(s: SimState): void {
     const angle = wrapAngle(travel - f.heading);
     let side: ApproachState['side'] = 'front';
     let featureSide = 0;
-    if (l.v < sh.vMin - A.FrontMargin || l.v > sh.vMax + A.FrontMargin) {
+    // Alongside it (past the start, outside its width) is a side approach however close.
+    if (l.v < sh.vMin - A.FrontMargin || l.v > sh.vMax + A.FrontMargin || (toStart < 0 && gap > 0)) {
       // The feature's side of the rider, in the rider's direction of travel.
       featureSide = (l.v < sh.vMin ? 1 : -1) * (cos(angle) >= 0 ? 1 : -1);
       side = featureSide === toeSign(r) ? 'toeside' : 'heelside';
