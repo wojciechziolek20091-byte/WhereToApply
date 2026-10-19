@@ -219,6 +219,7 @@ Config.DEFAULT_CONFIG = {
 		NoseTolerance = { Rounded = 0.12, Coping = 0.08, Round = 0.18, Kanted = 0.18, Rail = 0.04, Bank = 0.3, Wall = 0 },
 		ScrapeBand = 0.15,
 		ScrapeSpeedLoss = 0.12,
+		InwardClimbMax = 0.4,
 		TrackRange = 20,
 		MinAngle = 0,
 		MaxAngle = 1.3089969389957472,

@@ -253,9 +253,10 @@ function SlideOn.leadCrossing(s, air)
 	-- How far the nose is under its tolerance (0 when it is within it).
 	local under = math.max(0, top - tol - lead)
 	local vin = math.max(0, so.toward * Vec.dot(r.vel, Vec.rightOf(f.heading)))
-	-- Just popped and rising fast, the board still rides up the face: only a board that cannot climb it digs in.
+	-- Still rising, or carried in hard near the top, the board rides up the face: only a board that cannot
+	-- climb it digs in. The inward speed lifts it at most InwardClimbMax (a board far below the top digs).
 	local vyUp = math.max(0, r.vel.y)
-	local energy = 0.5 * vyUp * vyUp + 0.5 * vin * vin * S.ClimbEfficiency
+	local energy = 0.5 * vyUp * vyUp + math.min(0.5 * vin * vin * S.ClimbEfficiency, GRAVITY * S.InwardClimbMax)
 	if under > S.ScrapeBand and energy < GRAVITY * (top - r.pos.y) and kind ~= "Bank" then
 		return "noseDig"
 	end

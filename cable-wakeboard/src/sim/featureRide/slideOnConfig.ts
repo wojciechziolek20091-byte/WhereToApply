@@ -49,11 +49,14 @@ export interface SlideOnConfig {
    * rounded edge lifts it the rest of the way. Up to ScrapeBand further down
    * it scrapes up (ScrapeSpeedLoss; sketchy past half the band). Lower still,
    * the nose digs in, unless the board still has the energy to climb the face
-   * (just popped and rising): then it scrapes up too.
+   * (just popped and rising, or carried in hard within InwardClimbMax of the
+   * top): then it scrapes up too.
    */
   NoseTolerance: Record<SideType, number>;
   ScrapeBand: number;
   ScrapeSpeedLoss: number;
+  /** The most the inward speed alone lifts a low board up the face (m); further below the top it digs in. */
+  InwardClimbMax: number;
   /** Availability (v2 spec 2): turn-in toward the feature, distance off its side, feature left, walls. */
   TrackRange: number;
   MinAngle: number;
@@ -142,6 +145,7 @@ export const DEFAULT_SLIDE_ON: SlideOnConfig = {
   NoseTolerance: { Rounded: 0.12, Coping: 0.08, Round: 0.18, Kanted: 0.18, Rail: 0.04, Bank: 0.3, Wall: 0 },
   ScrapeBand: 0.15,
   ScrapeSpeedLoss: 0.12,
+  InwardClimbMax: 0.4,
   TrackRange: 20,
   MinAngle: 0,
   MaxAngle: deg(75),

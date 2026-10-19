@@ -5,7 +5,7 @@
  *   npx vite-node scripts/side-approach-sweep.ts [--both] [--fails] [--json out.json]
  */
 import { writeFileSync } from 'node:fs';
-import { runSweep, type SweepRow } from '../tests/scenarios/sideApproachSweep';
+import { runSideApproach, runSweep, SWEEP_FEATURES, type SweepResult, type SweepRow } from '../tests/scenarios/sideApproachSweep';
 
 const args = process.argv.slice(2);
 const t0 = Date.now();
@@ -47,6 +47,11 @@ console.log('\nSection 5 targets:\n');
 const low65 = (f: string): boolean => !f.startsWith('ledge');
 const band = rows.filter((r) => right(r));
 const rate = (rs: SweepRow[]): number => (rs.length ? count(rs, ok) / rs.length : 0);
+const tally = (rs: SweepRow[], key: (r: SweepRow) => string): [string, number][] => {
+  const m = new Map<string, number>();
+  for (const r of rs) m.set(key(r), (m.get(key(r)) ?? 0) + 1);
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+};
 const check = (what: string, value: number, target: number, more = true): void =>
   console.log(`- ${what}: ${Math.round(value * 100)}% (target ${more ? '>=' : '<='} ${Math.round(target * 100)}%) ${(more ? value >= target : value <= target) ? 'PASS' : 'FAIL'}`);
 check('roughly right, features <= 0.65 m, A+B', rate(band.filter((r) => low65(r.feature))), 0.9);
@@ -58,12 +63,13 @@ check('low effort (charge 0.25, table), A', lowEffort.length ? count(lowEffort, 
 const lateBand = rows.filter((r) => r.angle >= 10 && r.angle <= 45 && r.lateral <= 2.5 && r.charge >= 0.5 && r.timing === 0.15 && (r.feature.startsWith('ledge') ? r.w : true));
 const onTime = rows.filter((r) => right(r) && (r.feature.startsWith('ledge') ? r.w : true));
 check('sloppy timing (+0.15 s), drop in A+B', rate(onTime) - rate(lateBand), 0.1, false);
+// Clearly bad (outside the grid): charge 0.1 on the 0.80 m ledge, no nose lift; crashes should dominate here.
+const ledge = SWEEP_FEATURES.find((f) => f.name.startsWith('ledge'))!;
+const bad: SweepResult[] = [];
+for (const angle of [10, 20, 30, 45]) for (const lateral of [0.3, 1, 2]) for (const edge of [0, 0.5, 1]) bad.push(runSideApproach(ledge.def, { angle, lateral, charge: 0.1, edge, w: false, timing: 0, side: -1 }));
+const badF = bad.filter((r) => r.outcome === 'F').length / bad.length;
+console.log(`- clearly bad (charge 0.1, ledge 0.80, no W, 10-45 deg): F ${Math.round(badF * 100)}% (target: mostly F) ${badF > 0.5 ? 'PASS' : 'FAIL'}; ${tally(bad.map((r) => ({ result: r }) as SweepRow), (r) => r.result.outcome).map(([k, n]) => `${k} ${n}`).join(', ')}`);
 
-const tally = (rs: SweepRow[], key: (r: SweepRow) => string): [string, number][] => {
-  const m = new Map<string, number>();
-  for (const r of rs) m.set(key(r), (m.get(key(r)) ?? 0) + 1);
-  return [...m.entries()].sort((a, b) => b[1] - a[1]);
-};
 console.log('\nCrash reasons (F):\n');
 for (const [k, n] of tally(rows.filter((r) => r.result.outcome === 'F'), (r) => r.result.note)) console.log(`- ${k}: ${n}`);
 console.log('\nNo contact (N):\n');

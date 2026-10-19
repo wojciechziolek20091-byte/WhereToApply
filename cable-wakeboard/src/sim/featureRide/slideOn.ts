@@ -211,9 +211,10 @@ export const edgeLeads = (yaw: number, cfg: SimConfig): boolean => Math.abs(sin(
  * - the whole board clears the top: fly on ('cleared'), a side ollie-on with air;
  * - the leading point is over the edge, or under it by no more than the
  *   edge's NoseTolerance: the contact phase starts ('contact');
- * - lower, within ScrapeBand, or with the board's middle less than DigDepth under the top: it
- *   scrapes up (contact with a speed loss, sketchy when deep);
- * - lower still with the board's middle deep under the top: the nose digs in;
+ * - lower, within ScrapeBand, or with the energy left to climb the face (rising, or
+ *   carried in within InwardClimbMax of the top): it scrapes up (contact with a speed
+ *   loss, sketchy when nearly stalled);
+ * - lower still, with no way up the face: the nose digs in;
  * - a thin rail is a short round edge: the base rides up over it the same
  *   way (its nose tolerance is small);
  * - a bank never digs: the board rides up it.
@@ -254,8 +255,9 @@ export function leadCrossing(s: SimState, air: AirState): 'cleared' | 'contact' 
   // How far the nose is under its tolerance (0 when it is within it).
   const under = Math.max(0, top - tol - lead);
   const vin = Math.max(0, so.toward * dot(r.vel, rightOf(f.heading)));
-  // Just popped and rising fast, the board still rides up the face: only a board that cannot climb it digs in.
-  const energy = 0.5 * Math.max(0, r.vel.y) * Math.max(0, r.vel.y) + 0.5 * vin * vin * S.ClimbEfficiency;
+  // Still rising, or carried in hard near the top, the board rides up the face: only a board that cannot
+  // climb it digs in. The inward speed lifts it at most InwardClimbMax (a board far below the top digs).
+  const energy = 0.5 * Math.max(0, r.vel.y) * Math.max(0, r.vel.y) + Math.min(0.5 * vin * vin * S.ClimbEfficiency, GRAVITY * S.InwardClimbMax);
   if (under > S.ScrapeBand && energy < GRAVITY * (top - r.pos.y) && type !== 'Bank') return 'noseDig';
   // Into the contact phase.
   so.phase = 'contact';
