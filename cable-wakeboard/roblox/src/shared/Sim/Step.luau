@@ -89,7 +89,9 @@ local function stepWater(s, input)
 		end
 	end
 
-	if mem.popReleased then
+	-- Coyote time (side approach v2): charging into a feature's side, the pop goes off at the edge.
+	local coyote = not mem.popReleased and input.pop and r.mode == "riding" and FeatureRideSlideOn.coyoteContact(s)
+	if mem.popReleased or coyote then
 		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
 		if r.mode == "waterTrickLoad" then
 			local vy, trick = WaterTrick.planWaterTrick(r.tensionSmooth, Pop.waterTrickTiming(r, cfg, DT), input, cfg)
@@ -97,14 +99,23 @@ local function stepWater(s, input)
 			air.trick = trick
 			return
 		end
-		local air = Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, Pop.ollieSpeed(charge, cfg), charge)
+		if coyote then
+			mem.popSpent = true
+		end
+		-- A side approach pops off its edge (v2 spec 1.1): measure the edge before leaving the water.
+		local edgeLoad = FeatureRideSlideOn.edgeLoadAt(s)
+		local popSpeed = Pop.ollieSpeed(charge, cfg) * (if coyote then 1 - cfg.slideOn.CoyotePenalty else 1)
+		local air = Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, popSpeed, charge)
+		FeatureRideSlideOn.predictSlideOn(s, air, popSpeed, edgeLoad)
+		air.noFlip = FeatureRideSlideOn.besideFeature(s)
 		FeatureRideEntryResolver.startEntry(s, air, Scalar.sign(input.steer), charge)
-		FeatureRideSlideOn.predictSlideOn(s, air, Pop.ollieSpeed(charge, cfg))
 		return
 	end
-	if r.mode == "riding" and WaterTrick.canArm(r, cfg) then
+	-- On a side approach the loaded edge is for the edge ollie (v2 spec 1): no water trick arms.
+	local side = FeatureRideSlideOn.sideApproachOn(s)
+	if r.mode == "riding" and WaterTrick.canArm(r, cfg) and not side then
 		Fsm.transition(s, "waterTrickLoad", "loaded")
-	elseif r.mode == "waterTrickLoad" and WaterTrick.shouldDisarm(r, cfg) then
+	elseif r.mode == "waterTrickLoad" and (WaterTrick.shouldDisarm(r, cfg) or side) then
 		Fsm.transition(s, "riding", "unloaded")
 	end
 
@@ -139,7 +150,7 @@ local function stepAirborne(s, input)
 	FeatureRideExitResolver.stepExitAssist(s, air, input)
 	FeatureRideSlideOn.stepNoseLift(s, air, input)
 	local lead = FeatureRideSlideOn.leadCrossing(s, air)
-	if lead == "noseDig" or lead == "hangUp" then
+	if lead == "noseDig" then
 		Actions.crash(s, lead)
 		return
 	end

@@ -129,6 +129,11 @@ function TricksClassify.classifyAir(air, landing, cfg)
 		end
 		table.insert(tokens, token("Pop", name, POINTS.ollie, domain, { quality = air.popQuality }))
 	end
+	-- Over a feature from its side (side approach v2): "Ollie Over", "Frontside 360 Over".
+	if air.over then
+		name = name .. " Over"
+		table.insert(tokens, token("Bonus", "Over", POINTS.overBonus, domain))
+	end
 
 	local points = sumPoints(tokens)
 	local family = if invertDef then (if invertDef.invert then "invert" else "raley") elseif degrees > 0 then "spin" else "jump"

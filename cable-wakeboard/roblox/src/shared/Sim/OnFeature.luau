@@ -23,6 +23,7 @@ local Pop = require(script.Parent.Pop)
 local Posture = require(script.Parent.Posture)
 local Rotation = require(script.Parent.Rotation)
 local Scalar = require(script.Parent.Scalar)
+local SlideOnConfig = require(script.Parent.FeatureRideSlideOnConfig)
 local Vec = require(script.Parent.Vec)
 
 local DT, GRAVITY = Config.DT, Config.GRAVITY
@@ -153,7 +154,9 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		noiseSeed = s.tick,
 		slideOnInward = 0,
 		slideOnToward = 0,
+		counterHeld = false,
 		slideOnClean = false,
+		entryAir = 0,
 	}
 end
 
@@ -496,10 +499,13 @@ function OnFeature.stepSlide(s, input, mem)
 	end
 
 	-- A slide-on's inward speed carries the board across; A/D counter-steers it instead of rotating.
-	if stepSlideOnCarry(s, j, piece, input.steer) then
+	if stepSlideOnCarry(s, j, f, piece, input.steer) then
 		return
 	end
-	local turned = if j.slideOnInward > 0 then nil else FeatureRotation.stepFeatureRotation(s, j, heading, mem)
+	if mem.steerDir == 0 then
+		j.counterHeld = false
+	end
+	local turned = if j.slideOnInward > 0 or j.counterHeld then nil else FeatureRotation.stepFeatureRotation(s, j, heading, mem)
 	if turned then
 		endSlide(s)
 		Actions.crash(s, turned)
@@ -663,13 +669,16 @@ function OnFeature.airOverFeature(s, air)
 	local r = s.rider
 	local hit = Features.featureUnder(s.features, r.pos)
 	local was = air.overFeature
+	-- Left a part it came over from the side, without landing: over the feature (v2 spec 3 D, not a crash).
+	local c = air.crossing
 	if
 		was ~= nil
+		and c
+		and c.part == was
+		and c.side ~= 0
 		and (not hit or hit.feature.def.id .. ":" .. tostring(hit.surface.piece.part) ~= was)
-		and EntryResolver.overshotSide(s, air, was)
 	then
-		Actions.crash(s, "overshoot")
-		return true
+		air.over = c.featureId
 	end
 	if not hit then
 		air.overFeature = nil
@@ -691,10 +700,19 @@ function OnFeature.airOverFeature(s, air)
 				Actions.crash(s, reason)
 				return true
 			end
+			-- Low across a side edge: it scrapes up onto the top and comes down on it now (v2 spec 2).
+			if air.crossing and air.crossing.part == part and air.crossing.side ~= 0 and r.pos.y < surface.height then
+				r.pos = Vec.vec3(r.pos.x, surface.height, r.pos.z)
+				r.vel = Vec.vec3(r.vel.x, math.min(r.vel.y, -0.1), r.vel.z)
+			end
 		end
 		air.overFeature = part
 	end
 	if r.pos.y > surface.height or r.vel.y >= 0 then
+		return false
+	end
+	-- Back under the top it slid off (the rope pulls it back): falling past its side, not landing on it.
+	if air.exit and air.exit.kind == "slideOff" and air.featureId == feature.def.id and r.pos.y < surface.height - 0.1 then
 		return false
 	end
 	if piece.role == "LandingRamp" then
@@ -728,6 +746,12 @@ function OnFeature.airOverFeature(s, air)
 	j.inRotation = e.inRotation
 	j.entryQuality = e.quality
 	j.entrySlide = e.slide
+	-- From the side: what it carries across (it may slide off the far side), and the air it took.
+	if air.crossing and air.crossing.side ~= 0 and air.crossing.featureId == feature.def.id then
+		j.slideOnInward = math.max(0, e.carry - s.cfg.slideOn.LandingCarryAbsorb)
+		j.slideOnToward = -air.crossing.side
+	end
+	j.entryAir = air.time
 	-- A transfer (or a hop back on) carries the line on.
 	j.chain = if air.exit then air.exit.jibs else {}
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
@@ -748,49 +772,41 @@ local function mountSlideOn(s, air, input, hung)
 		return
 	end
 	local heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, piece)
-	local yaw = Scalar.wrapAngle(EntryResolver.boardYawInAir(air) - heading)
-	local edge = so.lead == "edge"
-	local boardAngle
-	if edge then
-		boardAngle = if yaw >= 0 then math.pi / 2 else -math.pi / 2
-	else
-		boardAngle = if math.abs(yaw) > math.pi / 2 then math.pi else 0
-	end
-	local off = math.max(0, math.abs(Scalar.wrapAngle(yaw - boardAngle)) - S.YawCorrection * math.abs(input.steer))
-	local roll = if air.entry then air.entry.roll else 0
-	if roll > L.MaxRoll then
-		Actions.crash(s, "slippedOut")
-		return
-	end
-	if off > S.BadAngle then
-		Actions.crash(s, "badAngle")
-		return
-	end
-	local hit = 0
+	-- A/D during the slide-on straightens the board up to YawCorrection.
+	local raw = Scalar.wrapAngle(EntryResolver.boardYawInAir(air) - heading)
+	local yaw = raw - Scalar.sign(raw) * math.min(math.abs(raw), S.YawCorrection * math.abs(input.steer))
+	local aligned = SlideOnConfig.alignSlide(yaw, cfg)
+	local boardAngle = aligned.boardAngle
+	local edge = math.abs(boardAngle) == math.pi / 2
+	-- Lining up costs balance, it is not sketchy (v2 spec 2).
+	local hit = aligned.hit
 	local sketchy = false
-	if roll > L.SketchyRoll then
-		sketchy = true
-		hit += L.RollHit
-	end
-	if off > S.SketchyAngle then
-		sketchy = true
-		hit += L.AngleHit
-	end
 	if hung then
 		sketchy = true
 		hit += S.SketchySaveHit
 	end
+	-- A scrape-up: slower, and sketchy when it climbed the face from below the band and nearly stalled.
+	local scrapeLoss = if so.scrape > 0 then S.ScrapeSpeedLoss else 0
+	if so.scrape > S.ScrapeBand and so.vin < 2 * S.HangUpSpeed then
+		sketchy = true
+		hit += L.AngleHit
+	end
 	if r.handle == "passing" then
 		r.handle = "inFront"
 	end
-	local speed = math.max(math.abs(so.along) * (1 - S.SpeedLoss), cfg.feature.stallSpeed + 0.5)
+	local speed = math.max(math.abs(so.along) * (1 - S.SpeedLoss - scrapeLoss), cfg.feature.stallSpeed + 0.5)
 	local level = table.clone(air)
 	level.rot = table.clone(air.rot)
 	level.rot.spinAngle = Scalar.round(air.rot.spinAngle / math.pi) * math.pi
-	local surface = Features.surfaceAt(f, { u = so.u, v = so.v })
+	-- Just over the near edge, the board's middle settles on the near half of the balance width; what it
+	-- carries decides if it slides off. (A thin rail's balance width is wider than the rail: stay on the rail.)
+	local centre = FeatureShapes.pieceCentre(piece, so.u)
+	local bw = math.min(EntryResolver.balanceHalfWidth(piece, s), piece.width / 2)
+	local mv = centre - so.toward * (bw / 2)
+	local surface = Features.surfaceAt(f, { u = so.u, v = mv })
 	local landing = Landing.evaluateLanding(r, level, if surface then surface.normal else Vec.vec3(0, 1, 0), cfg)
 	r.air = nil
-	mountMain(s, f, piece, so.u, so.v, speed, if edge then "edgeSlideOn" else "slideOn", sketchy, boardAngle)
+	mountMain(s, f, piece, so.u, mv, speed, if edge then "edgeSlideOn" else "slideOn", sketchy, boardAngle)
 	local j = r.jib
 	j.balance = Scalar.clamp(so.toward * hit, -L.MaxHit, L.MaxHit)
 	j.inRotation = air.rot.spinAngle - air.spinStart
@@ -799,12 +815,32 @@ local function mountSlideOn(s, air, input, hung)
 		local toes = Edge.toeSign({ stance = r.stance, switchStance = air.takeoffSwitch })
 		j.entrySlide = FeatureRotation.sideEntrySlide(EntryResolver.boardYawInAir(air), heading, -so.toward, toes, air.takeoffHeading)
 	end
-	j.slideOnInward = so.vin
+	j.slideOnInward = math.max(0, so.vin - S.CarryAbsorb)
 	j.slideOnToward = so.toward
 	j.slideOnClean = not sketchy and so.vin0 > 0 and so.vin >= S.CleanInwardShare * so.vin0
 	j.chain = if air.exit then air.exit.jibs else {}
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = f.def.id })
+end
+
+-- Short of the top (a hang-up): the board slips back off the edge into the water beside the
+-- feature. Not a crash: the air goes on and lands under the water rules.
+local function dropBack(s, air)
+	local r = s.rider
+	local so = air.slideOn
+	so.phase = "cleared"
+	local f = featureById(s, so.featureId)
+	local l = Features.toLocal(f, r.pos)
+	local p = SlideOn.topPieceAt(f, l.u, l.v)
+	local edgeV = if p then FeatureShapes.pieceCentre(p, l.u) - so.toward * (p.width / 2) else l.v
+	local v = edgeV - so.toward * (s.cfg.slideOn.BaseWidth / 2 + 0.05)
+	r.pos = Features.toWorld(f, l.u, v, math.max(0.05, math.min(r.pos.y, so.top - 0.1)))
+	local fw = Vec.forwardOf(f.heading)
+	local rt = Vec.rightOf(f.heading)
+	local along = Vec.dot(r.vel, fw)
+	r.vel = Vec.vec3(fw.x * along - rt.x * so.toward * 0.5, 0, fw.z * along - rt.z * so.toward * 0.5)
+	table.insert(air.cleared, f.def.id .. ":" .. tostring(so.part))
+	air.overFeature = nil
 end
 
 function OnFeature.stepSlideOnContact(s, air, input)
@@ -818,19 +854,20 @@ function OnFeature.stepSlideOnContact(s, air, input)
 		return true
 	end
 	if step == "hang" and so.p < S.SketchySaveShare then
-		Actions.crash(s, "hangUp")
+		dropBack(s, air)
 		return true
 	end
 	mountSlideOn(s, air, input, step == "hang")
 	return true
 end
 
-function stepSlideOnCarry(s, j, piece, steer)
+function stepSlideOnCarry(s, j, f, piece, steer)
 	local S = s.cfg.slideOn
 	if j.slideOnInward <= 0 then
 		return false
 	end
-	local ramp = s.rider.ramp
+	local r = s.rider
+	local ramp = r.ramp
 	if j.time > S.OvershootWindow then
 		j.slideOnInward = 0
 		return false
@@ -839,12 +876,27 @@ function stepSlideOnCarry(s, j, piece, steer)
 	local bite = if piece.profile == "Round" then S.RoundInwardFriction else S.InwardFriction
 	local v = math.max(0, j.slideOnInward - bite * GRAVITY * DT)
 	if steer * j.slideOnToward < 0 then
+		j.counterHeld = true
 		v *= DetMath.pow(1 - S.CounterSteerBleed, (math.abs(steer) * DT) / 0.1)
 	end
 	j.slideOnInward = v
-	if j.slideOnToward * Features.offCentre(piece, ramp) > EntryResolver.balanceHalfWidth(piece, s) then
-		endSlide(s)
-		Actions.crash(s, "overshoot")
+	if j.slideOnToward * Features.offCentre(piece, ramp) > math.min(EntryResolver.balanceHalfWidth(piece, s), piece.width / 2) then
+		-- Off the far side (v2 spec 3 C): on with what it carries across.
+		local heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, piece)
+		local fw = Vec.forwardOf(heading)
+		local along = Vec.dot(r.vel, fw)
+		local out = math.max(v, 1) * j.slideOnToward
+		local rt = Vec.rightOf(f.heading)
+		-- Tipping off the far edge, clear of the top; the rider swings the board back along the travel.
+		r.vel = Vec.vec3(fw.x * along + rt.x * out, -1, fw.z * along + rt.z * out)
+		ramp.v = FeatureShapes.pieceCentre(piece, ramp.u) + j.slideOnToward * (piece.width / 2 + S.BaseWidth / 2)
+		r.pos = Features.toWorld(f, ramp.u, ramp.v, r.pos.y)
+		j.boardAngle = if math.abs(Scalar.wrapAngle(j.boardAngle)) > math.pi / 2 then math.pi else 0
+		local air = leaveFeature(s, f, 0, 0, piece, "slideOff")
+		-- Drifting back over it on the way down is not a new entry.
+		for _, q in f.shape.pieces do
+			table.insert(air.cleared, f.def.id .. ":" .. tostring(q.part))
+		end
 		return true
 	end
 	return false

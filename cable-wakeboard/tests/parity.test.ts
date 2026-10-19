@@ -182,7 +182,7 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
     expect(events).toContain('slideDone');
   });
 
-  it('feature entries (EntryResolver): side hops, clearance, slip, overshoot and safety pops trace the same', () => {
+  it('feature entries (EntryResolver): side hops, clearance, scrape-ups, jump-overs and safety pops trace the same', () => {
     const trace = readFileSync(ENTRY_LUAU, 'utf8');
     const calls = ENTRY_SCENARIOS.map((sc) => `print("#")\nentryTrace(${luauLiteral(sc)})`).join('\n');
     const out = runLuau(`local entryTrace = (function()\n${trace}\nend)()\n${calls}`);
@@ -198,10 +198,12 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
       reasons.push(`${String(last[last.length - 1])}/${String(ts.find((r) => r[22] !== '-')?.[22] ?? '-')}`);
     });
     // The scenarios cover the entry outcomes they are named for.
-    expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseDig/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
-    expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(5);
+    // Side approach v2: no ClippedSide, Overshoot or SlippedOut; a jump over is no entry and no crash.
+    expect(reasons).toEqual(expect.arrayContaining(['noseDig/-', 'missedSafetyPop/-', '-/-']));
+    for (const gone of ['clippedSide', 'overshoot', 'slippedOut', 'hangUp']) expect(reasons.some((x) => x.startsWith(`${gone}/`))).toBe(false);
+    expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(6);
     expect(reasons.some((x) => x.startsWith('ranOutMidRotation/'))).toBe(true);
-    expect(reasons).toEqual(expect.arrayContaining(['-/slideOn', 'noseDig/-']));
+    expect(reasons.filter((x) => x === '-/slideOn').length).toBeGreaterThanOrEqual(3);
     expect(reasons.some((x) => x.endsWith('/edgeSlideOn'))).toBe(true);
   });
 
@@ -213,6 +215,12 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
       .split('\n')
       .map(Number);
     expect(lu).toEqual(grid.map(([c, l, t]) => maxReachableHeight(DEFAULT_CONFIG, c, l, t as 'Rounded')));
+    // With the edge loaded at the pop (v2 spec 1.1).
+    const edged = runLuau(grid.map(([c, l, t]) => `print(string.format("%.17g", Sim.FeatureRideSlideOnConfig.maxReachableHeight(Sim.Config.DEFAULT_CONFIG, ${c}, ${l}, "${t}", nil, nil, 0.8)))`).join('\n'))
+      .trimEnd()
+      .split('\n')
+      .map(Number);
+    expect(edged).toEqual(grid.map(([c, l, t]) => maxReachableHeight(DEFAULT_CONFIG, c, l, t as 'Rounded', undefined, undefined, 0.8)));
   });
 
   it('FeatureTrickNamer names every line the same as the TypeScript one (spec 8 examples and more)', () => {

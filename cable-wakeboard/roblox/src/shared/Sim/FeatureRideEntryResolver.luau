@@ -11,6 +11,7 @@ local FeatureShapes = require(script.Parent.FeatureShapes)
 local Landing = require(script.Parent.Landing)
 local Scalar = require(script.Parent.Scalar)
 local SlideController = require(script.Parent.FeatureRideSlideController)
+local SlideOnConfig = require(script.Parent.FeatureRideSlideOnConfig)
 local Vec = require(script.Parent.Vec)
 
 local EntryResolver = {}
@@ -41,13 +42,15 @@ function EntryResolver.startEntry(s, air, steer, charge)
 	if not f then
 		return
 	end
-	local slipping = a.edgeAge <= R.Landing.SlipWindow
+	-- A side approach pops off its edge (v2 spec 1.1): only a front approach slips out.
+	local slipping = a.side == "front" and a.edgeAge <= R.Landing.SlipWindow
 	local slip = if a.side == "heelside"
 		then R.Landing.SlipRollHeelside
 		elseif a.side == "toeside" then R.Landing.SlipRollToeside
 		else R.Landing.SlipRollFront
 	local hop = 0
-	if a.side ~= "front" and a.sideGap <= R.SideEntry.MaxLateral and steer ~= 0 and steer == a.featureSide then
+	-- The hop toward it, unless the edge's release already carries the slide-on there.
+	if not air.slideOn and a.side ~= "front" and a.sideGap <= R.SideEntry.MaxLateral and steer ~= 0 and steer == a.featureSide then
 		hop = Scalar.lerp(R.SideEntry.HopLateralVMin, R.SideEntry.HopLateralVMax, charge)
 		r.vel = Vec.add(r.vel, Vec.scale(Vec.rightOf(f.heading), -Scalar.sign(a.lateral) * hop))
 	end
@@ -77,45 +80,16 @@ function EntryResolver.crossEdge(s, air, f, l, surface, part)
 	local side = if tSide < tFront then (if off >= 0 then 1 else -1) else 0
 	air.crossing = { featureId = f.def.id, part = part, side = side, height = surface.height }
 	local short = surface.height + E.Clearance - r.pos.y
-	if short > E.TailClipTolerance then
-		return if side == 0 then "shortOllie" else "clippedSide"
-	end
-	if side ~= 0 then
-		local angle = if air.entry and air.entry.featureId == f.def.id then air.entry.angle else axisAngle(DetMath.atan2(vv, vu))
-		if angle > cfg.featureRide.SideEntry.MaxAngle then
-			return "noseHitSide"
-		end
+	local S = cfg.slideOn
+	-- From the side (v2 spec 2) a board a little low scrapes up the edge; well below it the nose digs in.
+	local allow = E.TailClipTolerance + (if side ~= 0 then S.NoseTolerance.Rounded + S.ScrapeBand else 0)
+	if short > allow then
+		return if side == 0 then "shortOllie" else "noseDig"
 	end
 	if short > 0 then
 		air.tailClip = true
 	end
 	return nil
-end
-
--- Left the part across its far side from a side entry, low on the way down: overshoot.
-function EntryResolver.overshotSide(s, air, part)
-	local c = air.crossing
-	local r = s.rider
-	if not c or c.part ~= part or c.side == 0 or r.vel.y >= 0 then
-		return false
-	end
-	local f = findFeature(s, c.featureId)
-	if not f then
-		return false
-	end
-	local l = Features.toLocal(f, r.pos)
-	local p = nil
-	for _, q in f.shape.pieces do
-		if f.def.id .. ":" .. tostring(q.part) == part and q.axis == "u" and l.u >= q.u0 and l.u <= q.u1 then
-			p = q
-			break
-		end
-	end
-	if not p then
-		return false
-	end
-	local off = l.v - FeatureShapes.pieceCentre(p, l.u)
-	return Scalar.sign(off) == -c.side and r.pos.y < c.height + s.cfg.featureRide.SideEntry.OvershootCatch
 end
 
 function EntryResolver.balanceHalfWidth(p, s)
@@ -145,7 +119,9 @@ function EntryResolver.resolveLanding(s, air, f, surface, l, heading)
 		elseif crossSide ~= 0 then "sideOllieOn"
 		else "ollieOn"
 	local yaw = Scalar.wrapAngle(EntryResolver.boardYawInAir(air) - heading)
-	local boardAngle = Scalar.round(yaw / (math.pi / 2)) * (math.pi / 2)
+	-- From the side any angle lines up into a slide (v2 spec 2); else the nearest 90.
+	local aligned = if crossSide ~= 0 then SlideOnConfig.alignSlide(yaw, cfg) else nil
+	local boardAngle = if aligned then aligned.boardAngle else Scalar.round(yaw / (math.pi / 2)) * (math.pi / 2)
 	local level = table.clone(air)
 	level.rot = table.clone(air.rot)
 	level.rot.spinAngle = Scalar.round(air.rot.spinAngle / math.pi) * math.pi
@@ -161,6 +137,7 @@ function EntryResolver.resolveLanding(s, air, f, surface, l, heading)
 		balance = 0,
 		speedKeep = if air.tailClip then cfg.featureRide.Entry.TailClipSpeedKeep else 1,
 		slide = nil,
+		carry = 0,
 		landing = landing,
 	}
 	local function fail(reason)
@@ -182,25 +159,30 @@ function EntryResolver.resolveLanding(s, air, f, surface, l, heading)
 		result.sketchy = true
 		hit += L.RollHit
 	end
-	-- 2. Board angle to the axis.
+	-- 2. Board angle to the axis (from the side, alignSlide: never a crash).
 	local offAngle = math.abs(yaw - boardAngle)
-	if offAngle > L.SketchyAngle then
+	if aligned then
+		hit += aligned.hit
+	elseif offAngle > L.SketchyAngle then
 		return fail("badAngle")
-	end
-	if offAngle > L.SnapTolerance then
+	elseif offAngle > L.SnapTolerance then
 		result.sketchy = true
 		hit += L.AngleHit
 	end
 	-- 3. Across the feature.
 	local off = l.v - FeatureShapes.pieceCentre(surface.piece, l.u)
 	local half = EntryResolver.balanceHalfWidth(surface.piece, s)
-	if math.abs(off) > half then
-		if crossSide ~= 0 and Scalar.sign(off) == crossSide then
-			return fail("clippedSide")
+	if crossSide ~= 0 then
+		-- From the side: what it carries across keeps going (it may slide off the far side, v2 spec 3 C).
+		result.carry = math.max(0, -crossSide * Vec.dot(r.vel, Vec.rightOf(heading)))
+		if math.abs(off) > half then
+			result.sketchy = true
+			hit += S.OvershootHit
 		end
+	elseif math.abs(off) > half then
 		local recover = if surface.piece.profile == "Round" then 0 else S.OvershootRecover
 		if math.abs(off) - half > recover then
-			return fail(if crossSide ~= 0 then "overshoot" else "fellOffFeature")
+			return fail("fellOffFeature")
 		end
 		result.sketchy = true
 		hit += S.OvershootHit

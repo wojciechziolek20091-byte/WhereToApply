@@ -407,8 +407,10 @@ local function testOllieOn(def: any, rows: { Row }, maxTries: number)
 			return { steer = steer, pop = l.u > main.u0 + rel - hold * 8 and l.u < main.u0 + rel }
 		end)
 		local e = find(events, function(x)
-			-- Cutting in from beside the safety lands as a side ollie-on (EntryResolver).
-			return x.type == "transition" and x.to == "onFeature" and (x.reason == "ollieOn" or x.reason == "sideOllieOn")
+			-- Cutting in from beside the safety lands as a side ollie-on (EntryResolver), or slides on from its edge (v2).
+			return x.type == "transition"
+				and x.to == "onFeature"
+				and (x.reason == "ollieOn" or x.reason == "sideOllieOn" or x.reason == "slideOn" or x.reason == "edgeSlideOn")
 		end)
 		if e and not crashOf(events) then
 			found = { beside = beside, rel = rel }

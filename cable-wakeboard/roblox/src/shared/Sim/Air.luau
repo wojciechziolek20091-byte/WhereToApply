@@ -66,6 +66,7 @@ function Air.createAirState(r, source, featureId, popSpeed, popQuality, cfg, spi
 		preWind = 0,
 		slideOn = nil,
 		over = nil,
+		noFlip = false,
 	}
 end
 
@@ -99,7 +100,7 @@ function Air.stepAir(r, air, ropeForce, input, mem, cfg)
 		return Rotation.rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading)
 	end, cfg, DT, spinRate)
 	-- Beside a feature W lifts the nose (slide-on), it does not flip.
-	local noseLift = air.slideOn ~= nil and air.slideOn.phase == "air"
+	local noseLift = air.noFlip or (air.slideOn ~= nil and air.slideOn.phase == "air")
 	if not air.trick and not noseLift then
 		Rotation.stepFlip(air.rot, if input.forward then 1 elseif input.back then -1 else 0, cfg, DT, BodyPhysics.flipRateScale(cfg, air.rot.flipAngle))
 	end

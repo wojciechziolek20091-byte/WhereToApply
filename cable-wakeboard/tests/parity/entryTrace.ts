@@ -1,6 +1,6 @@
 /**
  * Scripted feature entries for the TypeScript <-> Luau parity check
- * (EntryResolver: side hops, clearance, slip, overshoot, safety pops). The
+ * (EntryResolver: side hops, clearance, scrape-ups, jump-overs, safety pops). The
  * Luau twin is roblox/tests/entry_trace.luau; the scenarios reach it as data.
  */
 import { makeConfig } from '../../src/sim/config';
@@ -24,11 +24,11 @@ export const ENTRY_SCENARIOS: EntryScenario[] = [
   { name: 'front ollie-on', def: {}, stance: 'regular', steps: [[2.6, 2.9, 1, 0]] },
   { name: 'side heelside', def: { offset: -1.6 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, -1]] },
   { name: 'side toeside goofy', def: { offset: -1.6 }, stance: 'goofy', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, -1]] },
-  { name: 'clipped side', def: { offset: 1.6 }, stance: 'regular', steps: [[3.3, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1]] },
-  { name: 'nose hit side', def: { offset: -3, yaw: 0.7 }, stance: 'regular', steps: [[3.0, 3.3, 1, 0], [3.3 - T, 3.3 + T, 0, -1]] },
-  { name: 'overshoot', def: { offset: 1.0 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1]] },
+  { name: 'side, a little low: scrape-up (was clipped side)', def: { offset: 1.6 }, stance: 'regular', steps: [[3.3, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1]] },
+  { name: '40 degrees: slide-on (was nose hit side)', def: { offset: -3, yaw: 0.7 }, stance: 'regular', steps: [[3.0, 3.3, 1, 0], [3.3 - T, 3.3 + T, 0, -1]] },
+  { name: 'over the box into the water (was overshoot)', def: { offset: 1.0 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1]] },
   { name: 'sketchy recovery', def: { offset: 1.1 }, stance: 'regular', steps: [[3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, 1]] },
-  { name: 'slipped out', def: { offset: -2.2 }, stance: 'regular', steps: [[3.0, 3.39, 0, -1], [3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, -1]] },
+  { name: 'edge into a short pop: nose dig, never a slip-out', def: { offset: -2.2 }, stance: 'regular', steps: [[3.0, 3.39, 0, -1], [3.2, 3.4, 1, 0], [3.4 - T, 3.4 + T, 0, -1]] },
   { name: '180-in pop-on', def: {}, stance: 'regular', steps: [[3.2, 3.5, 1, 0], [3.5, 3.8, 0, 1]] },
   { name: 'ollie onto the safety', def: { offset: 1.3, entryLength: 6, safety: 'gap' }, stance: 'regular', steps: [[3.0, 3.1, 1, 0], [3.1 - T, 3.1 + T, 0, 1], [3.65, 3.9, 1, 0]] },
   { name: 'early hop, gap', def: { safety: 'gap' }, stance: 'regular', steps: [[3.15, 3.2, 1, 0]] },
@@ -42,8 +42,9 @@ export const ENTRY_SCENARIOS: EntryScenario[] = [
   // Slide-ons (side approaches spec): turned 15-20 degrees in toward the box.
   { name: 'slide-on', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0]] },
   { name: 'slide-on, W nose lift', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[3.0, 3.3, 1, 0], [3.3, 3.9, 0, 0, 1]] },
-  { name: 'slide-on, nose dig', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0], [3.3, 3.9, 0, -1]] },
-  { name: 'edge slide-on', def: { offset: -2, yaw: 0.35 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0], [3.3, 3.9, 0, 1, 1]] },
+  { name: 'slide-on, A held (was a nose dig)', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0], [3.3, 3.9, 0, -1]] },
+  // A quarter turn in the air: across the board at the edge (v2 alignment: 60-120 degrees).
+  { name: 'edge slide-on', def: { offset: -2, yaw: 0.35 }, stance: 'regular', steps: [[2.6, 3.0, 1, 0], [3.0, 3.15, 0, -1]] },
 ];
 
 /** One row per tick until a crash or 6 s: state, approach, entry. */

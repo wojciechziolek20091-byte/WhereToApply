@@ -104,6 +104,10 @@ function FeatureScoring.scoreFeatureLine(exit, air, landing, cfg)
 		if j.slideOnClean then
 			table.insert(tokens, token("Bonus", "Clean Slide-on", S.SlideOnCleanBonus * k))
 		end
+		-- Air-on (side approach v2 spec 7): a side ollie-on earns its air time.
+		if j.entry == "sideOllieOn" and j.entryAir > 0 then
+			table.insert(tokens, token("Bonus", "Air", cfg.slideOn.AirOnBonus * j.entryAir * k))
+		end
 		passes += j.rot.passes
 	end
 	if out then
