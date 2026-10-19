@@ -1,13 +1,13 @@
-import { atan, cos } from './math/detmath';
+import { atan, cos, pow } from './math/detmath';
 import { FEATURE_CATALOG } from './featureCatalog';
 import type { SimConfig } from './config';
 import { deg, DT, GRAVITY } from './config';
-import { edgeNorm, updateEdge } from './edge';
+import { edgeNorm, toeSign, updateEdge } from './edge';
 import { type FeatureSurface, featureUnder, offCentre, pieceHeading, surfaceAt, toWorld } from './features';
 import { type RidePiece, wallHeightAt } from './featureShapes';
 import { transition } from './fsm';
 import type { InputFrame, InputMemory } from './input';
-import { sign, wrapAngle } from './math/scalar';
+import { clamp, sign, wrapAngle } from './math/scalar';
 import { add, dot, forwardOf, headingOf, horizontal, horizontalLength, rightOf, scale, vec3 } from './math/vec';
 import type { ResolvedFeature } from './park';
 import { ollieCharge, ollieSpeed } from './pop';
@@ -18,12 +18,13 @@ import type { SimState } from './world';
 import { applyRope, crash, takeOff } from './actions';
 import { landingSpeedKeep } from './bodyPhysics';
 import { evaluateLanding } from './landing';
-import { crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
+import { balanceHalfWidth, boardYawInAir, crossEdge, overshotSide, resolveLanding, safetyPitchError } from './featureRide/entryResolver';
 import { isBoardslide, partEnd, slideFriction, stepBalance, stepKink } from './featureRide/slideController';
 import { stepPress } from './featureRide/pressController';
 import { exitOf, popKind } from './featureRide/exitResolver';
 import { popScaleOn, wallTooSlow } from './featureRide/featureSpecials';
-import { midRotation, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
+import { midRotation, sideEntrySlide, slideIdAt, stepFeatureRotation } from './featureRide/featureRotation';
+import { stepContact, topPieceAt } from './featureRide/slideOn';
 
 /**
  * Kickers and obstacles (spec section 9), on any feature's ride pieces
@@ -131,6 +132,9 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     sketchy,
     rot,
     noiseSeed: s.tick,
+    slideOnInward: 0,
+    slideOnToward: 0,
+    slideOnClean: false,
   };
 }
 
@@ -374,8 +378,10 @@ export function stepSlide(s: SimState, input: InputFrame, mem: InputMemory): voi
     return;
   }
 
+  // A slide-on's inward speed carries the board across; A/D counter-steers it instead of rotating.
+  if (stepSlideOnCarry(s, j, piece, input.steer)) return;
   // Rotations in 90-degree hop steps, hard way, handle passes (FeatureRotation).
-  const turned = stepFeatureRotation(s, j, heading, mem);
+  const turned = j.slideOnInward > 0 ? null : stepFeatureRotation(s, j, heading, mem);
   if (turned) {
     endSlide(s);
     crash(s, turned);
@@ -674,4 +680,117 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
   s.events.push({ type: 'featureEnter', tick: s.tick, featureId: feature.def.id });
   return true;
+}
+
+/**
+ * A slide-on's contact phase (side approaches spec 4.2.3-4.2.5), instead of
+ * the air step: the board climbs on over the side edge (slideOn.ts). With
+ * the tail on top it mounts the main; out of inward speed it hangs up on
+ * the edge: a sketchy save with SketchySaveShare of the board on top, else a
+ * crash. Returns true while the contact phase handled the tick.
+ */
+export function stepSlideOnContact(s: SimState, air: AirState, input: InputFrame): boolean {
+  const so = air.slideOn;
+  if (!so || so.phase !== 'contact') return false;
+  const S = s.cfg.slideOn;
+  const step = stepContact(s, air);
+  if (step === null) return true;
+  if (step === 'hang' && so.p < S.SketchySaveShare) {
+    crash(s, 'hangUp');
+    return true;
+  }
+  mountSlideOn(s, air, input, step === 'hang');
+  return true;
+}
+
+/** The slide-on lands on the main: snap the board onto the axis, check the base and the angle, then slide. */
+function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boolean): void {
+  const { rider: r, cfg } = s;
+  const S = cfg.slideOn;
+  const L = cfg.featureRide.Landing;
+  const so = air.slideOn!;
+  const f = featureById(s, so.featureId);
+  const piece = topPieceAt(f, so.u);
+  if (!piece) {
+    crash(s, 'fellOffFeature');
+    return;
+  }
+  const heading = f.shape.legacy ? f.heading : pieceHeading(f, piece);
+  const yaw = wrapAngle(boardYawInAir(air) - heading);
+  const edge = so.lead === 'edge';
+  const boardAngle = edge ? (yaw >= 0 ? Math.PI / 2 : -Math.PI / 2) : Math.abs(yaw) > Math.PI / 2 ? Math.PI : 0;
+  // A/D during the slide-on straightens the board up to YawCorrection.
+  const off = Math.max(0, Math.abs(wrapAngle(yaw - boardAngle)) - S.YawCorrection * Math.abs(input.steer));
+  const roll = air.entry ? air.entry.roll : 0;
+  if (roll > L.MaxRoll) {
+    crash(s, 'slippedOut');
+    return;
+  }
+  if (off > S.BadAngle) {
+    crash(s, 'badAngle');
+    return;
+  }
+  let hit = 0;
+  let sketchy = false;
+  if (roll > L.SketchyRoll) {
+    sketchy = true;
+    hit += L.RollHit;
+  }
+  if (off > S.SketchyAngle) {
+    sketchy = true;
+    hit += L.AngleHit;
+  }
+  if (hung) {
+    sketchy = true;
+    hit += S.SketchySaveHit;
+  }
+  if (r.handle === 'passing') r.handle = 'inFront';
+  const speed = Math.max(Math.abs(so.along) * (1 - S.SpeedLoss), cfg.feature.stallSpeed + 0.5);
+  const level = { ...air, rot: { ...air.rot, spinAngle: Math.round(air.rot.spinAngle / Math.PI) * Math.PI } };
+  const surface = surfaceAt(f, { u: so.u, v: so.v });
+  const landing = evaluateLanding(r, level, surface ? surface.normal : vec3(0, 1, 0), cfg);
+  r.air = null;
+  mountMain(s, f, piece, so.u, so.v, speed, edge ? 'edgeSlideOn' : 'slideOn', sketchy, boardAngle);
+  const j = r.jib!;
+  // Thrown inward, the way the board was going.
+  j.balance = clamp(so.toward * hit, -L.MaxHit, L.MaxHit);
+  j.inRotation = air.rot.spinAngle - air.spinStart;
+  j.entryQuality = sketchy ? landing.quality * 0.6 : landing.quality;
+  if (edge) {
+    const toes = toeSign({ stance: r.stance, switchStance: air.takeoffSwitch });
+    j.entrySlide = sideEntrySlide(boardYawInAir(air), heading, -so.toward, toes, air.takeoffHeading);
+  }
+  j.slideOnInward = so.vin;
+  j.slideOnToward = so.toward;
+  j.slideOnClean = !sketchy && so.vin0 > 0 && so.vin >= S.CleanInwardShare * so.vin0;
+  j.chain = air.exit ? air.exit.jibs : [];
+  s.events.push({ type: 'landed', tick: s.tick, air, landing, onFeature: true });
+  s.events.push({ type: 'featureEnter', tick: s.tick, featureId: f.def.id });
+}
+
+/**
+ * After a slide-on the inward speed left carries the board on across (spec
+ * 4.2.5): the base sliding sideways bleeds it, counter-steer (A/D away from the
+ * way it is going) bleeds CounterSteerBleed of it per 0.1 s. Past the far
+ * side of the balance width within OvershootWindow is an overshoot. Returns
+ * true on the crash.
+ */
+function stepSlideOnCarry(s: SimState, j: JibState, piece: RidePiece, steer: number): boolean {
+  const S = s.cfg.slideOn;
+  if (j.slideOnInward <= 0) return false;
+  const ramp = s.rider.ramp!;
+  if (j.time > S.OvershootWindow) {
+    j.slideOnInward = 0;
+    return false;
+  }
+  ramp.v += j.slideOnToward * j.slideOnInward * DT;
+  let v = Math.max(0, j.slideOnInward - S.InwardFriction * GRAVITY * DT);
+  if (steer * j.slideOnToward < 0) v *= pow(1 - S.CounterSteerBleed, (Math.abs(steer) * DT) / 0.1);
+  j.slideOnInward = v;
+  if (j.slideOnToward * offCentre(piece, ramp) > balanceHalfWidth(piece, s)) {
+    endSlide(s);
+    crash(s, 'overshoot');
+    return true;
+  }
+  return false;
 }

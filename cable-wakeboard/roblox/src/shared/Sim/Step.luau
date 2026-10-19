@@ -8,6 +8,7 @@ local FeatureRideApproachTracker = require(script.Parent.FeatureRideApproachTrac
 local FeatureRideEntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local FeatureRideExitResolver = require(script.Parent.FeatureRideExitResolver)
 local FeatureRideFeatureSpecials = require(script.Parent.FeatureRideFeatureSpecials)
+local FeatureRideSlideOn = require(script.Parent.FeatureRideSlideOn)
 local Fsm = require(script.Parent.Fsm)
 local Hydro = require(script.Parent.Hydro)
 local Input = require(script.Parent.Input)
@@ -98,6 +99,7 @@ local function stepWater(s, input)
 		end
 		local air = Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, Pop.ollieSpeed(charge, cfg), charge)
 		FeatureRideEntryResolver.startEntry(s, air, Scalar.sign(input.steer), charge)
+		FeatureRideSlideOn.predictSlideOn(s, air, Pop.ollieSpeed(charge, cfg))
 		return
 	end
 	if r.mode == "riding" and WaterTrick.canArm(r, cfg) then
@@ -127,10 +129,23 @@ local function stepAirborne(s, input)
 	if not rope then
 		return
 	end
+	-- A slide-on climbing over the side edge instead of flying.
+	if OnFeature.stepSlideOnContact(s, air, input) then
+		return
+	end
 	if Air.stepAir(r, air, rope.force, input, s.inputs, cfg) then
 		table.insert(s.events, { type = "handlePass", tick = s.tick })
 	end
 	FeatureRideExitResolver.stepExitAssist(s, air, input)
+	FeatureRideSlideOn.stepNoseLift(s, air, input)
+	local lead = FeatureRideSlideOn.leadCrossing(s, air)
+	if lead == "noseDig" or lead == "hangUp" then
+		Actions.crash(s, lead)
+		return
+	end
+	if lead == "contact" then
+		return
+	end
 	if OnFeature.airOverFeature(s, air) then
 		return
 	end

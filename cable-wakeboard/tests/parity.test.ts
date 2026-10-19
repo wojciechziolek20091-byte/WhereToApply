@@ -198,9 +198,11 @@ describe.skipIf(!LUAU)('TypeScript and Luau sims agree', () => {
       reasons.push(`${String(last[last.length - 1])}/${String(ts.find((r) => r[22] !== '-')?.[22] ?? '-')}`);
     });
     // The scenarios cover the entry outcomes they are named for.
-    expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseHitSide/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
+    expect(reasons).toEqual(expect.arrayContaining(['clippedSide/-', 'noseDig/-', 'overshoot/-', 'slippedOut/-', 'missedSafetyPop/-']));
     expect(reasons.filter((x) => x.endsWith('sideOllieOn'))).toHaveLength(5);
     expect(reasons.some((x) => x.startsWith('ranOutMidRotation/'))).toBe(true);
+    expect(reasons).toEqual(expect.arrayContaining(['-/slideOn', 'noseDig/-']));
+    expect(reasons.some((x) => x.endsWith('/edgeSlideOn'))).toBe(true);
   });
 
   it('SlideOnConfig.maxReachableHeight gives the same heights (charge x nose lift x edge)', () => {

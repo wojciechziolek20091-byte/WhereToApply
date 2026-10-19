@@ -84,3 +84,78 @@ describe('Slide-on availability (side approaches spec 3)', () => {
     expect(approachAt(box({ sideType: 'Coping' }), 1, 2, 15).sideType).toBe('Coping');
   });
 });
+
+import { ride } from './scenarios/featureScenarios';
+
+/**
+ * A scripted side approach: a box `height` m high (1 m wide) set `off` m to
+ * the side of the line and turned `yawDeg` in across it; pop held from
+ * `g0` m off its side to `g1` m (the release), W held the first 0.2 s of
+ * the entry air with `w`, A/D `steer` for the first 0.5 m on the main.
+ */
+function sideLine(height: number, yawDeg: number, off: number, g0: number, g1: number, o: { w?: boolean; steer?: number } = {}) {
+  const def: FeatureDef = { kind: 'slider', id: 'f', name: 'Box', style: 'box', s: 135, offset: off, yaw: deg(yawDeg), length: 8, width: 1, height, entryLength: 3, safety: 'flush' };
+  let held = false;
+  let released = false;
+  let maxFlip = 0;
+  let maxPitch = 0;
+  const run = ride(def, (c) => {
+    const a = c.s.rider.approach;
+    const so = c.s.rider.air?.slideOn;
+    if (so) {
+      maxPitch = Math.max(maxPitch, so.pitch);
+      if (so.phase === 'air') maxFlip = Math.max(maxFlip, Math.abs(c.s.rider.air!.rot.flipAngle));
+    }
+    if (c.mode === 'riding' && a && !released && a.slideOnBlock !== 'front' && a.sideGap < g0) held = true;
+    if (held && a && a.sideGap < g1) {
+      held = false;
+      released = true;
+    }
+    return {
+      pop: held,
+      forward: !!o.w && c.entryAir >= 0 && c.entryAir < 0.2,
+      steer: c.mode === 'onFeature' && c.mainU < 0.5 ? (o.steer ?? 0) : 0,
+    };
+  });
+  return { ...run, jib: run.jibs[0], maxFlip, maxPitch };
+}
+
+describe('Slide-on physics (side approaches spec 4)', () => {
+  it('a 0.5 m box from 15 degrees: the nose lifts 18 degrees, the board slides on into a clean 50-50', () => {
+    const r = sideLine(0.5, 15, -2, 2.4, 1.0);
+    expect(r.crash).toBeNull();
+    expect(r.jib?.entry).toBe('slideOn');
+    expect(r.jib?.slideOrder[0]).toBe('fiftyFifty');
+    expect(r.jib?.sketchy).toBe(false);
+    expect(r.jib?.slideOnClean).toBe(true);
+    expect(r.maxPitch).toBeCloseTo(deg(18), 3);
+  });
+
+  it('a 0.8 m ledge needs W: it lifts the nose to 30 degrees (and does not flip); without it the nose digs in', () => {
+    const w = sideLine(0.8, 18, -2, 5, 1.2, { w: true });
+    expect(w.crash).toBeNull();
+    expect(w.jib?.entry).toBe('slideOn');
+    expect(w.maxPitch).toBeCloseTo(deg(30), 3);
+    expect(w.maxFlip).toBe(0);
+    expect(sideLine(0.8, 18, -2, 5, 1.2).crash).toBe('noseDig');
+  });
+
+  it('out of inward speed on the edge: a hang-up crash, or a sketchy save with most of the board on top', () => {
+    expect(sideLine(0.8, 15, -2, 5, 1.2, { w: true }).crash).toBe('hangUp');
+    const save = sideLine(0.8, 15, -2, 5, 1.0, { w: true });
+    expect(save.crash).toBeNull();
+    expect(save.jib?.entry).toBe('slideOn');
+    expect(save.jib?.sketchy).toBe(true);
+  });
+
+  it('popped too close at 20 degrees: the nose is still low at the edge (NoseDig)', () => {
+    expect(sideLine(0.5, 20, -2, 1.6, 0.4).crash).toBe('noseDig');
+  });
+
+  it('25 degrees in carries the board across: overshoot, unless A/D counter-steers', () => {
+    expect(sideLine(0.5, 25, -2, 2.4, 1.0).crash).toBe('overshoot');
+    const saved = sideLine(0.5, 25, -2, 2.4, 1.0, { steer: 1 });
+    expect(saved.crash).toBeNull();
+    expect(saved.jib?.entry).toBe('slideOn');
+  });
+});

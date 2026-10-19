@@ -8,7 +8,8 @@ import { computeHydroForces } from './hydro';
 import { edgeNorm } from './edge';
 import { type InputFrame, updateInputMemory } from './input';
 import { addScaled, horizontalLength, scale, UP, vec3, add } from './math/vec';
-import { airOverFeature, stepRamp, stepSlide, tryEnterFeature } from './onFeature';
+import { airOverFeature, stepRamp, stepSlide, stepSlideOnContact, tryEnterFeature } from './onFeature';
+import { leadCrossing, predictSlideOn, stepNoseLift } from './featureRide/slideOn';
 import { trackApproach } from './featureRide/approachTracker';
 import { landedInGap, startEntry } from './featureRide/entryResolver';
 import { stepExitAssist } from './featureRide/exitResolver';
@@ -90,6 +91,7 @@ function stepWater(s: SimState, input: InputFrame): void {
     }
     const air = takeOff(s, r.mode === 'ridingBlind' ? 'blindPop' : 'flat', null, ollieSpeed(charge, cfg), charge);
     startEntry(s, air, sign(input.steer), charge);
+    predictSlideOn(s, air, ollieSpeed(charge, cfg));
     return;
   }
   if (r.mode === 'riding' && canArm(r, cfg)) transition(s, 'waterTrickLoad', 'loaded');
@@ -111,8 +113,17 @@ function stepAirborne(s: SimState, input: InputFrame): void {
   r.edgeLoad = 0;
   const rope = applyRope(s);
   if (!rope) return;
+  // A slide-on climbing over the side edge (slideOn.ts) instead of flying.
+  if (stepSlideOnContact(s, air, input)) return;
   if (stepAir(r, air, rope.force, input, s.inputs, cfg)) s.events.push({ type: 'handlePass', tick: s.tick });
   stepExitAssist(s, air, input);
+  stepNoseLift(s, air, input);
+  const lead = leadCrossing(s, air);
+  if (lead === 'noseDig' || lead === 'hangUp') {
+    crash(s, lead);
+    return;
+  }
+  if (lead === 'contact') return;
   if (airOverFeature(s, air)) return;
   if (r.pos.y <= 0 && r.vel.y < 0) {
     const spine = spineFlatLanding(s, air);

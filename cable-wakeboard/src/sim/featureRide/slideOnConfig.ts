@@ -57,6 +57,8 @@ export interface SlideOnConfig {
   /** Overshoot: carried past the far balance limit within this (s); counter-steer bleeds this share per 0.1 s. */
   OvershootWindow: number;
   CounterSteerBleed: number;
+  /** After the slide-on the base slides sideways and bites: the inward speed bleeds at this x g (m/s^2 per g). */
+  InwardFriction: number;
   /** Settle: the board snaps flat over this (s); the scrape costs SpeedLoss of the forward speed; the tail clearing pops up ClearPop (m/s). */
   SettleTime: number;
   SpeedLoss: number;
@@ -102,6 +104,7 @@ export const DEFAULT_SLIDE_ON: SlideOnConfig = {
   SketchySaveHit: 0.6,
   OvershootWindow: 0.4,
   CounterSteerBleed: 0.5,
+  InwardFriction: 0.8,
   SettleTime: 0.08,
   SpeedLoss: 0.06,
   ClearPop: 0.4,

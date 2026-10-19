@@ -1,3 +1,5 @@
+import type { JibEntry } from '../rider';
+
 /**
  * FeatureRideConfig: every number of the feature riding spec. Part of the
  * sim config (`DEFAULT_CONFIG.featureRide`), so it reaches Luau through the
@@ -167,7 +169,7 @@ export interface FeatureRideConfig {
     PretzelFactor: number;
     SwitchFactor: number;
     /** Entry bonus by kind. */
-    EntryBonus: Record<'popOn' | 'pop' | 'ollieOn' | 'sideOllieOn' | 'transfer' | 'rideOn', number>;
+    EntryBonus: Record<JibEntry, number>;
     EndTapBonus: number;
     /** Feature difficulty (catalogue 1-4) to a points multiplier: Base + PerLevel x difficulty. */
     DifficultyBase: number;
@@ -287,7 +289,7 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     HardWayFactor: 1.3,
     PretzelFactor: 1.2,
     SwitchFactor: 1.1,
-    EntryBonus: { popOn: 100, pop: 40, ollieOn: 50, sideOllieOn: 80, transfer: 60, rideOn: 0 },
+    EntryBonus: { popOn: 100, pop: 40, ollieOn: 50, sideOllieOn: 80, slideOn: 60, edgeSlideOn: 70, transfer: 60, rideOn: 0 },
     EndTapBonus: 50,
     DifficultyBase: 0.85,
     DifficultyPerLevel: 0.15,

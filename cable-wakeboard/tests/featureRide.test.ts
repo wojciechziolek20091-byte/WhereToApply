@@ -265,9 +265,9 @@ describe('Entry scenarios (feature ride M2-M3, spec 12.2)', () => {
     expect(sideHop(1.6, [3.3, 3.4]).crash).toBe('clippedSide');
   });
 
-  it('fail 3: a side approach at 40 degrees: NoseHitSide', () => {
-    expect(play(slider({ offset: -3, yaw: 0.7 }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? -1 : 0 })).crash).toBe('noseHitSide');
-    expect(play(slider({ offset: 3, yaw: -0.7 }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? 1 : 0 })).crash).toBe('noseHitSide');
+  it('fail 3: a side approach at 40 degrees: the nose digs into the side (NoseDig; was NoseHitSide before slide-ons)', () => {
+    expect(play(slider({ offset: -3, yaw: 0.7 }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? -1 : 0 })).crash).toBe('noseDig');
+    expect(play(slider({ offset: 3, yaw: -0.7 }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? 1 : 0 })).crash).toBe('noseDig');
   });
 
   it('fail 4: a side hop too strong for the gap: Overshoot (just past it is a sketchy recovery)', () => {

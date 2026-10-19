@@ -70,7 +70,11 @@ export type CrashReason =
   /** Too slow on a wall ride: slid down the wall. */
   | 'wallSlideDown'
   /** Popped off a gap safety into the gap. */
-  | 'landedInGap';
+  | 'landedInGap'
+  /** Slide-on: the nose under the side edge, or met the side face head-on. */
+  | 'noseDig'
+  /** Slide-on: ran out of inward speed with too little of the board on top. */
+  | 'hangUp';
 
 export type TakeoffSource = 'flat' | 'kicker' | 'feature' | 'waterTrick' | 'lineLift' | 'blindPop';
 
@@ -185,6 +189,44 @@ export interface AirState {
   tailClip: boolean;
   /** Left a feature's slide: how, and the line of slides so far (ExitResolver). */
   exit: FeatureExit | null;
+  /** A side entry's nose-lift slide-on in progress (slideOn.ts), else null. */
+  slideOn: SlideOnAir | null;
+}
+
+/**
+ * A slide-on (side approaches spec 4.2): the air with the nose lifting, then
+ * the contact phase with the board climbing on over the side edge.
+ */
+export interface SlideOnAir {
+  featureId: string;
+  /** Inward along the feature's right: +1 from its left side, -1 from its right. */
+  toward: number;
+  /** Nose lift the board is lifting to, and its lift now (rad). */
+  target: number;
+  pitch: number;
+  /** Seconds since the pop was released. */
+  sinceRelease: number;
+  phase: 'air' | 'contact' | 'cleared';
+  /** The nose leads, or the board's edge (turned 90 in the air). */
+  lead: 'nose' | 'edge';
+  /** Share of the board over the top (0..1). */
+  p: number;
+  /** Inward speed (m/s) now and at contact; upward speed left (m/s). */
+  vin: number;
+  vin0: number;
+  vy: number;
+  /** Board middle's height at contact, and the top's (m). */
+  y0: number;
+  top: number;
+  type: SideType;
+  /** Board angle to the axis at contact (rad). */
+  yaw0: number;
+  /** Board middle in the feature frame, and its speed along the axis (m, m/s). */
+  u: number;
+  v: number;
+  along: number;
+  /** The top's part. */
+  part: number;
 }
 
 /** Leaving a feature's slide (ExitResolver, spec 6). */
@@ -285,6 +327,11 @@ export interface JibState {
   sketchy: boolean;
   /** Rotation on the feature (spin only), with handle-pass windows. */
   rot: RotationState;
+  /** Slide-on: inward speed still carrying the board across (m/s), and which way (+-1 along the feature's right). */
+  slideOnInward: number;
+  slideOnToward: number;
+  /** Slide-on kept CleanInwardShare of its inward speed (style bonus). */
+  slideOnClean: boolean;
 }
 
 /** One rotation on a feature: 90-degree steps chained while A/D is held (FeatureRotation). */
@@ -306,7 +353,7 @@ export interface FeatureRotationRecord {
 }
 
 /** How the rider got onto a feature (EntryResolver). */
-export type JibEntry = 'popOn' | 'pop' | 'ollieOn' | 'sideOllieOn' | 'transfer' | 'rideOn';
+export type JibEntry = 'popOn' | 'pop' | 'ollieOn' | 'sideOllieOn' | 'slideOn' | 'edgeSlideOn' | 'transfer' | 'rideOn';
 
 /** How the rider is coming at the nearest feature (featureRide/approachTracker.ts). */
 export interface ApproachState {

@@ -81,6 +81,71 @@ There is no tutorial yet, so it is on by default.
 |---|---|
 | ![Approach](slide-on/cue-approach.jpg) Turned in toward the pipe rail: the near edge glows | ![Top](slide-on/cue-top.jpg) From above: the contact marker on the edge |
 
+## Physics (spec 4.1-4.2)
+
+Code: `src/sim/featureRide/slideOn.ts` (the maths), `onFeature.ts`
+(`stepSlideOnContact`, `mountSlideOn`, `stepSlideOnCarry`) and the hooks in
+`step.ts`. The Luau twins have the same names.
+
+1. **Pop.** A water pop with a tryable approach starts `air.slideOn`. A
+   tryable approach is one with no block, or blocked only by `height`, by
+   `end`, or by an `angle` steeper than MaxAngle. The pop keeps
+   `SidePopScale` of its vertical speed.
+2. **Air.** The nose lifts to `AutoNoseLift` in `NoseLiftTime`. W within
+   `WWindow` of the release raises the target to `MaxNoseLift`. While the
+   slide-on is in the air, W never flips the board.
+3. **Lead crossing.** When the leading point passes over the near side
+   edge, the checks run in this order:
+   - Nose ahead, more than `HeadOnAngle` off the axis: `noseDig`. Banks are
+     exempt.
+   - The low end of the board clears the top by `Entry.Clearance`: it is a
+     plain side ollie and flies on (`sideOllieOn` as before).
+   - Thin rails: the nose must clear, then the board's middle must reach the
+     rail, else `hangUp`.
+   - Other edges: the nose must clear the edge by `NoseClearance` (coping
+     needs more), else `noseDig`.
+   - Otherwise the contact phase starts.
+   If the board turned near 90° in the air, the edge leads instead of the
+   nose; that is an Edge Slide-on.
+4. **Contact.** Each tick runs `SubSteps` sub-steps. The board's middle climbs
+   from its height at contact to the top. The upward speed left at contact
+   pays for the climb first. After that the inward kinetic energy pays
+   (× `ClimbEfficiency`), less the edge's scrape (`EdgeFriction`), and the
+   rope's inward pull helps. Meanwhile the nose comes down flat.
+   - With the tail on top, the board mounts.
+   - Out of inward speed, the board hangs up on the edge. With
+     `SketchySaveShare` or more of the board on top it is a sketchy save
+     (balance hit `SketchySaveHit`). With less, it is a `hangUp` crash.
+5. **Mount.**
+   - The board snaps to the nearest slide angle: 0 or 180°, or ±90° for an
+     edge lead.
+   - A/D straightens it by up to `YawCorrection`.
+   - Off by more than `SketchyAngle` is sketchy; more than `BadAngle` is a
+     crash. A hard edge still on at takeoff is checked the same way as on
+     other entries (`slippedOut`).
+   - The board loses `SpeedLoss` of its forward speed.
+   - The entry is `slideOn` or `edgeSlideOn`. It is clean when it keeps
+     `CleanInwardShare` of its inward speed and is not sketchy.
+6. **Overshoot.** The inward speed left keeps carrying the board across.
+   - The base bites: the speed bleeds at `InwardFriction` × g.
+   - Counter-steer (A/D away from the way the board is going) bleeds
+     `CounterSteerBleed` per 0.1 s. While it carries, A/D does not rotate the
+     board.
+   - Passing the far side of the balance width within `OvershootWindow` is
+     `overshoot`.
+
+Example outcomes on a 1 m wide box (tests/slideOn.test.ts):
+
+| Line | Result |
+| --- | --- |
+| 0.5 m, 15° in, pop released 1.0 m off the side | clean Slide-on 50-50 |
+| 0.8 m, 18° in, W | Slide-on, nose at 30° |
+| 0.8 m, 18° in, no W | NoseDig |
+| 0.8 m, 15° in, W, released 1.2 m off | HangUp |
+| 0.8 m, 15° in, W, released 1.0 m off | sketchy save |
+| 0.5 m, 20° in, released 0.4 m off | NoseDig (nose still low) |
+| 0.5 m, 25° in | Overshoot; counter-steer saves it |
+
 ## Decisions (where the spec and the game differ)
 
 1. **Side-entry pop height.**
@@ -103,3 +168,7 @@ There is no tutorial yet, so it is on by default.
    It adds to the inward speed of the turn-in.
 5. **Sub-steps.** The contact phase runs 4 sub-steps per 60 Hz tick
    (1/240 s), deterministic in both sims.
+6. **Sideways bite (`InwardFriction`, new).** The spec gives no rate for
+   the inward speed left after mounting. With only the slide's friction, a
+   15° slide-on overshot a 1 m box. At 0.8 g, 15° stays on and 25° needs
+   counter-steer.

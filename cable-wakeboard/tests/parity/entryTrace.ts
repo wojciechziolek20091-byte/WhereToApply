@@ -39,6 +39,11 @@ export const ENTRY_SCENARIOS: EntryScenario[] = [
   { name: 'rotation into the end', def: {}, stance: 'regular', steps: [[4.3, 4.6, 0, -1]] },
   { name: 'nose press', def: {}, stance: 'regular', steps: [[3.6, 4.4, 0, 0, 1]] },
   { name: 'tail press, end tap', def: {}, stance: 'goofy', steps: [[3.6, 4.2, 0, 0, -1], [4.45, 4.5, 0, 0, 1]] },
+  // Slide-ons (side approaches spec): turned 15-20 degrees in toward the box.
+  { name: 'slide-on', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0]] },
+  { name: 'slide-on, W nose lift', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[3.0, 3.3, 1, 0], [3.3, 3.9, 0, 0, 1]] },
+  { name: 'slide-on, nose dig', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0], [3.3, 3.9, 0, -1]] },
+  { name: 'edge slide-on', def: { offset: -2, yaw: 0.35 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0], [3.3, 3.9, 0, 1, 1]] },
 ];
 
 /** One row per tick until a crash or 6 s: state, approach, entry. */

@@ -11,6 +11,7 @@ local FeatureCatalog = require(script.Parent.FeatureCatalog)
 local Features = require(script.Parent.Features)
 local EntryResolver = require(script.Parent.FeatureRideEntryResolver)
 local SlideController = require(script.Parent.FeatureRideSlideController)
+local SlideOn = require(script.Parent.FeatureRideSlideOn)
 local FeatureRotation = require(script.Parent.FeatureRideFeatureRotation)
 local PressController = require(script.Parent.FeatureRidePressController)
 local ExitResolver = require(script.Parent.FeatureRideExitResolver)
@@ -26,7 +27,7 @@ local Vec = require(script.Parent.Vec)
 
 local DT, GRAVITY = Config.DT, Config.GRAVITY
 local OnFeature = {}
-local stepWall, startJib
+local stepWall, startJib, stepSlideOnCarry
 
 local function deg(d)
 	return (d * math.pi) / 180
@@ -150,6 +151,9 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		sketchy = sketchy,
 		rot = rot,
 		noiseSeed = s.tick,
+		slideOnInward = 0,
+		slideOnToward = 0,
+		slideOnClean = false,
 	}
 end
 
@@ -491,7 +495,11 @@ function OnFeature.stepSlide(s, input, mem)
 		return
 	end
 
-	local turned = FeatureRotation.stepFeatureRotation(s, j, heading, mem)
+	-- A slide-on's inward speed carries the board across; A/D counter-steers it instead of rotating.
+	if stepSlideOnCarry(s, j, piece, input.steer) then
+		return
+	end
+	local turned = if j.slideOnInward > 0 then nil else FeatureRotation.stepFeatureRotation(s, j, heading, mem)
 	if turned then
 		endSlide(s)
 		Actions.crash(s, turned)
@@ -725,6 +733,119 @@ function OnFeature.airOverFeature(s, air)
 	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
 	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = feature.def.id })
 	return true
+end
+
+local function mountSlideOn(s, air, input, hung)
+	local r, cfg = s.rider, s.cfg
+	local S = cfg.slideOn
+	local L = cfg.featureRide.Landing
+	local so = air.slideOn
+	local f = featureById(s, so.featureId)
+	local piece = SlideOn.topPieceAt(f, so.u)
+	if not piece then
+		Actions.crash(s, "fellOffFeature")
+		return
+	end
+	local heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, piece)
+	local yaw = Scalar.wrapAngle(EntryResolver.boardYawInAir(air) - heading)
+	local edge = so.lead == "edge"
+	local boardAngle
+	if edge then
+		boardAngle = if yaw >= 0 then math.pi / 2 else -math.pi / 2
+	else
+		boardAngle = if math.abs(yaw) > math.pi / 2 then math.pi else 0
+	end
+	local off = math.max(0, math.abs(Scalar.wrapAngle(yaw - boardAngle)) - S.YawCorrection * math.abs(input.steer))
+	local roll = if air.entry then air.entry.roll else 0
+	if roll > L.MaxRoll then
+		Actions.crash(s, "slippedOut")
+		return
+	end
+	if off > S.BadAngle then
+		Actions.crash(s, "badAngle")
+		return
+	end
+	local hit = 0
+	local sketchy = false
+	if roll > L.SketchyRoll then
+		sketchy = true
+		hit += L.RollHit
+	end
+	if off > S.SketchyAngle then
+		sketchy = true
+		hit += L.AngleHit
+	end
+	if hung then
+		sketchy = true
+		hit += S.SketchySaveHit
+	end
+	if r.handle == "passing" then
+		r.handle = "inFront"
+	end
+	local speed = math.max(math.abs(so.along) * (1 - S.SpeedLoss), cfg.feature.stallSpeed + 0.5)
+	local level = table.clone(air)
+	level.rot = table.clone(air.rot)
+	level.rot.spinAngle = Scalar.round(air.rot.spinAngle / math.pi) * math.pi
+	local surface = Features.surfaceAt(f, { u = so.u, v = so.v })
+	local landing = Landing.evaluateLanding(r, level, if surface then surface.normal else Vec.vec3(0, 1, 0), cfg)
+	r.air = nil
+	mountMain(s, f, piece, so.u, so.v, speed, if edge then "edgeSlideOn" else "slideOn", sketchy, boardAngle)
+	local j = r.jib
+	j.balance = Scalar.clamp(so.toward * hit, -L.MaxHit, L.MaxHit)
+	j.inRotation = air.rot.spinAngle - air.spinStart
+	j.entryQuality = if sketchy then landing.quality * 0.6 else landing.quality
+	if edge then
+		local toes = Edge.toeSign({ stance = r.stance, switchStance = air.takeoffSwitch })
+		j.entrySlide = FeatureRotation.sideEntrySlide(EntryResolver.boardYawInAir(air), heading, -so.toward, toes, air.takeoffHeading)
+	end
+	j.slideOnInward = so.vin
+	j.slideOnToward = so.toward
+	j.slideOnClean = not sketchy and so.vin0 > 0 and so.vin >= S.CleanInwardShare * so.vin0
+	j.chain = if air.exit then air.exit.jibs else {}
+	table.insert(s.events, { type = "landed", tick = s.tick, air = air, landing = landing, onFeature = true })
+	table.insert(s.events, { type = "featureEnter", tick = s.tick, featureId = f.def.id })
+end
+
+function OnFeature.stepSlideOnContact(s, air, input)
+	local so = air.slideOn
+	if not so or so.phase ~= "contact" then
+		return false
+	end
+	local S = s.cfg.slideOn
+	local step = SlideOn.stepContact(s, air)
+	if step == nil then
+		return true
+	end
+	if step == "hang" and so.p < S.SketchySaveShare then
+		Actions.crash(s, "hangUp")
+		return true
+	end
+	mountSlideOn(s, air, input, step == "hang")
+	return true
+end
+
+function stepSlideOnCarry(s, j, piece, steer)
+	local S = s.cfg.slideOn
+	if j.slideOnInward <= 0 then
+		return false
+	end
+	local ramp = s.rider.ramp
+	if j.time > S.OvershootWindow then
+		j.slideOnInward = 0
+		return false
+	end
+	ramp.v += j.slideOnToward * j.slideOnInward * DT
+	local v = math.max(0, j.slideOnInward - S.InwardFriction * GRAVITY * DT)
+	if steer * j.slideOnToward < 0 then
+		v *= DetMath.pow(1 - S.CounterSteerBleed, (math.abs(steer) * DT) / 0.1)
+	end
+	j.slideOnInward = v
+	if j.slideOnToward * Features.offCentre(piece, ramp) > EntryResolver.balanceHalfWidth(piece, s) then
+		endSlide(s)
+		Actions.crash(s, "overshoot")
+		return true
+	end
+	return false
 end
 
 return OnFeature

@@ -282,11 +282,11 @@ export const SCENARIOS: Scenario[] = [
     }),
   },
   {
-    id: 'F3', kind: 'fail', what: 'Side approach at 40 degrees: NoseHitSide',
+    id: 'F3', kind: 'fail', what: 'Side approach at 40 degrees: NoseDig',
     run: (fc) => search([[-1, 0.7], [1, -0.7]].flatMap(([side, yaw]) => [2, 2.5, 3, 3.5, 4].flatMap((off) => [3.0, 2.6, 2.8].map((t0) => [side!, yaw!, off, t0] as const))), ([side, yaw, off, t0]) => {
       const def = offsetDef(fc.def, side * off, yaw);
       const r = ride(def, (c) => ({ pop: held(c, t0, t0 + 0.3), steer: held(c, t0 + 0.3 - T, t0 + 0.3 + T) ? side : 0 }));
-      return { ok: r.crash === 'noseHitSide', note: `${off} m ${side > 0 ? 'right' : 'left'}, turned 40 degrees: ${r.crash ?? desc(r)}` };
+      return { ok: r.crash === 'noseDig', note: `${off} m ${side > 0 ? 'right' : 'left'}, turned 40 degrees: ${r.crash ?? desc(r)}` };
     }),
   },
   {
