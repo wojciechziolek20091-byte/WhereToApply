@@ -710,9 +710,10 @@ function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boole
   const L = cfg.featureRide.Landing;
   const so = air.slideOn!;
   const f = featureById(s, so.featureId);
-  const piece = topPieceAt(f, so.u);
+  const piece = topPieceAt(f, so.u, so.v);
   if (!piece) {
-    crash(s, 'fellOffFeature');
+    // Slid on past the end of the top: off into the air.
+    so.phase = 'cleared';
     return;
   }
   const heading = f.shape.legacy ? f.heading : pieceHeading(f, piece);

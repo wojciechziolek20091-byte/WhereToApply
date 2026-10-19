@@ -12,8 +12,10 @@ import { SLIDES, type SlideId } from '../tricks/data';
  * ("Backside Boardslide"); a 90-in is implied by a boardslide, a 90-out is
  * "to Fakie" / "to Forward". `Switch` prefixes slides ridden switch;
  * `Nose Press` / `Tail Press` replace 50-50 when pressed over 40% of it.
- * Entry words: Ollie-on, Side Ollie-on, Pop-on (a clean pop off the
- * safety); none for ride-ons and other safety pops.
+ * Entry words: Ollie-on, Side Ollie-on, Slide-on, Edge Slide-on, Pop-on
+ * (a clean pop off the safety); none for ride-ons and other safety pops.
+ * An Edge Slide-on goes after its slide's side: "Backside Edge Slide-on
+ * Boardslide".
  */
 
 /** What the namer needs of one slide (a JibState has all of it). */
@@ -38,6 +40,10 @@ export function entryWord(entry: JibEntry): string {
       return 'Ollie-on';
     case 'sideOllieOn':
       return 'Side Ollie-on';
+    case 'slideOn':
+      return 'Slide-on';
+    case 'edgeSlideOn':
+      return 'Edge Slide-on';
     case 'popOn':
       return 'Pop-on';
     default:
@@ -61,14 +67,18 @@ export function slideName(id: SlideId, j: NamerJib): string {
 /** The parts of one jib's name: in-rotation, the first slide, each rotation on it. */
 function jibParts(j: NamerJib, first: boolean): string[] {
   const parts: string[] = [];
-  if (first) {
-    const w = entryWord(j.entry);
-    if (w) parts.push(w);
-  }
+  const start = j.slideOrder[0];
+  const w = first ? entryWord(j.entry) : '';
+  let startName = start ? slideName(start, j) : '';
+  const sided = /^(Switch )?(Backside|Frontside) (.+)$/.exec(startName);
+  if (w && j.entry === 'edgeSlideOn' && sided) {
+    // The side leads: Backside Edge Slide-on (Switch) Boardslide.
+    parts.push(sided[2]!, w);
+    startName = `${sided[1] ?? ''}${sided[3]!}`;
+  } else if (w) parts.push(w);
   const inDeg = quarters(j.inRotation);
   if (inDeg >= 180) parts.push(`${inDeg}-in`);
-  const start = j.slideOrder[0];
-  if (start) parts.push(slideName(start, j));
+  if (startName) parts.push(startName);
   for (const r of j.rotations) {
     if (r.hardWay) parts.push('Hard Way');
     parts.push(`${r.deg}`);

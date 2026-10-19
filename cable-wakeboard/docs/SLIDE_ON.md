@@ -146,6 +146,45 @@ Example outcomes on a 1 m wide box (tests/slideOn.test.ts):
 | 0.5 m, 20° in, released 0.4 m off | NoseDig (nose still low) |
 | 0.5 m, 25° in | Overshoot; counter-steer saves it |
 
+## Names and scoring (spec 6)
+
+- **Entry words.** `Slide-on` and `Edge Slide-on`. An Edge Slide-on comes
+  after its slide's side: `Backside Edge Slide-on Boardslide`,
+  `Frontside Edge Slide-on Switch Lipslide`. Other examples:
+  `Slide-on 50-50`, `Slide-on Switch 50-50 180-out`. Both sims have these
+  in the namer parity cases.
+- **Entry bonus** (`Scoring.EntryBonus`):
+
+  | Entry | Bonus |
+  | --- | --- |
+  | `sideOllieOn` (clears the whole board) | 80 |
+  | `edgeSlideOn` | 60 |
+  | `slideOn` | 50 |
+
+- **Clean bonus.** A clean slide-on adds `Clean Slide-on`
+  (`SlideOnCleanBonus` 15 × difficulty). Clean means it kept
+  `CleanInwardShare` of its inward speed and was not sketchy. Even with the
+  bonus, both slide-ons score less than a whole-board side ollie-on.
+- **Sketchy entries.** A sketchy save, a sketchy angle or a sketchy roll
+  marks the jib sketchy. The line's quality is then multiplied by
+  `safety.sketchyMultiplier`, and the entry quality by 0.6.
+
+## Edge cases (spec 7)
+
+- **Sloped parts.** The climb aims at the top's height where the lead
+  crosses, and the mount follows the slope. For example, a slide-on onto
+  the Rooftop's down slope works.
+- **Near the end.** With less than `MinRemaining` left, the cue is off, but
+  the rider can still try. A board that slides on past the end of the top
+  flies on off it.
+- **Multi-lane features.** The lane nearest the board is used: for the
+  approach, at the lead crossing and at the mount. On the Transfer, each
+  side slides onto its own lane.
+- **Switch and goofy riders.** Toe and heel sides come from the stance, the
+  same as other side entries.
+- **Contact angles.** 20–70° is sketchy. Beyond 70° is `badAngle`, except
+  near 90° (the edge-lead snap).
+
 ## Decisions (where the spec and the game differ)
 
 1. **Side-entry pop height.**

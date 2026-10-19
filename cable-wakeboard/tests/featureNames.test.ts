@@ -88,6 +88,19 @@ describe('FeatureScoring (feature ride M9, spec 9)', () => {
     expect(hard / easy).toBeCloseTo(1.45, 9);
   });
 
+  it('slide-ons (side approaches spec 6): a clean one earns a style bonus, a whole-board side ollie-on still scores more, a sketchy save cuts the quality', () => {
+    const line = (o: Partial<JibState>) => scoreFeatureLine(exitOf([slideJib({ metres: { fiftyFifty: 4 }, ...o })]), airSpin(0), landed(true), DEFAULT_CONFIG);
+    const clean = line({ entry: 'slideOn', slideOnClean: true });
+    const plain = line({ entry: 'slideOn', slideOnClean: false });
+    expect(clean.name).toBe('Slide-on 50-50');
+    expect(tokenPts(clean, 'Clean Slide-on')).toBe(S.SlideOnCleanBonus);
+    expect(clean.points).toBeGreaterThan(plain.points);
+    const side = line({ entry: 'sideOllieOn' });
+    expect(side.points).toBeGreaterThan(clean.points);
+    expect(side.points).toBeGreaterThan(line({ entry: 'edgeSlideOn', slideOnClean: true }).points);
+    expect(line({ entry: 'slideOn', sketchy: true }).quality).toBeCloseTo(DEFAULT_CONFIG.safety.sketchyMultiplier, 9);
+  });
+
   it('a clean landing adds the clean bonus; a sketchy entry or exit cuts the quality', () => {
     const q = (sketchy: boolean, kind: FeatureExit['kind'] = 'popOff') => scoreFeatureLine(exitOf([slideJib({ metres: { fiftyFifty: 4 }, sketchy })], kind), airSpin(0), landed(true), DEFAULT_CONFIG).quality;
     expect(q(false)).toBeCloseTo(1 + DEFAULT_CONFIG.landing.cleanBonus, 9);

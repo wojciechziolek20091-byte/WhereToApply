@@ -49,6 +49,12 @@ export const SPEC_EXAMPLES: NameCase[] = [
   ];
 
 export const MORE_NAMES: NameCase[] = [
+    // Side approaches spec 6: slide-ons.
+    ['slide-on, 50-50', [jib({ entry: 'slideOn', slides: ['fiftyFifty'] })], null, 'Slide-on 50-50'],
+    ['edge slide-on from the heelside into a boardslide', [jib({ entry: 'edgeSlideOn', inDeg: 90, slides: ['backboard'] })], null, 'Backside Edge Slide-on Boardslide'],
+    ['edge slide-on, switch, frontside lipslide', [jib({ entry: 'edgeSlideOn', inDeg: -90, slides: ['frontLip'], switchStance: true })], null, 'Frontside Edge Slide-on Switch Lipslide'],
+    ['slide-on, switch 50-50, 180 out', [jib({ entry: 'slideOn', slides: ['switchFiftyFifty'] })], out(180, false), 'Slide-on Switch 50-50 180-out'],
+    ['slide-on, nose press', [jib({ entry: 'slideOn', slides: ['fiftyFifty'], press: { nose: 0.95 } })], null, 'Slide-on Nose Press'],
     ['front ollie-on, 50-50', [jib({ entry: 'ollieOn', slides: ['fiftyFifty'] })], null, 'Ollie-on 50-50'],
     ['front ollie-on, 90 to a frontside boardslide', [jib({ entry: 'ollieOn', inDeg: -90, slides: ['frontboard'] })], null, 'Ollie-on Frontside Boardslide'],
     ['side ollie-on from the toeside, tail first', [jib({ entry: 'sideOllieOn', inDeg: -90, slides: ['frontLip'] })], null, 'Side Ollie-on Frontside Lipslide'],

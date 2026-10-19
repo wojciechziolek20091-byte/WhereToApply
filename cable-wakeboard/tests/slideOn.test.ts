@@ -93,8 +93,21 @@ import { ride } from './scenarios/featureScenarios';
  * `g0` m off its side to `g1` m (the release), W held the first 0.2 s of
  * the entry air with `w`, A/D `steer` for the first 0.5 m on the main.
  */
-function sideLine(height: number, yawDeg: number, off: number, g0: number, g1: number, o: { w?: boolean; steer?: number } = {}) {
-  const def: FeatureDef = { kind: 'slider', id: 'f', name: 'Box', style: 'box', s: 135, offset: off, yaw: deg(yawDeg), length: 8, width: 1, height, entryLength: 3, safety: 'flush' };
+function sideLine(height: number, yawDeg: number, off: number, g0: number, g1: number, o: LineOpts = {}) {
+  const box: FeatureDef = { kind: 'slider', id: 'f', name: 'Box', style: 'box', s: 135, offset: 0, length: 8, width: 1, height, entryLength: 3, safety: 'flush' };
+  return sideLineOn(box, yawDeg, off, g0, g1, o);
+}
+
+interface LineOpts {
+  w?: boolean;
+  steer?: number;
+  stance?: 'regular' | 'goofy';
+}
+
+/** The same on any feature def, moved `off` m to the side and turned `yawDeg` in. */
+function sideLineOn(def0: FeatureDef, yawDeg: number, off: number, g0: number, g1: number, o: LineOpts = {}) {
+  const def = { ...def0, offset: off, yaw: deg(yawDeg) * (off < 0 ? 1 : -1) } as FeatureDef;
+  let mountV: number | null = null;
   let held = false;
   let released = false;
   let maxFlip = 0;
@@ -106,6 +119,7 @@ function sideLine(height: number, yawDeg: number, off: number, g0: number, g1: n
       maxPitch = Math.max(maxPitch, so.pitch);
       if (so.phase === 'air') maxFlip = Math.max(maxFlip, Math.abs(c.s.rider.air!.rot.flipAngle));
     }
+    if (c.mode === 'onFeature' && mountV === null) mountV = c.s.rider.ramp!.v;
     if (c.mode === 'riding' && a && !released && a.slideOnBlock !== 'front' && a.sideGap < g0) held = true;
     if (held && a && a.sideGap < g1) {
       held = false;
@@ -116,8 +130,8 @@ function sideLine(height: number, yawDeg: number, off: number, g0: number, g1: n
       forward: !!o.w && c.entryAir >= 0 && c.entryAir < 0.2,
       steer: c.mode === 'onFeature' && c.mainU < 0.5 ? (o.steer ?? 0) : 0,
     };
-  });
-  return { ...run, jib: run.jibs[0], maxFlip, maxPitch };
+  }, o.stance);
+  return { ...run, jib: run.jibs[0], maxFlip, maxPitch, mountV };
 }
 
 describe('Slide-on physics (side approaches spec 4)', () => {
@@ -159,3 +173,29 @@ describe('Slide-on physics (side approaches spec 4)', () => {
     expect(saved.jib?.entry).toBe('slideOn');
   });
 });
+
+describe('Slide-on edge cases (side approaches spec 7)', () => {
+  const feature = (name: string): FeatureDef => ({ kind: 'feature', id: 'f', name, catalog: name, s: 135, offset: 0 }) as FeatureDef;
+
+  it('a sloped part: onto the down slope of the Rooftop', () => {
+    const r = sideLineOn(feature('Rooftop'), 12, -2.5, 2.4, 1.0);
+    expect(r.crash).toBeNull();
+    expect(r.jib?.entry).toBe('slideOn');
+  });
+
+  it('a multi-lane feature: the lane on the approach side (Transfer, both sides)', () => {
+    const left = sideLineOn(feature('Transfer'), 15, 2, 2.4, 1.0);
+    expect(left.jib?.entry).toBe('slideOn');
+    expect(Math.abs(left.mountV!)).toBeLessThan(0.45);
+    const right = sideLineOn(feature('Transfer'), 18, -4, 5, 0.9, { w: true });
+    expect(right.jib?.entry).toBe('slideOn');
+    expect(right.mountV!).toBeGreaterThan(1.7);
+  });
+
+  it('goofy riders slide on the same way', () => {
+    const r = sideLine(0.5, 15, -2, 2.4, 1.0, { stance: 'goofy' });
+    expect(r.crash).toBeNull();
+    expect(r.jib?.entry).toBe('slideOn');
+  });
+});
+

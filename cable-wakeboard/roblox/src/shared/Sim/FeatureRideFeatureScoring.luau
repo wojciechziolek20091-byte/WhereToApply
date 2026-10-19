@@ -101,6 +101,9 @@ function FeatureScoring.scoreFeatureLine(exit, air, landing, cfg)
 		if j.endTap then
 			table.insert(tokens, token("Bonus", if j.endTap == "nose" then "Nose Tap" else "Tail Tap", S.EndTapBonus * k))
 		end
+		if j.slideOnClean then
+			table.insert(tokens, token("Bonus", "Clean Slide-on", S.SlideOnCleanBonus * k))
+		end
 		passes += j.rot.passes
 	end
 	if out then

@@ -171,6 +171,8 @@ export interface FeatureRideConfig {
     /** Entry bonus by kind. */
     EntryBonus: Record<JibEntry, number>;
     EndTapBonus: number;
+    /** A clean slide-on (kept SlideOn.CleanInwardShare of its inward speed, not sketchy): style bonus. */
+    SlideOnCleanBonus: number;
     /** Feature difficulty (catalogue 1-4) to a points multiplier: Base + PerLevel x difficulty. */
     DifficultyBase: number;
     DifficultyPerLevel: number;
@@ -289,8 +291,9 @@ export const DEFAULT_FEATURE_RIDE: FeatureRideConfig = {
     HardWayFactor: 1.3,
     PretzelFactor: 1.2,
     SwitchFactor: 1.1,
-    EntryBonus: { popOn: 100, pop: 40, ollieOn: 50, sideOllieOn: 80, slideOn: 60, edgeSlideOn: 70, transfer: 60, rideOn: 0 },
+    EntryBonus: { popOn: 100, pop: 40, ollieOn: 50, sideOllieOn: 80, slideOn: 50, edgeSlideOn: 60, transfer: 60, rideOn: 0 },
     EndTapBonus: 50,
+    SlideOnCleanBonus: 15,
     DifficultyBase: 0.85,
     DifficultyPerLevel: 0.15,
   },

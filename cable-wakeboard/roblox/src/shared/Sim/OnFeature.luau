@@ -741,9 +741,10 @@ local function mountSlideOn(s, air, input, hung)
 	local L = cfg.featureRide.Landing
 	local so = air.slideOn
 	local f = featureById(s, so.featureId)
-	local piece = SlideOn.topPieceAt(f, so.u)
+	local piece = SlideOn.topPieceAt(f, so.u, so.v)
 	if not piece then
-		Actions.crash(s, "fellOffFeature")
+		-- Slid on past the end of the top: off into the air.
+		so.phase = "cleared"
 		return
 	end
 	local heading = if f.shape.legacy then f.heading else Features.pieceHeading(f, piece)

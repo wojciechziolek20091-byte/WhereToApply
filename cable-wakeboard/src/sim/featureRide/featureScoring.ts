@@ -96,6 +96,7 @@ export function scoreFeatureLine(exit: FeatureExit, air: AirState | null, landin
       tokens.push(token('Rotation', `${r.deg}`, (r.deg / 90) * S.PerQuarter * (r.hardWay ? S.HardWayFactor : 1) * k, { degrees: r.deg, direction: r.side }));
     }
     if (j.endTap) tokens.push(token('Bonus', j.endTap === 'nose' ? 'Nose Tap' : 'Tail Tap', S.EndTapBonus * k));
+    if (j.slideOnClean) tokens.push(token('Bonus', 'Clean Slide-on', S.SlideOnCleanBonus * k));
     passes += j.rot.passes;
   }
   if (out) {

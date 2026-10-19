@@ -35,13 +35,18 @@ function SlideOn.sideTypeOf(f, p, s)
 	return "Rounded"
 end
 
-function SlideOn.topPieceAt(f, u)
+function SlideOn.topPieceAt(f, u, v)
+	v = v or 0
+	local best, bestOff = nil, math.huge
 	for _, p in f.shape.pieces do
 		if p.slide and p.axis == "u" and not p.wall and u >= p.u0 and u <= p.u1 then
-			return p
+			local off = math.abs(v - FeatureShapes.pieceCentre(p, u))
+			if off < bestOff then
+				best, bestOff = p, off
+			end
 		end
 	end
-	return nil
+	return best
 end
 
 function SlideOn.assessSlideOn(s, f, l, a)
@@ -55,7 +60,7 @@ function SlideOn.assessSlideOn(s, f, l, a)
 	a.inwardSpeed = inward
 	a.turnIn = if toward == 0 then 0 else DetMath.atan2(inward, math.abs(along))
 	a.contactU = if toward ~= 0 and inward > 0.05 then l.u + (along * a.sideGap) / inward else l.u
-	local p = SlideOn.topPieceAt(f, a.contactU)
+	local p = SlideOn.topPieceAt(f, a.contactU, l.v)
 	a.topHeight = if p then FeatureShapes.pieceHeightAt(p, a.contactU).height else 0
 	a.sideType = if p then SlideOn.sideTypeOf(f, p, s) else "Rounded"
 	a.edgeRadius = if p then p.radius else 0
@@ -172,7 +177,7 @@ function SlideOn.leadCrossing(s, air)
 	local reach = if edge then S.BaseWidth / 2 else (S.BoardLength / 2) * math.abs(sin(yaw))
 	local leadU = if edge then l.u else l.u + (S.BoardLength / 2) * math.abs(cos(yaw))
 	local leadV = l.v + so.toward * reach
-	local p = SlideOn.topPieceAt(f, leadU)
+	local p = SlideOn.topPieceAt(f, leadU, leadV)
 	if not p then
 		return nil
 	end

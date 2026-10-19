@@ -38,10 +38,22 @@ export function sideTypeOf(f: ResolvedFeature, p: RidePiece, s: SimState): SideT
   return 'Rounded';
 }
 
-/** The slide piece of a feature's top under `u` (along its axis), if any. */
-export function topPieceAt(f: ResolvedFeature, u: number): RidePiece | null {
-  for (const p of f.shape.pieces) if (p.slide && p.axis === 'u' && !p.wall && u >= p.u0 && u <= p.u1) return p;
-  return null;
+/**
+ * The slide piece of a feature's top under `u` (along its axis), if any; on
+ * a multi-lane feature (Transfer) the lane whose centre is nearest `v`.
+ */
+export function topPieceAt(f: ResolvedFeature, u: number, v = 0): RidePiece | null {
+  let best: RidePiece | null = null;
+  let bestOff = Infinity;
+  for (const p of f.shape.pieces) {
+    if (!p.slide || p.axis !== 'u' || p.wall || u < p.u0 || u > p.u1) continue;
+    const off = Math.abs(v - pieceCentre(p, u));
+    if (off < bestOff) {
+      best = p;
+      bestOff = off;
+    }
+  }
+  return best;
 }
 
 /**
@@ -62,7 +74,7 @@ export function assessSlideOn(s: SimState, f: ResolvedFeature, l: FeatureLocal, 
   a.turnIn = toward === 0 ? 0 : atan2(inward, Math.abs(along));
   // Where the board meets the edge, carrying on as it goes.
   a.contactU = toward !== 0 && inward > 0.05 ? l.u + (along * a.sideGap) / inward : l.u;
-  const p = topPieceAt(f, a.contactU);
+  const p = topPieceAt(f, a.contactU, l.v);
   a.topHeight = p ? pieceHeightAt(p, a.contactU).height : 0;
   a.sideType = p ? sideTypeOf(f, p, s) : 'Rounded';
   a.edgeRadius = p ? p.radius : 0;
@@ -172,7 +184,7 @@ export function leadCrossing(s: SimState, air: AirState): 'cleared' | 'contact' 
   const reach = edge ? S.BaseWidth / 2 : (S.BoardLength / 2) * Math.abs(sin(yaw));
   const leadU = edge ? l.u : l.u + (S.BoardLength / 2) * Math.abs(cos(yaw));
   const leadV = l.v + so.toward * reach;
-  const p = topPieceAt(f, leadU);
+  const p = topPieceAt(f, leadU, leadV);
   if (!p) return null;
   const edgeV = pieceCentre(p, leadU) - so.toward * (p.width / 2);
   if (so.toward * (leadV - edgeV) < 0) return null;

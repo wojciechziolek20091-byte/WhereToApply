@@ -21,6 +21,10 @@ function Namer.entryWord(entry)
 		return "Ollie-on"
 	elseif entry == "sideOllieOn" then
 		return "Side Ollie-on"
+	elseif entry == "slideOn" then
+		return "Slide-on"
+	elseif entry == "edgeSlideOn" then
+		return "Edge Slide-on"
 	elseif entry == "popOn" then
 		return "Pop-on"
 	end
@@ -44,20 +48,39 @@ function Namer.slideName(id, j)
 	return if j.switchStance then "Switch " .. base else base
 end
 
-local function jibParts(j, first, parts)
-	if first then
-		local w = Namer.entryWord(j.entry)
-		if w ~= "" then
-			table.insert(parts, w)
+-- "(Switch )Backside Boardslide" -> "Switch ", "Backside", "Boardslide"; nil without a side word.
+local function splitSide(name)
+	local sw, rest = "", name
+	if string.sub(rest, 1, 7) == "Switch " then
+		sw, rest = "Switch ", string.sub(rest, 8)
+	end
+	for _, side in { "Backside", "Frontside" } do
+		if string.sub(rest, 1, #side + 1) == side .. " " and #rest > #side + 1 then
+			return sw, side, string.sub(rest, #side + 2)
 		end
+	end
+	return nil
+end
+
+local function jibParts(j, first, parts)
+	local start = j.slideOrder[1]
+	local w = if first then Namer.entryWord(j.entry) else ""
+	local startName = if start then Namer.slideName(start, j) else ""
+	local sw, side, rest = splitSide(startName)
+	if w ~= "" and j.entry == "edgeSlideOn" and side then
+		-- The side leads: Backside Edge Slide-on (Switch) Boardslide.
+		table.insert(parts, side)
+		table.insert(parts, w)
+		startName = sw .. rest
+	elseif w ~= "" then
+		table.insert(parts, w)
 	end
 	local inDeg = quarters(j.inRotation)
 	if inDeg >= 180 then
 		table.insert(parts, `{inDeg}-in`)
 	end
-	local start = j.slideOrder[1]
-	if start then
-		table.insert(parts, Namer.slideName(start, j))
+	if startName ~= "" then
+		table.insert(parts, startName)
 	end
 	for _, r in j.rotations do
 		if r.hardWay then
