@@ -36,7 +36,8 @@ function SlideOnConfig.maxReachableHeight(cfg, charge, noseLift, sideType, speed
 	local vin = v * DetMath.sin(a)
 	local budget = 0.5 * vin * vin * S.ClimbEfficiency - S.EdgeFriction[t]
 	local climb = peak + budget / G + (if t == "Round" then S.RoundTailAllowance else 0)
-	return math.min(nose, climb)
+	-- A bank never digs the nose in: only the climb counts.
+	return if t == "Bank" then climb else math.min(nose, climb)
 end
 
 return SlideOnConfig

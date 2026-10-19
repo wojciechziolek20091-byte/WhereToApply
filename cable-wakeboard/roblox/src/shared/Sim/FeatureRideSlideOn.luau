@@ -60,10 +60,16 @@ function SlideOn.assessSlideOn(s, f, l, a)
 	a.inwardSpeed = inward
 	a.turnIn = if toward == 0 then 0 else DetMath.atan2(inward, math.abs(along))
 	a.contactU = if toward ~= 0 and inward > 0.05 then l.u + (along * a.sideGap) / inward else l.u
-	local p = SlideOn.topPieceAt(f, a.contactU, l.v)
+	local edge = SlideOn.topPieceAt(f, a.contactU, l.v)
+	a.sideType = if edge then SlideOn.sideTypeOf(f, edge, s) else "Rounded"
+	a.edgeRadius = if edge then edge.radius else 0
+	local p = edge
+	if edge and edge.cap and toward ~= 0 and inward > 0.05 then
+		-- A bank: the board reaches the flat top only after climbing its run.
+		a.contactU += (along * (edge.cap.half - edge.cap.halfTop)) / inward
+		p = SlideOn.topPieceAt(f, a.contactU, l.v)
+	end
 	a.topHeight = if p then FeatureShapes.pieceHeightAt(p, a.contactU).height else 0
-	a.sideType = if p then SlideOn.sideTypeOf(f, p, s) else "Rounded"
-	a.edgeRadius = if p then p.radius else 0
 	a.remaining = if p then SlideController.partEnd(f, p.part) - a.contactU else 0
 	a.maxHeight = SlideOnConfig.maxReachableHeight(cfg, 1, S.MaxNoseLift, a.sideType, a.speed, math.max(a.turnIn, S.MinAngle))
 	local block = ""
@@ -137,6 +143,7 @@ function SlideOn.predictSlideOn(s, air, popSpeed)
 		v = 0,
 		along = 0,
 		part = 0,
+		bankRun = 0,
 	}
 end
 
@@ -195,6 +202,7 @@ function SlideOn.leadCrossing(s, air)
 	so.type = kind
 	so.lead = if edge then "edge" else "nose"
 	so.part = p.part
+	so.bankRun = if p.cap then p.cap.half - p.cap.halfTop else 0
 	local offAxis = if edge
 		then math.abs(math.abs(yaw) - math.pi / 2)
 		else math.min(math.abs(yaw), math.pi - math.abs(yaw))
@@ -246,7 +254,8 @@ function SlideOn.stepContact(s, air)
 	local dt = DT / n
 	local m = cfg.rider.mass
 	local ropeIn = (so.toward * Vec.dot(r.ropeForce, Vec.rightOf(f.heading))) / m
-	local length = if so.lead == "edge" then S.BaseWidth else S.BoardLength * math.max(math.abs(sin(so.yaw0)), sin(S.MinAngle))
+	-- A bank adds its run from the foot to the flat top.
+	local length = (if so.lead == "edge" then S.BaseWidth else S.BoardLength * math.max(math.abs(sin(so.yaw0)), sin(S.MinAngle))) + so.bankRun
 	local climbTo = so.top - (if so.type == "Round" then S.RoundTailAllowance else 0)
 	for _ = 1, n do
 		local dp = math.min(1 - so.p, (so.vin * dt) / length)

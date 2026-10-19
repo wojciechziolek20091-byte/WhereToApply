@@ -229,6 +229,8 @@ export interface SlideOnAir {
   along: number;
   /** The top's part. */
   part: number;
+  /** A bank (pyramid side): how far across it climbs from the bank's foot to the flat top (m), else 0. */
+  bankRun: number;
 }
 
 /** Leaving a feature's slide (ExitResolver, spec 6). */

@@ -74,10 +74,16 @@ export function assessSlideOn(s: SimState, f: ResolvedFeature, l: FeatureLocal, 
   a.turnIn = toward === 0 ? 0 : atan2(inward, Math.abs(along));
   // Where the board meets the edge, carrying on as it goes.
   a.contactU = toward !== 0 && inward > 0.05 ? l.u + (along * a.sideGap) / inward : l.u;
-  const p = topPieceAt(f, a.contactU, l.v);
+  const edge = topPieceAt(f, a.contactU, l.v);
+  a.sideType = edge ? sideTypeOf(f, edge, s) : 'Rounded';
+  a.edgeRadius = edge ? edge.radius : 0;
+  let p = edge;
+  if (edge && edge.cap && toward !== 0 && inward > 0.05) {
+    // A bank: the board reaches the flat top only after climbing its run.
+    a.contactU += (along * (edge.cap.half - edge.cap.halfTop)) / inward;
+    p = topPieceAt(f, a.contactU, l.v);
+  }
   a.topHeight = p ? pieceHeightAt(p, a.contactU).height : 0;
-  a.sideType = p ? sideTypeOf(f, p, s) : 'Rounded';
-  a.edgeRadius = p ? p.radius : 0;
   a.remaining = p ? partEnd(f, p.part) - a.contactU : 0;
   a.maxHeight = maxReachableHeight(cfg, 1, S.MaxNoseLift, a.sideType, a.speed, Math.max(a.turnIn, S.MinAngle));
   a.slideOnBlock =
@@ -143,6 +149,7 @@ export function predictSlideOn(s: SimState, air: AirState, popSpeed: number): vo
     v: 0,
     along: 0,
     part: 0,
+    bankRun: 0,
   };
 }
 
@@ -198,6 +205,7 @@ export function leadCrossing(s: SimState, air: AirState): 'cleared' | 'contact' 
   so.type = type;
   so.lead = edge ? 'edge' : 'nose';
   so.part = p.part;
+  so.bankRun = p.cap ? p.cap.half - p.cap.halfTop : 0;
   // Head-on: steeper than HeadOnAngle the nose meets the side face square.
   const offAxis = edge ? Math.abs(Math.abs(yaw) - Math.PI / 2) : Math.min(Math.abs(yaw), Math.PI - Math.abs(yaw));
   if (!edge && offAxis > S.HeadOnAngle && type !== 'Bank') return 'noseDig';
@@ -251,7 +259,8 @@ export function stepContact(s: SimState, air: AirState): 'done' | 'hang' | null 
   const dt = DT / n;
   const m = cfg.rider.mass;
   const ropeIn = (so.toward * dot(r.ropeForce, rightOf(f.heading))) / m;
-  const length = so.lead === 'edge' ? S.BaseWidth : S.BoardLength * Math.max(Math.abs(sin(so.yaw0)), sin(S.MinAngle));
+  // A bank adds its run from the foot to the flat top.
+  const length = (so.lead === 'edge' ? S.BaseWidth : S.BoardLength * Math.max(Math.abs(sin(so.yaw0)), sin(S.MinAngle))) + so.bankRun;
   const climbTo = so.top - (so.type === 'Round' ? S.RoundTailAllowance : 0);
   for (let i = 0; i < n; i++) {
     const dp = Math.min(1 - so.p, (so.vin * dt) / length);

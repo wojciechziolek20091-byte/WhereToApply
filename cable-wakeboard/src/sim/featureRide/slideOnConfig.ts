@@ -164,5 +164,6 @@ export function maxReachableHeight(
   const vin = speed * sin(angle);
   const budget = 0.5 * vin * vin * S.ClimbEfficiency - S.EdgeFriction[type];
   const climb = peak + budget / G + (type === 'Round' ? S.RoundTailAllowance : 0);
-  return Math.min(nose, climb);
+  // A bank never digs the nose in: only the climb counts.
+  return type === 'Bank' ? climb : Math.min(nose, climb);
 }
