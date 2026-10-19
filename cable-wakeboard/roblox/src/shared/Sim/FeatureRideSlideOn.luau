@@ -118,6 +118,7 @@ function SlideOn.predictSlideOn(s, air, popSpeed)
 	local l = Features.toLocal(f, r.pos)
 	air.slideOn = {
 		featureId = f.def.id,
+		featureHeading = f.heading,
 		toward = if l.v < f.shape.vMin then 1 else -1,
 		target = cfg.slideOn.AutoNoseLift,
 		pitch = 0,
@@ -211,6 +212,11 @@ function SlideOn.leadCrossing(s, air)
 		if r.pos.y >= top - S.RailCentreAllowance then
 			so.phase = "cleared"
 			return "cleared"
+		end
+		-- Still rising: wait, unless the board's middle has reached the rail low (its base hits it).
+		local centre = FeatureShapes.pieceCentre(p, leadU)
+		if r.vel.y > 0 and so.toward * (l.v - centre) < 0 then
+			return nil
 		end
 		return "hangUp"
 	end

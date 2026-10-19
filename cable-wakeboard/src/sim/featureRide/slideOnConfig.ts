@@ -59,6 +59,8 @@ export interface SlideOnConfig {
   CounterSteerBleed: number;
   /** After the slide-on the base slides sideways and bites: the inward speed bleeds at this x g (m/s^2 per g). */
   InwardFriction: number;
+  /** On a round top (pipe) the base wraps it: the inward speed bleeds at this x g instead. */
+  RoundInwardFriction: number;
   /** Settle: the board snaps flat over this (s); the scrape costs SpeedLoss of the forward speed; the tail clearing pops up ClearPop (m/s). */
   SettleTime: number;
   SpeedLoss: number;
@@ -105,6 +107,7 @@ export const DEFAULT_SLIDE_ON: SlideOnConfig = {
   OvershootWindow: 0.4,
   CounterSteerBleed: 0.5,
   InwardFriction: 0.8,
+  RoundInwardFriction: 3.0,
   SettleTime: 0.08,
   SpeedLoss: 0.06,
   ClearPop: 0.4,

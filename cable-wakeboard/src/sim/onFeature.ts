@@ -785,7 +785,8 @@ function stepSlideOnCarry(s: SimState, j: JibState, piece: RidePiece, steer: num
     return false;
   }
   ramp.v += j.slideOnToward * j.slideOnInward * DT;
-  let v = Math.max(0, j.slideOnInward - S.InwardFriction * GRAVITY * DT);
+  const bite = piece.profile === 'Round' ? S.RoundInwardFriction : S.InwardFriction;
+  let v = Math.max(0, j.slideOnInward - bite * GRAVITY * DT);
   if (steer * j.slideOnToward < 0) v *= pow(1 - S.CounterSteerBleed, (Math.abs(steer) * DT) / 0.1);
   j.slideOnInward = v;
   if (j.slideOnToward * offCentre(piece, ramp) > balanceHalfWidth(piece, s)) {

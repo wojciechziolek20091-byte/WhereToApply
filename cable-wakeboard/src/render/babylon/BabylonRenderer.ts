@@ -41,7 +41,7 @@ import { buildCablePath, cablePointAt } from '../../sim/cable';
 import { DEFAULT_CONFIG } from '../../sim/config';
 import { towerParts } from '../../art/tower';
 import { FEATURE_CONFIG } from '../../park/featureConfig';
-import { kickerHeightAt, toWorld } from '../../sim/features';
+import { kickerHeightAt, toLocal, toWorld } from '../../sim/features';
 import { topPieceAt } from '../../sim/featureRide/slideOn';
 import { createRng, nextFloat, nextRange } from '../../sim/math/rng';
 import { clamp01 } from '../../sim/math/scalar';
@@ -288,6 +288,12 @@ export class BabylonRenderer {
   private readonly splash: ParticleSystem;
   private readonly splashEmitter = new Vector3();
   private shake = 0;
+  /** Slide-on effects: the phase last frame, scuff marks on edges (fading), the camera's shift away from the feature. */
+  private slideOnPhase: string | null = null;
+  private readonly scuffs: { mesh: Mesh; age: number }[] = [];
+  private scuffMat: StandardMaterial | null = null;
+  private camShift = new Vector3();
+  private audio: AudioContext | null = null;
   private fovKick = 0;
   private readonly charMat: StandardMaterial;
   private readonly carrier: Mesh;
@@ -765,7 +771,7 @@ export class BabylonRenderer {
     const a = sim.rider.approach;
     const on = this.slideOnCue && !!a && a.slideOnBlock === '' && (sim.rider.mode === 'riding' || sim.rider.mode === 'airborne');
     const f = on ? sim.features.find((x) => x.def.id === a!.featureId) : undefined;
-    const p = f ? topPieceAt(f, a!.contactU) : null;
+    const p = f ? topPieceAt(f, a!.contactU, toLocal(f, sim.rider.pos).v) : null;
     if (!a || !f || !p) {
       this.cueEdge.setEnabled(false);
       this.cueMark.setEnabled(false);
@@ -989,6 +995,7 @@ export class BabylonRenderer {
       for (const b of this.buoyMeshes) b.mesh.position.y = b.y + B.BobAmplitude * Math.sin(2 * Math.PI * B.BobFrequency * t + b.phase);
     }
     this.updateSlideOnCue(sim);
+    this.updateSlideOnFx(sim, frameSeconds);
     if (this.pointCam) {
       this.camera.position.set(...this.pointCam.from);
       this.camera.setTarget(new Vector3(...this.pointCam.to));
@@ -1016,6 +1023,91 @@ export class BabylonRenderer {
     }
     this.camera.position.set(c.x + 40, 200, c.z + 300);
     this.camera.setTarget(new Vector3(c.x, 0, c.z + 10));
+  }
+
+  /**
+   * Slide-on effects (side approaches spec 5): at the nose contact a burst
+   * of spray off the base, a camera shake, a scrape and a scuff on the
+   * edge (fading over ScuffLife); during the slide-on the chase camera
+   * shifts away from the feature to frame the edge.
+   */
+  private updateSlideOnFx(sim: SimState, dt: number): void {
+    const SO = DEFAULT_ANIM_CONFIG.SlideOn;
+    const r = sim.rider;
+    const so = r.air?.slideOn ?? null;
+    const phase = so ? so.phase : null;
+    if (so && phase === 'contact' && this.slideOnPhase === 'air' && !this.scrub) {
+      this.splashEmitter.set(r.pos.x, so.top, r.pos.z);
+      this.splash.manualEmitCount = SO.ContactSpray;
+      this.shake = Math.max(this.shake, SO.ContactShake);
+      this.addScuff(sim, so.featureId, so.u, so.v, so.top, so.featureHeading);
+      this.playScrape(SO.ScrapeVolume * Math.min(1, so.vin / 3));
+    }
+    this.slideOnPhase = phase;
+    // Shift away from the feature while the nose lifts, climbs and settles.
+    let want = Vector3.Zero();
+    const settle = r.jib && (r.jib.entry === 'slideOn' || r.jib.entry === 'edgeSlideOn') && r.jib.time < 0.6;
+    const toward = so ? so.toward : settle ? r.jib!.slideOnToward : 0;
+    const heading = so ? so.featureHeading : settle ? (sim.features.find((x) => x.def.id === r.jib!.featureId)?.heading ?? 0) : 0;
+    if ((so && (phase === 'air' || phase === 'contact')) || settle) {
+      want = new Vector3(Math.sin(heading) * toward, 0, -Math.cos(heading) * toward).scale(SO.CameraShift);
+    }
+    this.camShift = Vector3.Lerp(this.camShift, want, Math.min(1, dt * 3));
+    for (let i = this.scuffs.length - 1; i >= 0; i--) {
+      const s = this.scuffs[i]!;
+      s.age += dt;
+      s.mesh.visibility = Math.max(0, 1 - s.age / SO.ScuffLife) * 0.7;
+      if (s.age >= SO.ScuffLife) {
+        s.mesh.dispose();
+        this.scuffs.splice(i, 1);
+      }
+    }
+  }
+
+  /** A dark scrape along the edge where the board climbed on. */
+  private addScuff(sim: SimState, featureId: string, u: number, v: number, top: number, heading: number): void {
+    const f = sim.features.find((x) => x.def.id === featureId);
+    const p = f ? topPieceAt(f, u, v) : null;
+    if (!f || !p) return;
+    if (!this.scuffMat) {
+      this.scuffMat = new StandardMaterial('scuffMat', this.scene);
+      this.scuffMat.diffuseColor = new Color3(0.12, 0.12, 0.13);
+      this.scuffMat.specularColor = Color3.Black();
+    }
+    const centre = p.v0 + (p.v1 - p.v0) * ((u - p.u0) / Math.max(1e-6, p.u1 - p.u0));
+    const edgeV = v < centre ? centre - p.width / 2 + 0.06 : centre + p.width / 2 - 0.06;
+    const m = CreateBox('scuff', { width: 0.9, height: 0.004, depth: 0.08 }, this.scene);
+    m.material = this.scuffMat;
+    m.isPickable = false;
+    m.position = v3(toWorld(f, u + 0.45, edgeV, top + 0.006));
+    m.rotation.y = -heading;
+    this.scuffs.push({ mesh: m, age: 0 });
+    while (this.scuffs.length > 12) this.scuffs.shift()!.mesh.dispose();
+  }
+
+  /** A short filtered-noise scrape (web audio; silent until the page has had a key press). */
+  private playScrape(volume: number): void {
+    if (volume <= 0.01 || typeof AudioContext === 'undefined') return;
+    try {
+      this.audio ??= new AudioContext();
+      const ctx = this.audio;
+      const len = Math.floor(ctx.sampleRate * 0.3);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 1800;
+      band.Q.value = 0.9;
+      const gain = ctx.createGain();
+      gain.gain.value = volume;
+      src.connect(band).connect(gain).connect(ctx.destination);
+      src.start();
+    } catch {
+      // No audio: effects stay visual.
+    }
   }
 
   /** Camera on a feature (`featureCam`): from the approach, the side, behind, above or low at the waterline. */
@@ -1066,7 +1158,7 @@ export class BabylonRenderer {
     const invert = clamp01(Math.max(frame.tuck, (0.5 - rootUpY) / 1.2));
     this.pullOut += (invert - this.pullOut) * Math.min(1, dt * 3);
     const back = 9 + C.InvertPullOut * this.pullOut;
-    const want = v3(riderPos).subtract(fwd.scale(back)).add(new Vector3(0, 3.4 + 0.8 * this.pullOut, 0));
+    const want = v3(riderPos).subtract(fwd.scale(back)).add(new Vector3(0, 3.4 + 0.8 * this.pullOut, 0)).add(this.camShift);
     want.y = Math.max(want.y, 1.6);
     if (!this.camPos) this.camPos = want.clone();
     this.camPos = Vector3.Lerp(this.camPos, want, Math.min(1, dt * 6));

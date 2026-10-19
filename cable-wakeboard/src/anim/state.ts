@@ -98,6 +98,13 @@ export interface RiderAnimState {
     ropeSnap: boolean;
     /** Blind riding: seconds and the spin-out direction in progress (0 when none). */
     spinOut: number;
+    /**
+     * A slide-on (side approaches spec 5): the nose lifting in the air (Lift:
+     * `progress` the lift over its most), climbing over the edge (Contact:
+     * the share of the board on top), or just on (Settle: seconds on the
+     * feature). `side` +1 when the feature is on the toes' side.
+     */
+    slideOn: { phase: 'Lift' | 'Contact' | 'Settle'; progress: number; side: number } | null;
   };
 }
 
@@ -269,6 +276,24 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
     if (f) slope = Math.atan2(Math.max(0, r.vel.y), Math.max(0.1, Math.sqrt(r.vel.x * r.vel.x + r.vel.z * r.vel.z))) / DEG;
   }
 
+  let slideOn: RiderAnimState['ext']['slideOn'] = null;
+  const so = air ? air.slideOn : null;
+  const towardSide = (heading: number, toward: number): number => {
+    // +1 when the feature is to the right of the travel, times the toes' side.
+    const d = -Math.sin(r.heading) * -Math.sin(heading) + Math.cos(r.heading) * Math.cos(heading);
+    return (d * toward >= 0 ? 1 : -1) * p.toes;
+  };
+  if (so && (so.phase === 'air' || so.phase === 'contact') && inAir(r.mode)) {
+    slideOn = {
+      phase: so.phase === 'air' ? 'Lift' : 'Contact',
+      progress: so.phase === 'air' ? Math.min(1, so.pitch / cfg.slideOn.MaxNoseLift) : so.p,
+      side: towardSide(so.featureHeading, so.toward),
+    };
+  } else if (jib && r.mode === 'onFeature' && (jib.entry === 'slideOn' || jib.entry === 'edgeSlideOn') && jib.chain.length === 0) {
+    const f = sim.features.find((x) => x.def.id === jib.featureId);
+    if (f) slideOn = { phase: 'Settle', progress: jib.time, side: towardSide(f.heading, jib.slideOnToward) };
+  }
+
   // Handle: the sim's rope attaches at the hips; the bar sits handleDist toward the carrier.
   const hip = { x: r.pos.x, y: r.pos.y + cfg.rider.hipHeight * (1 - 0.35 * r.legCompression), z: r.pos.z };
   const toCarrier = vsub(sim.carrier.pos, hip);
@@ -332,6 +357,7 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
       justTookOff,
       ropeSnap,
       spinOut: r.spinOut ? r.spinOut.dir : 0,
+      slideOn,
     },
   };
 }

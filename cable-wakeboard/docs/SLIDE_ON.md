@@ -185,6 +185,45 @@ Example outcomes on a 1 m wide box (tests/slideOn.test.ts):
 - **Contact angles.** 20–70° is sketchy. Beyond 70° is `badAngle`, except
   near 90° (the edge-lead snap).
 
+## Animation, effects and camera (spec 5)
+
+- **Board.** `render/pose.ts` (twin `RiderPose.luau`) tilts the board in the
+  air. A nose lead pitches it about its z axis, with the end that points
+  along the travel up. An edge lead lifts the edge facing the feature. The
+  contact phase lowers it flat as the board comes over.
+- **State.** `ext.slideOn` in the animation state has a `phase`, a
+  `progress` and a `side`:
+  - `Lift`: the nose lift over its most.
+  - `Contact`: the share of the board on top.
+  - `Settle`: seconds on the feature.
+  - `side` is +1 when the feature is on the toes' side.
+  The three values are replicated in packet slots 50–52, so the packet is
+  53 long; the server check was updated.
+- **Clip.** `slideOn` (`SLIDE_ON_CLIPS` in poses.ts) is sampled by phase:
+  - 0: the pop.
+  - 0.35: nose up, front knee tucked, back foot loaded.
+  - 0.75: low over the edge, weight on the front foot.
+  - 1: on top, absorbing the climb.
+  The animator blends it in with `SlideOn.Blend` and leans the waist toward
+  the feature by up to `SlideOn.Lean`, most at the climb. The settle fades
+  out over `SlideOn.SettleTime`.
+- **Failure clips.** `crashNoseDig` throws the rider over the nose.
+  `crashHangUp` tips the board back off the edge and the rider sits down
+  sideways.
+- **Effects** (web: BabylonRenderer `updateSlideOnFx`; Roblox: WakeClient):
+  at the nose contact,
+  - a spray burst off the base (`ContactSpray`);
+  - a camera shake (`ContactShake`);
+  - a scrape: synthesised noise on the web, `Sound.Scrape` on Roblox
+    (empty id until an asset exists);
+  - a dark scuff along the edge, fading over `ScuffLife`.
+- **Camera.** While the nose lifts, the board climbs and for 0.6 s after
+  mounting, the chase camera shifts `CameraShift` away from the feature, so
+  the edge stays in frame.
+- **Animation scenarios.** `SlideOnToeside`, `SlideOnHeelside`,
+  `CrashNoseDig` and `CrashHangUp` were added to testDriver (F7 scrubber) and
+  to the TS/Luau animation parity check.
+
 ## Decisions (where the spec and the game differ)
 
 1. **Side-entry pop height.**

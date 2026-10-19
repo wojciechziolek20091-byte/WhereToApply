@@ -157,6 +157,23 @@ export interface AnimConfig {
     /** Torso pitch forward per metre of compression (deg). */
     PitchPerMetre: number;
   };
+  /** Side approaches spec 5: the slide-on clip by phase. */
+  SlideOn: {
+    /** How fast the slide-on clip blends in and out. */
+    Blend: SpringParams;
+    /** Upper body lean toward the feature at the climb (deg, + over the toes when the feature is on that side). */
+    Lean: number;
+    /** On the feature: the settle (absorbing the climb) fades out over this (s). */
+    SettleTime: number;
+    /** Effects at the nose contact: camera shake (m), spray burst (particles), a scuff on the edge that fades over ScuffLife (s). */
+    ContactShake: number;
+    ContactSpray: number;
+    ScuffLife: number;
+    /** Chase camera: shifts this far away from the feature during a slide-on, to frame the edge (m). */
+    CameraShift: number;
+    /** Scrape sound at the contact (0..1 volume; the web build synthesises it, Roblox plays Sound.Scrape). */
+    ScrapeVolume: number;
+  };
   Crash: {
     /** Lead-in length before the ragdoll takes over (s). */
     LeadIn: number;
@@ -193,7 +210,7 @@ export interface AnimConfig {
     RopeSag: number;
     RopeTautWidth: number;
   };
-  Sound: Record<'Carve' | 'Pop' | 'Land' | 'GrindBox' | 'GrindRail' | 'HandlePass' | 'RopeSnap' | 'Splash', string>;
+  Sound: Record<'Carve' | 'Pop' | 'Land' | 'GrindBox' | 'GrindRail' | 'HandlePass' | 'RopeSnap' | 'Splash' | 'Scrape', string>;
   Debug: {
     /** F4 cycles the local time scale through these. */
     TimeScales: number[];
@@ -276,12 +293,13 @@ export const DEFAULT_ANIM_CONFIG: AnimConfig = {
     Sketchy: sp(2.4, 0.35),
     PitchPerMetre: 60,
   },
+  SlideOn: { Blend: sp(6, 1), Lean: 14, SettleTime: 0.3, ContactShake: 0.12, ContactSpray: 90, ScuffLife: 6, CameraShift: 1.4, ScrapeVolume: 0.35 },
   Crash: { LeadIn: 0.22 },
   Ragdoll: { Gravity: 9.81, WaterDrag: 6, Buoyancy: 1.7, FloatDepth: 0.15, AirDrag: 0.05, Iterations: 6, MinHinge: 25 },
   Secondary: { FreeArm: sp(2.2, 0.55), CounterSwing: 6, HeadBob: sp(3.5, 0.6) },
   Camera: { ShakePerMS: 0.05, ShakeDecay: 6, CarveRoll: 4, PopFovKick: 6, InvertPullOut: 2.5 },
   Vfx: { SprayRate: 1400, RoosterEdge: 0.75, SplashPerMS: 40, RopeSag: 0.06, RopeTautWidth: 0.8 },
-  Sound: { Carve: '', Pop: '', Land: '', GrindBox: '', GrindRail: '', HandlePass: '', RopeSnap: '', Splash: '' },
+  Sound: { Carve: '', Pop: '', Land: '', GrindBox: '', GrindRail: '', HandlePass: '', RopeSnap: '', Splash: '', Scrape: '' },
   Debug: { TimeScales: [1, 0.25, 0.1] },
   Physics: { ComPivot: true, CrouchFollowsCharge: true },
 };

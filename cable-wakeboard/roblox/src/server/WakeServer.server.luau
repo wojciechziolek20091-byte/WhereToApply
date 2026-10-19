@@ -85,7 +85,7 @@ end)
 local AnimState = Instance.new("UnreliableRemoteEvent")
 AnimState.Name = "AnimState"
 AnimState.Parent = remotes
-local PACKET_LENGTH = 50
+local PACKET_LENGTH = 53
 local lastSend: { [number]: number } = {}
 AnimState.OnServerEvent:Connect(function(player: Player, packet: any)
 	if type(packet) ~= "table" or #packet ~= PACKET_LENGTH then

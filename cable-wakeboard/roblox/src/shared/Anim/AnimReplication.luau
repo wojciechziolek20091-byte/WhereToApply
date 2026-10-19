@@ -15,6 +15,8 @@ local HANDLES = { "InFront", "Behind", "Passing", "Dropped" }
 local SLIDES = { "", "FiftyFifty", "Backboard", "Frontboard", "SwitchFiftyFifty", "WallRide" }
 local SIDES = { "", "Frontside", "Backside" }
 local QUALITIES = { "", "Clean", "Sketchy" }
+local SLIDE_ON_PHASES = { "Lift", "Contact", "Settle" }
+local SLIDE_ON_INDEX = { Lift = 1, Contact = 2, Settle = 3 }
 local ROLLS = { "", "back", "front" }
 local CRASHES = {
 	"",
@@ -46,7 +48,7 @@ local CRASHES = {
 	"hangUp",
 }
 
-R.PACKET_LENGTH = 50
+R.PACKET_LENGTH = 53
 R.SEND_RATE = 18
 
 -- 0-based index of v in list (nil and "" are index 0), like the TS indexOf.
@@ -120,6 +122,10 @@ function R.pack(s, time, flags)
 		s.passProgress or -1,
 		s.speed,
 		if s.feature then 1 else 0,
+		-- 50-52 (TS indices): the slide-on (0 none, 1 Lift, 2 Contact, 3 Settle), its progress and side.
+		if s.ext.slideOn then SLIDE_ON_INDEX[s.ext.slideOn.phase] else 0,
+		if s.ext.slideOn then s.ext.slideOn.progress else 0,
+		if s.ext.slideOn then s.ext.slideOn.side else 0,
 	}
 end
 
@@ -185,12 +191,13 @@ function R.unpack(p)
 			justTookOff = bit32.band(flags, 2) ~= 0,
 			ropeSnap = bit32.band(flags, 4) ~= 0,
 			spinOut = 0,
+			slideOn = if n(50) > 0 then { phase = SLIDE_ON_PHASES[n(50)] or "Lift", progress = n(51), side = n(52) } else nil,
 		},
 	}
 end
 
 -- TS indices that interpolate linearly.
-local LERP = { 3, 4, 5, 6, 7, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 33, 34, 36, 37, 39, 40, 41, 46, 48 }
+local LERP = { 3, 4, 5, 6, 7, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 33, 34, 36, 37, 39, 40, 41, 46, 48, 51 }
 
 function R.createBuffer()
 	return { packets = {}, flagsFiredAt = -1 }

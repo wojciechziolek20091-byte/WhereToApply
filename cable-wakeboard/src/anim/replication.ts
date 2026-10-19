@@ -47,10 +47,11 @@ const CRASHES = [
   'hangUp',
 ];
 
-export const PACKET_LENGTH = 50;
+export const PACKET_LENGTH = 53;
 export const SEND_RATE = 18;
 
 const idx = <T>(list: T[], v: T): number => Math.max(0, list.indexOf(v));
+const SLIDE_ON_PHASES = ['Lift', 'Contact', 'Settle'] as const;
 
 /** Encode a state (time in seconds). `flags` are the one-shots seen since the last send. */
 export function packAnimState(s: RiderAnimState, time: number, flags: number): number[] {
@@ -106,6 +107,10 @@ export function packAnimState(s: RiderAnimState, time: number, flags: number): n
     s.passProgress ?? -1,
     s.speed,
     s.feature ? 1 : 0,
+    // 50-52: the slide-on (0 none, 1 Lift, 2 Contact, 3 Settle), its progress and side.
+    s.ext.slideOn ? SLIDE_ON_PHASES.indexOf(s.ext.slideOn.phase) + 1 : 0,
+    s.ext.slideOn ? s.ext.slideOn.progress : 0,
+    s.ext.slideOn ? s.ext.slideOn.side : 0,
   ];
 }
 
@@ -165,12 +170,13 @@ export function unpackAnimState(p: number[]): RiderAnimState {
       justTookOff: (flags & 2) !== 0,
       ropeSnap: (flags & 4) !== 0,
       spinOut: 0,
+      slideOn: n(50) > 0 ? { phase: SLIDE_ON_PHASES[n(50) - 1] ?? 'Lift', progress: n(51), side: n(52) } : null,
     },
   };
 }
 
 /** Indices of the numbers that interpolate linearly (the rest take the newer packet). */
-const LERP = [3, 4, 5, 6, 7, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 33, 34, 36, 37, 39, 40, 41, 46, 48];
+const LERP = [3, 4, 5, 6, 7, 10, 11, 12, 13, 18, 19, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 33, 34, 36, 37, 39, 40, 41, 46, 48, 51];
 
 /** Received packets of one remote rider, oldest first, and the newest packet whose one-shots have fired. */
 export interface RemoteBuffer {

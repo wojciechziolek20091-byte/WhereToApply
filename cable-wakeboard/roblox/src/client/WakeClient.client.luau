@@ -670,7 +670,7 @@ local function updateSlideOnCue(sim)
 			end
 		end
 	end
-	local p = if f then Sim.FeatureRideSlideOn.topPieceAt(f, a.contactU) else nil
+	local p = if f then Sim.FeatureRideSlideOn.topPieceAt(f, a.contactU, Sim.Features.toLocal(f, r.pos).v) else nil
 	cueEdge.Transparency = if p then 0.45 else 1
 	cueMark.Transparency = if p then 0.3 else 1
 	if not p then
@@ -688,6 +688,71 @@ local function updateSlideOnCue(sim)
 	local mark = Sim.Features.toWorld(f, a.contactU, v, a.topHeight + 0.04)
 	-- A flat disc: the cylinder's axis (x) points up.
 	cueMark.CFrame = CFrame.fromMatrix(Vector3.new(mark.x, mark.y, mark.z) * S, Vector3.yAxis, fwd)
+end
+-- Slide-on effects (side approaches spec 5): at the nose contact a spray burst,
+-- a camera shake, the scrape sound and a scuff on the edge that fades; the
+-- chase camera shifts away from the feature during the slide-on.
+local shake = 0
+local slideOnPhase = nil
+local scuffs = {}
+local camShift = Vector3.zero
+local function featureOf(sim, id)
+	for _, x in sim.features do
+		if x.def.id == id then
+			return x
+		end
+	end
+	return nil
+end
+local function updateSlideOnFx(sim, dt)
+	local SO = AC.SlideOn
+	local r = sim.rider
+	local so = if r.air then r.air.slideOn else nil
+	local phase = if so then so.phase else nil
+	if so and phase == "contact" and slideOnPhase == "air" and not scrubOn then
+		splashPart.CFrame = CFrame.new(Vector3.new(r.pos.x, so.top, r.pos.z) * S)
+		splash:Emit(math.floor(SO.ContactSpray / 4))
+		shake = math.max(shake, SO.ContactShake * 3)
+		play("Scrape", SO.ScrapeVolume * math.min(1, so.vin / 3))
+		local f = featureOf(sim, so.featureId)
+		local p = if f then Sim.FeatureRideSlideOn.topPieceAt(f, so.u, so.v) else nil
+		if f and p then
+			local centre = p.v0 + (p.v1 - p.v0) * ((so.u - p.u0) / math.max(1e-6, p.u1 - p.u0))
+			local edgeV = if so.v < centre then centre - p.width / 2 + 0.06 else centre + p.width / 2 - 0.06
+			local at = Sim.Features.toWorld(f, so.u + 0.45, edgeV, so.top + 0.006)
+			local fwd = Vector3.new(math.cos(f.heading), 0, math.sin(f.heading))
+			local mark = part("SlideOnScuff", Vector3.new(0.9 * S, 0.01 * S, 0.08 * S), CFrame.fromMatrix(Vector3.new(at.x, at.y, at.z) * S, fwd, Vector3.yAxis), Color3.fromRGB(30, 30, 33))
+			mark.Transparency = 0.3
+			table.insert(scuffs, { part = mark, age = 0 })
+			if #scuffs > 12 then
+				table.remove(scuffs, 1).part:Destroy()
+			end
+		end
+	end
+	slideOnPhase = phase
+	local jib = r.jib
+	local settle = jib and (jib.entry == "slideOn" or jib.entry == "edgeSlideOn") and jib.time < 0.6
+	local toward, heading = 0, 0
+	if so then
+		toward, heading = so.toward, so.featureHeading
+	elseif settle then
+		local f = featureOf(sim, jib.featureId)
+		toward, heading = jib.slideOnToward, if f then f.heading else 0
+	end
+	local want = Vector3.zero
+	if (so and (phase == "air" or phase == "contact")) or settle then
+		want = Vector3.new(math.sin(heading) * toward, 0, -math.cos(heading) * toward) * SO.CameraShift * S
+	end
+	camShift = camShift:Lerp(want, math.min(1, dt * 3))
+	for i = #scuffs, 1, -1 do
+		local sc = scuffs[i]
+		sc.age += dt
+		sc.part.Transparency = 0.3 + 0.7 * math.min(1, sc.age / SO.ScuffLife)
+		if sc.age >= SO.ScuffLife then
+			sc.part:Destroy()
+			table.remove(scuffs, i)
+		end
+	end
 end
 ContextActionService:BindAction("SteerStick", function(_, _, inputObject)
 	analogSteer = inputObject.Position.X
@@ -854,7 +919,6 @@ RunService.PreSimulation:Connect(function(rawDt)
 	end
 end)
 
-local shake = 0
 local fovKick = 0
 local camRoll = 0
 local pullOut = 0
@@ -926,7 +990,8 @@ RunService.RenderStepped:Connect(function(rawDt)
 	local wantRoll = math.rad(AC.Camera.CarveRoll * edgeN)
 	camRoll += (wantRoll - camRoll) * math.min(1, dt * 3)
 	local jitter = Vector3.new(math.sin(clock * 61), math.sin(clock * 47 + 1), math.sin(clock * 53 + 2)) * shake * S
-	local look = CFrame.lookAt(focus + back + Vector3.new(0, (3 + pullOut) * S, 0) + jitter, focus)
+	updateSlideOnFx(sim, dt)
+	local look = CFrame.lookAt(focus + back + Vector3.new(0, (3 + pullOut) * S, 0) + jitter + camShift, focus)
 	camera.CFrame = camera.CFrame:Lerp(look * CFrame.Angles(0, 0, camRoll), math.min(1, dt * 6))
 	camera.FieldOfView = 70 + math.clamp((speed - 8) * 1.5, 0, 12) + fovKick
 

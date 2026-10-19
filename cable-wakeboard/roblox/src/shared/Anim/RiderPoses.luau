@@ -163,6 +163,15 @@ RiderPoses.ALL_CLIPS = {
 			{ t = 1, knee = 32, joints = { Hips = { x = 6, y = 0 }, Waist = { x = 8, y = 0 }, Neck = { x = 2, y = 0 } }, aim = 1 },
 		},
 	},
+	{
+		name = "slideOn",
+		keys = {
+			{ t = 0, knee = { 46, 52 }, joints = { Hips = { x = 8, y = 8 }, Waist = { x = 10, y = 10 }, Neck = { x = 4 } }, handle = { z = -0.06 } },
+			{ t = 0.35, knee = { 92, 54 }, joints = { Hips = { x = 4, y = 6 }, Waist = { x = 2, y = 8 }, Neck = { x = 8 } }, handle = { z = -0.08 } },
+			{ t = 0.75, knee = { 62, 70 }, joints = { Hips = { x = 14, y = 10 }, Waist = { x = 16, y = 14 }, Neck = { x = 6 } }, handle = { z = -0.1 } },
+			{ t = 1, knee = { 56, 56 }, joints = { Hips = { x = 10, y = 10 }, Waist = { x = 12, y = 16 }, Neck = { x = 6 } }, handle = { z = -0.06 } },
+		},
+	},
 	{ name = "indy", keys = { { t = 0, joints = { Hips = { x = 26 }, Waist = { x = 50 }, Neck = { x = 24 } }, knee = { 134, 134 }, aim = 0.4 } } },
 	{
 		name = "indyTweak",
@@ -366,6 +375,64 @@ RiderPoses.ALL_CLIPS = {
 		},
 	},
 	{
+		name = "crashNoseDig",
+		keys = {
+			{
+				t = 0,
+				knee = 70,
+				joints = { Waist = { x = 20 }, LShoulder = { x = -40, y = 0, z = 20 }, RShoulder = { x = -30, y = 0, z = -20 }, LElbow = { x = -20 }, RElbow = { x = -20 } },
+				aim = 0.4,
+			},
+			{
+				t = 1,
+				knee = 30,
+				joints = {
+					Hips = { x = 36, y = 20 },
+					Waist = { x = 70, y = 18 },
+					Neck = { x = -24 },
+					LShoulder = { x = -130, y = 0, z = 30 },
+					RShoulder = { x = -110, y = 0, z = -40 },
+					LElbow = { x = -20 },
+					RElbow = { x = -20 },
+				},
+				aim = 0,
+			},
+		},
+	},
+	{
+		name = "crashHangUp",
+		keys = {
+			{
+				t = 0,
+				knee = 62,
+				joints = {
+					Hips = { z = -6 },
+					Waist = { x = 10 },
+					LShoulder = { x = -30, y = 0, z = 30 },
+					RShoulder = { x = -20, y = 0, z = -30 },
+					LElbow = { x = -20 },
+					RElbow = { x = -20 },
+				},
+				aim = 0.5,
+			},
+			{
+				t = 1,
+				knee = 100,
+				pelvis = { z = -0.14, y = -0.08 },
+				joints = {
+					Hips = { x = -18, z = -24 },
+					Waist = { x = -20, z = 18 },
+					Neck = { x = 12 },
+					LShoulder = { x = 40, y = 0, z = 90 },
+					RShoulder = { x = 30, y = 0, z = -70 },
+					LElbow = { x = -20 },
+					RElbow = { x = -20 },
+				},
+				aim = 0,
+			},
+		},
+	},
+	{
 		name = "crashYank",
 		keys = {
 			{
@@ -417,8 +484,8 @@ RiderPoses.CRASH_LEAD_IN = {
 	kinkThrow = "crashForward",
 	ranOutMidRotation = "crashSide",
 	wallSlideDown = "crashSlipOff",
-	noseDig = "crashForward",
-	hangUp = "crashSlipOff",
+	noseDig = "crashNoseDig",
+	hangUp = "crashHangUp",
 }
 
 return RiderPoses

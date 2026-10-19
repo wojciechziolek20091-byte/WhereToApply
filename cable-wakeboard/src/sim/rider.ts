@@ -199,6 +199,8 @@ export interface AirState {
  */
 export interface SlideOnAir {
   featureId: string;
+  /** The feature's axis (rad), for the board's lift and the animation. */
+  featureHeading: number;
   /** Inward along the feature's right: +1 from its left side, -1 from its right. */
   toward: number;
   /** Nose lift the board is lifting to, and its lift now (rad). */

@@ -229,6 +229,7 @@ Config.DEFAULT_CONFIG = {
 		OvershootWindow = 0.4,
 		CounterSteerBleed = 0.5,
 		InwardFriction = 0.8,
+		RoundInwardFriction = 3,
 		SettleTime = 0.08,
 		SpeedLoss = 0.06,
 		ClearPop = 0.4,

@@ -63,6 +63,7 @@ export function baseAnimState(origin: V3): RiderAnimState {
       justTookOff: false,
       ropeSnap: false,
       spinOut: 0,
+      slideOn: null,
     },
   };
 }
@@ -217,6 +218,39 @@ function slide(name: SlideName): Scenario {
   };
 }
 
+/** A slide-on (side approaches spec 5): the nose lifts, climbs over the edge, settles on top. `side` +1 the feature on the toes' side. */
+function slideOn(side: number): Scenario {
+  const T = 1.2;
+  return {
+    duration: T,
+    at(u, _p, o) {
+      const s = baseAnimState(o);
+      let pitch = 0;
+      if (u < 0.6) {
+        const air = u < 0.45;
+        const lift = smooth(u / 0.2);
+        const climb = air ? 0 : (u - 0.45) / 0.15;
+        s.state = 'Airborne';
+        s.trick.id = 'Ollie';
+        s.trick.phase = u / 0.6;
+        s.ext.airTime = u * T;
+        s.ext.airDuration = 0.6 * T;
+        s.boardCFrame.pos.y += air ? 0.7 * Math.sin((Math.PI * u) / 0.9) : 0.62 + 0.18 * climb;
+        s.ext.slideOn = air ? { phase: 'Lift', progress: lift * 0.6, side } : { phase: 'Contact', progress: climb, side };
+        pitch = 18 * lift * (1 - climb);
+      } else {
+        s.state = 'OnFeature';
+        s.boardCFrame.pos.y += 0.8;
+        s.feature = { slide: 'FiftyFifty', balance: 0.2 * side, entry: 'slideOn' };
+        s.ext.slideOn = { phase: 'Settle', progress: (u - 0.6) * T, side };
+      }
+      s.boardCFrame.rot = composeBoardRotation(0, { x: 0, y: 0, z: 1 }, pitch * DEG, 0);
+      s.tension = 350;
+      return s;
+    },
+  };
+}
+
 function crash(reason: string): Scenario {
   return {
     duration: 2.2,
@@ -309,6 +343,10 @@ export const SCENARIOS: Record<string, Scenario> = {
   CrashCaughtEdgeBlind: crash('caughtEdgeBlind'),
   CrashFellOffFeature: crash('fellOffFeature'),
   CrashRopeYank: crash('ropeYank'),
+  SlideOnToeside: slideOn(1),
+  SlideOnHeelside: slideOn(-1),
+  CrashNoseDig: crash('noseDig'),
+  CrashHangUp: crash('hangUp'),
 };
 
 /**

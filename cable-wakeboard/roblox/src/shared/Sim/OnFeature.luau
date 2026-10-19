@@ -836,7 +836,8 @@ function stepSlideOnCarry(s, j, piece, steer)
 		return false
 	end
 	ramp.v += j.slideOnToward * j.slideOnInward * DT
-	local v = math.max(0, j.slideOnInward - S.InwardFriction * GRAVITY * DT)
+	local bite = if piece.profile == "Round" then S.RoundInwardFriction else S.InwardFriction
+	local v = math.max(0, j.slideOnInward - bite * GRAVITY * DT)
 	if steer * j.slideOnToward < 0 then
 		v *= DetMath.pow(1 - S.CounterSteerBleed, (math.abs(steer) * DT) / 0.1)
 	end

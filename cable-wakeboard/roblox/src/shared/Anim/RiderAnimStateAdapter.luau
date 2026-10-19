@@ -226,6 +226,26 @@ function Adapter.fromSim(sim, events, prev)
 		end
 	end
 
+	local slideOn = nil
+	local so = if air then air.slideOn else nil
+	local function towardSide(heading, toward)
+		-- +1 when the feature is to the right of the travel, times the toes' side.
+		local d = -math.sin(r.heading) * -math.sin(heading) + math.cos(r.heading) * math.cos(heading)
+		return (if d * toward >= 0 then 1 else -1) * p.toes
+	end
+	if so and (so.phase == "air" or so.phase == "contact") and Sim.Fsm.inAir(r.mode) then
+		slideOn = {
+			phase = if so.phase == "air" then "Lift" else "Contact",
+			progress = if so.phase == "air" then math.min(1, so.pitch / cfg.slideOn.MaxNoseLift) else so.p,
+			side = towardSide(so.featureHeading, so.toward),
+		}
+	elseif jib and r.mode == "onFeature" and (jib.entry == "slideOn" or jib.entry == "edgeSlideOn") and #jib.chain == 0 then
+		local f = findFeature(sim, jib.featureId)
+		if f then
+			slideOn = { phase = "Settle", progress = jib.time, side = towardSide(f.heading, jib.slideOnToward) }
+		end
+	end
+
 	local hip = { x = r.pos.x, y = r.pos.y + cfg.rider.hipHeight * (1 - 0.35 * r.legCompression), z = r.pos.z }
 	local toCarrier = Quat.vsub(sim.carrier.pos, hip)
 	local dist = Quat.vlen(toCarrier)
@@ -294,6 +314,7 @@ function Adapter.fromSim(sim, events, prev)
 			justTookOff = justTookOff,
 			ropeSnap = ropeSnap,
 			spinOut = if r.spinOut then r.spinOut.dir else 0,
+			slideOn = slideOn,
 		},
 	}
 end

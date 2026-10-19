@@ -36,6 +36,16 @@ function RiderPose.of(r)
 			raley = t.extension
 		elseif air.rot.flipAngle ~= 0 then
 			invert = { axis = { 1, 0, 0 }, angle = toes * air.rot.flipAngle }
+		elseif air.slideOn and air.slideOn.pitch > 0 then
+			-- Slide-on: the leading end lifts. The nose (the end along the travel) about the
+			-- board's z; the edge facing the feature about its long axis.
+			local so = air.slideOn
+			if so.lead == "nose" then
+				invert = { axis = { 0, 0, 1 }, angle = (if math.cos(air.rot.spinAngle) >= 0 then 1 else -1) * so.pitch }
+			else
+				local side = -math.sin(yaw) * -math.sin(so.featureHeading) + math.cos(yaw) * math.cos(so.featureHeading)
+				invert = { axis = { 1, 0, 0 }, angle = -(if side * so.toward >= 0 then 1 else -1) * so.pitch }
+			end
 		end
 	end
 	return {

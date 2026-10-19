@@ -131,6 +131,10 @@ export interface Animator {
   aimYaw: Spring;
   aimPitch: Spring;
   grabW: Spring;
+  /** Slide-on clip weight, its time and the feature's side (+1 toes). */
+  slideOnW: Spring;
+  slideOnT: number;
+  slideOnSide: number;
   tweakW: Spring;
   grab: GrabName | null;
   grabStart: number;
@@ -204,6 +208,9 @@ export function createAnimator(rig: RigDef, cfg: AnimConfig = DEFAULT_ANIM_CONFI
     aimYaw: spring(70),
     aimPitch: spring(0),
     grabW: spring(0),
+    slideOnW: spring(0),
+    slideOnT: 0,
+    slideOnSide: 0,
     tweakW: spring(0),
     grab: null,
     grabStart: 0,
@@ -398,6 +405,30 @@ function canonicalPose(a: Animator, s: RiderAnimState, dt: number): ChannelPose 
     const name = a.lastGrab.charAt(0).toLowerCase() + a.lastGrab.slice(1);
     blendInto(p, sample(a, name, 0), clamp01(a.grabW.x), a.clips[name]!.mask);
     blendInto(p, sample(a, `${name}Tweak`, 0), clamp01(a.tweakW.x) * clamp01(a.grabW.x), a.clips[`${name}Tweak`]!.mask);
+  }
+
+  // Slide-on (side approaches spec 5): the clip by its phase, leaning toward the feature at the climb.
+  const SO = cfg.SlideOn;
+  const so = s.ext.slideOn;
+  let soOn = false;
+  if (so) {
+    if (so.phase === 'Lift') {
+      a.slideOnT = 0.35 * so.progress;
+      soOn = true;
+    } else if (so.phase === 'Contact') {
+      a.slideOnT = 0.35 + 0.4 * so.progress;
+      soOn = true;
+    } else if (so.progress < SO.SettleTime) {
+      a.slideOnT = 0.75 + (0.25 * so.progress) / SO.SettleTime;
+      soOn = true;
+    }
+    a.slideOnSide = so.side;
+  }
+  stepSpring(a.slideOnW, soOn ? 1 : 0, SO.Blend, dt);
+  if (a.slideOnW.x > 0.001) {
+    const w = clamp01(a.slideOnW.x);
+    blendInto(p, sample(a, 'slideOn', a.slideOnT), w, a.clips.slideOn!.mask);
+    bump(p, 'Waist.x', a.slideOnSide * SO.Lean * Math.sin(Math.PI * Math.min(1, a.slideOnT / 0.9)) * w);
   }
 
   // Crash lead-in.
@@ -969,6 +1000,8 @@ function resetForRespawn(a: Animator): void {
   a.lastGrab = null;
   a.grabW.x = 0;
   a.tweakW.x = 0;
+  a.slideOnW.x = 0;
+  a.slideOnW.v = 0;
   for (const s of [a.landDrop, a.wobble, a.yank, a.bob, a.leadHips, a.leadShoulders, a.leadHead, a.preWind]) {
     s.x = 0;
     s.v = 0;

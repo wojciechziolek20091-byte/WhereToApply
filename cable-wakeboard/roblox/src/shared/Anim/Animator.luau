@@ -97,6 +97,9 @@ function Animator.create(rig, cfg)
 		aimPitch = spring(0),
 		grabW = spring(0),
 		tweakW = spring(0),
+		slideOnW = spring(0),
+		slideOnT = 0,
+		slideOnSide = 0,
 		grab = nil,
 		grabStart = 0,
 		releaseTimer = 0,
@@ -342,6 +345,30 @@ local function canonicalPose(a, s, dt)
 		Channels.blendInto(p, sample(a, name .. "Tweak", 0), clamp01(a.tweakW.x) * clamp01(a.grabW.x), a.clips[name .. "Tweak"].mask)
 	end
 
+	-- Slide-on (side approaches spec 5): the clip by its phase, leaning toward the feature at the climb.
+	local SO = cfg.SlideOn
+	local so = s.ext.slideOn
+	local soOn = false
+	if so then
+		if so.phase == "Lift" then
+			a.slideOnT = 0.35 * so.progress
+			soOn = true
+		elseif so.phase == "Contact" then
+			a.slideOnT = 0.35 + 0.4 * so.progress
+			soOn = true
+		elseif so.progress < SO.SettleTime then
+			a.slideOnT = 0.75 + (0.25 * so.progress) / SO.SettleTime
+			soOn = true
+		end
+		a.slideOnSide = so.side
+	end
+	stepSpring(a.slideOnW, if soOn then 1 else 0, SO.Blend, dt)
+	if a.slideOnW.x > 0.001 then
+		local w = clamp01(a.slideOnW.x)
+		Channels.blendInto(p, sample(a, "slideOn", a.slideOnT), w, a.clips.slideOn.mask)
+		bump(p, "Waist.x", a.slideOnSide * SO.Lean * math.sin(math.pi * math.min(1, a.slideOnT / 0.9)) * w)
+	end
+
 	if st == "Crashed" then
 		local clip = CRASH_LEAD_IN[s.crashReason or ""] or "crashSide"
 		Channels.blendInto(p, sample(a, clip, clamp01(s.ext.modeTime / cfg.Crash.LeadIn)), 1, a.clips[clip].mask)
@@ -496,6 +523,8 @@ local function resetForRespawn(a)
 	a.lastGrab = nil
 	a.grabW.x = 0
 	a.tweakW.x = 0
+	a.slideOnW.x = 0
+	a.slideOnW.v = 0
 	for _, sp in { a.landDrop, a.wobble, a.yank, a.bob, a.leadHips, a.leadShoulders, a.leadHead, a.preWind } do
 		sp.x = 0
 		sp.v = 0

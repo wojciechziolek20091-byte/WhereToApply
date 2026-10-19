@@ -182,6 +182,25 @@ export const TRICK_CLIPS: PoseClip[] = [
 ];
 
 /**
+ * Side approaches spec 5: the slide-on, by its own phase (state.ts
+ * ext.slideOn). 0 the pop, 0.35 the nose fully up (front knee tucked, the
+ * back foot loaded), 0.75 climbing over the edge (low, weight to the front
+ * foot), 1 on top and absorbing it. The lean toward the feature is added by
+ * the animator (SlideOn.Lean), as it depends on which side the feature is.
+ */
+export const SLIDE_ON_CLIPS: PoseClip[] = [
+  {
+    name: 'slideOn',
+    keys: [
+      { t: 0, knee: [46, 52], joints: { Hips: { x: 8, y: 8 }, Waist: { x: 10, y: 10 }, Neck: { x: 4 } }, handle: { z: -0.06 } },
+      { t: 0.35, knee: [92, 54], joints: { Hips: { x: 4, y: 6 }, Waist: { x: 2, y: 8 }, Neck: { x: 8 } }, handle: { z: -0.08 } },
+      { t: 0.75, knee: [62, 70], joints: { Hips: { x: 14, y: 10 }, Waist: { x: 16, y: 14 }, Neck: { x: 6 } }, handle: { z: -0.1 } },
+      { t: 1, knee: [56, 56], joints: { Hips: { x: 10, y: 10 }, Waist: { x: 12, y: 16 }, Neck: { x: 6 } }, handle: { z: -0.06 } },
+    ],
+  },
+];
+
+/**
  * Section 6: grabs. The knees bring the board up first (the hand follows
  * after Grab.HandDelay). `<grab>Tweak` is blended in after Grab.TweakAfter.
  */
@@ -261,6 +280,22 @@ export const CRASH_CLIPS: PoseClip[] = [
     ],
   },
   {
+    // NoseDig (slide-on): the nose stops in the side face, the rider is thrown over it and across.
+    name: 'crashNoseDig',
+    keys: [
+      { t: 0, knee: 70, joints: { Waist: { x: 20 }, ...flail([-40, 0, 20], [-30, 0, 20]) }, aim: 0.4 },
+      { t: 1, knee: 30, joints: { Hips: { x: 36, y: 20 }, Waist: { x: 70, y: 18 }, Neck: { x: -24 }, ...flail([-130, 0, 30], [-110, 0, 40]) }, aim: 0 },
+    ],
+  },
+  {
+    // HangUp (slide-on): the board stuck on the edge, it tips back off; the rider sits down sideways.
+    name: 'crashHangUp',
+    keys: [
+      { t: 0, knee: 62, joints: { Hips: { z: -6 }, Waist: { x: 10 }, ...flail([-30, 0, 30], [-20, 0, 30]) }, aim: 0.5 },
+      { t: 1, knee: 100, pelvis: { z: -0.14, y: -0.08 }, joints: { Hips: { x: -18, z: -24 }, Waist: { x: -20, z: 18 }, Neck: { x: 12 }, ...flail([40, 0, 90], [30, 0, 70]) }, aim: 0 },
+    ],
+  },
+  {
     // RopeYank: arms jerk forward, face first.
     name: 'crashYank',
     keys: [
@@ -296,8 +331,8 @@ export const CRASH_LEAD_IN: Record<string, string> = {
   kinkThrow: 'crashForward',
   ranOutMidRotation: 'crashSide',
   wallSlideDown: 'crashSlipOff',
-  noseDig: 'crashForward',
-  hangUp: 'crashSlipOff',
+  noseDig: 'crashNoseDig',
+  hangUp: 'crashHangUp',
 };
 
-export const ALL_CLIPS: PoseClip[] = [...BASE_POSES, ...ADDITIVE_POSES, ...TRICK_CLIPS, ...GRAB_POSES, ...CRASH_CLIPS];
+export const ALL_CLIPS: PoseClip[] = [...BASE_POSES, ...ADDITIVE_POSES, ...TRICK_CLIPS, ...SLIDE_ON_CLIPS, ...GRAB_POSES, ...CRASH_CLIPS];

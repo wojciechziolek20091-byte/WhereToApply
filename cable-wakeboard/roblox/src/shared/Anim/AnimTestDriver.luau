@@ -59,6 +59,7 @@ function Driver.baseAnimState(origin)
 			justTookOff = false,
 			ropeSnap = false,
 			spinOut = 0,
+			slideOn = nil,
 		},
 	}
 end
@@ -222,6 +223,41 @@ local function slide(name)
 	}
 end
 
+-- A slide-on (side approaches spec 5): the nose lifts, climbs over the edge, settles on top.
+local function slideOn(side)
+	local T = 1.2
+	return {
+		duration = T,
+		at = function(u, _p, o)
+			local s = base(o)
+			local pitch = 0
+			if u < 0.6 then
+				local inAir = u < 0.45
+				local lift = smooth(u / 0.2)
+				local climb = if inAir then 0 else (u - 0.45) / 0.15
+				s.state = "Airborne"
+				s.trick.id = "Ollie"
+				s.trick.phase = u / 0.6
+				s.ext.airTime = u * T
+				s.ext.airDuration = 0.6 * T
+				s.boardCFrame.pos.y += if inAir then 0.7 * math.sin((math.pi * u) / 0.9) else 0.62 + 0.18 * climb
+				s.ext.slideOn = if inAir
+					then { phase = "Lift", progress = lift * 0.6, side = side }
+					else { phase = "Contact", progress = climb, side = side }
+				pitch = 18 * lift * (1 - climb)
+			else
+				s.state = "OnFeature"
+				s.boardCFrame.pos.y += 0.8
+				s.feature = { slide = "FiftyFifty", balance = 0.2 * side, entry = "slideOn" }
+				s.ext.slideOn = { phase = "Settle", progress = (u - 0.6) * T, side = side }
+			end
+			s.boardCFrame.rot = compose(0, { x = 0, y = 0, z = 1 }, pitch * DEG, 0)
+			s.tension = 350
+			return s
+		end,
+	}
+end
+
 local function crash(reason)
 	return {
 		duration = 2.2,
@@ -316,6 +352,10 @@ add("CrashGrabHeld", crash("grabHeldOnLanding"))
 add("CrashCaughtEdgeBlind", crash("caughtEdgeBlind"))
 add("CrashFellOffFeature", crash("fellOffFeature"))
 add("CrashRopeYank", crash("ropeYank"))
+add("SlideOnToeside", slideOn(1))
+add("SlideOnHeelside", slideOn(-1))
+add("CrashNoseDig", crash("noseDig"))
+add("CrashHangUp", crash("hangUp"))
 
 -- Play a scenario from its start up to phase u at fps; returns the last frame.
 function Driver.playTo(a, sc, u, origin, fps)

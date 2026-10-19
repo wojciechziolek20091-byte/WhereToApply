@@ -124,6 +124,7 @@ export function predictSlideOn(s: SimState, air: AirState, popSpeed: number): vo
   const l = toLocal(f, r.pos);
   air.slideOn = {
     featureId: f.def.id,
+    featureHeading: f.heading,
     toward: l.v < f.shape.vMin ? 1 : -1,
     target: cfg.slideOn.AutoNoseLift,
     pitch: 0,
@@ -210,6 +211,9 @@ export function leadCrossing(s: SimState, air: AirState): 'cleared' | 'contact' 
       so.phase = 'cleared';
       return 'cleared';
     }
+    // Still rising: wait, unless the board's middle has reached the rail low (its base hits it).
+    const centre = pieceCentre(p, leadU);
+    if (r.vel.y > 0 && so.toward * (l.v - centre) < 0) return null;
     return 'hangUp';
   }
   if (lead < top + noseClearance(type, cfg) && type !== 'Bank') return 'noseDig';

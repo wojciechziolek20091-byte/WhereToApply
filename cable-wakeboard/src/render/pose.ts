@@ -45,6 +45,15 @@ export function riderPose(r: RiderState): RiderPose {
     } else if (air.rot.flipAngle !== 0) {
       // + front flip, - tantrum (back flip): the head goes toward the toes or the heels.
       invert = { axis: [1, 0, 0], angle: toes * air.rot.flipAngle };
+    } else if (air.slideOn && air.slideOn.pitch > 0) {
+      // Slide-on: the leading end lifts. The nose (the end along the travel) about the
+      // board's z; the edge facing the feature about its long axis.
+      const so = air.slideOn;
+      if (so.lead === 'nose') invert = { axis: [0, 0, 1], angle: (Math.cos(air.rot.spinAngle) >= 0 ? 1 : -1) * so.pitch };
+      else {
+        const side = -Math.sin(yaw) * -Math.sin(so.featureHeading) + Math.cos(yaw) * Math.cos(so.featureHeading);
+        invert = { axis: [1, 0, 0], angle: -(side * so.toward >= 0 ? 1 : -1) * so.pitch };
+      }
     }
   }
   // Rotating +a about x lifts the -z side. The heel is on -toes, so a heelside
