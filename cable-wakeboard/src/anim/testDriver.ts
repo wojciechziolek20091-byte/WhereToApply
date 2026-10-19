@@ -268,6 +268,81 @@ function crash(reason: string): Scenario {
   };
 }
 
+/**
+ * A side approach (v2 spec 4) as one move: the edge cut toward the feature,
+ * the pop, then the outcome: over it into the water ('over'), on and off the
+ * far side ('slideOff'), or a sketchy save on top ('save').
+ */
+function sideApproach(kind: 'over' | 'slideOff' | 'save', side: number): Scenario {
+  const T = 2;
+  return {
+    duration: T,
+    at(u, _p, o) {
+      const s = baseAnimState(o);
+      s.tension = 900;
+      if (u < 0.3) {
+        // Edging into it, the load building.
+        const k = smooth(u / 0.25);
+        s.edge = -side * k;
+        s.ext.edgeDegrees = -side * 25 * k;
+        s.boardCFrame.rot = composeBoardRotation(0, null, 0, side * 25 * k * DEG);
+        s.velocity = { x: SPEED, y: 0, z: side * 3 };
+        s.ext.slideOn = { phase: 'Edge', progress: k, side };
+        return s;
+      }
+      if (kind === 'over' && u < 0.85) {
+        const v = (u - 0.3) / 0.55;
+        s.state = 'Airborne';
+        s.trick.id = 'Ollie';
+        s.trick.phase = v;
+        s.boardCFrame.pos.y += 4 * 1.1 * v * (1 - v);
+        s.velocity = { x: SPEED, y: 3 * (1 - 2 * v), z: side * 2 };
+        s.ext.airTime = v * 0.55 * T;
+        s.ext.airDuration = 0.55 * T;
+        s.ext.slideOn = { phase: 'AirOn', progress: s.ext.airTime, side };
+        // The edge rolls flat in the air.
+        s.boardCFrame.rot = composeBoardRotation(0, null, 0, side * 25 * (1 - smooth(v / 0.4)) * DEG);
+        s.tension = 900 - 600 * smooth(v / 0.3);
+        return s;
+      }
+      if (kind === 'over') return s;
+      if (u < 0.45) {
+        const v = (u - 0.3) / 0.15;
+        s.state = 'Airborne';
+        s.trick.id = 'Ollie';
+        s.trick.phase = v;
+        s.boardCFrame.pos.y += 0.6 * v;
+        s.ext.airTime = v * 0.15 * T;
+        s.ext.airDuration = 0.15 * T;
+        s.ext.slideOn = v < 0.6 ? { phase: 'Lift', progress: v / 0.6, side } : { phase: 'Contact', progress: (v - 0.6) / 0.4, side };
+        s.boardCFrame.rot = composeBoardRotation(0, { x: 0, y: 0, z: 1 }, 18 * Math.min(1, v / 0.6) * DEG, side * 25 * (1 - smooth(v)) * DEG);
+        return s;
+      }
+      if (kind === 'save' || u < 0.6) {
+        s.state = 'OnFeature';
+        s.boardCFrame.pos.y += 0.6;
+        s.feature = { slide: 'FiftyFifty', balance: (kind === 'save' ? 0.8 : 0.3) * side, entry: 'slideOn' };
+        s.ext.slideOn = { phase: kind === 'save' ? 'Save' : 'Settle', progress: (u - 0.45) * T, side };
+        return s;
+      }
+      if (u < 0.85) {
+        // Off the far side and down into the water.
+        const v = (u - 0.6) / 0.25;
+        s.state = 'Airborne';
+        s.trick.id = 'Ollie';
+        s.trick.phase = v;
+        s.boardCFrame.pos.y += 0.6 * (1 - v * v);
+        s.velocity = { x: SPEED, y: -3 * v, z: side * 1.5 };
+        s.ext.airTime = v * 0.25 * T;
+        s.ext.airDuration = 0.25 * T;
+        s.ext.slideOn = { phase: 'SlideOff', progress: s.ext.airTime, side };
+        return s;
+      }
+      return s;
+    },
+  };
+}
+
 export const SCENARIOS: Record<string, Scenario> = {
   Cruise: riding(0, 420),
   Heelside: riding(1, 950),
@@ -345,6 +420,10 @@ export const SCENARIOS: Record<string, Scenario> = {
   CrashRopeYank: crash('ropeYank'),
   SlideOnToeside: slideOn(1),
   SlideOnHeelside: slideOn(-1),
+  SideOverHeelside: sideApproach('over', -1),
+  SideOverToeside: sideApproach('over', 1),
+  SideSlideOff: sideApproach('slideOff', -1),
+  SideSave: sideApproach('save', 1),
   CrashNoseDig: crash('noseDig'),
   CrashHangUp: crash('hangUp'),
 };

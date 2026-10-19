@@ -139,6 +139,8 @@ export function classifyAir(air: AirState, landing: LandingResult, cfg: SimConfi
   if (air.over) {
     name = `${name} Over`;
     tokens.push(token('Bonus', 'Over', POINTS.overBonus, domain));
+    // A brief touch on the top on the way over (v2 spec 3 D).
+    if (air.tap) tokens.push(token('Bonus', 'Tap', POINTS.tapBonus, domain));
   }
 
   const points = tokens.reduce((a, t) => a + t.points, 0);

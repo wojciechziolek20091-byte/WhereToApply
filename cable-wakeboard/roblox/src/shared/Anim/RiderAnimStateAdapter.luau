@@ -233,16 +233,51 @@ function Adapter.fromSim(sim, events, prev)
 		local d = -math.sin(r.heading) * -math.sin(heading) + math.cos(r.heading) * math.cos(heading)
 		return (if d * toward >= 0 then 1 else -1) * p.toes
 	end
+	local function sideEntry(e)
+		return e == "slideOn" or e == "edgeSlideOn" or e == "sideOllieOn"
+	end
+	local function towardOf(f)
+		return if Sim.Features.toLocal(f, r.pos).v < f.shape.vMin then 1 else -1
+	end
 	if so and (so.phase == "air" or so.phase == "contact") and Sim.Fsm.inAir(r.mode) then
 		slideOn = {
 			phase = if so.phase == "air" then "Lift" else "Contact",
 			progress = if so.phase == "air" then math.min(1, so.pitch / cfg.slideOn.MaxNoseLift) else so.p,
 			side = towardSide(so.featureHeading, so.toward),
 		}
-	elseif jib and r.mode == "onFeature" and (jib.entry == "slideOn" or jib.entry == "edgeSlideOn") and #jib.chain == 0 then
+	elseif air and Sim.Fsm.inAir(r.mode) and air.exit and air.exit.kind == "slideOff" then
+		-- Off the far side: still going the way it carried across.
+		local f = findFeature(sim, air.featureId)
+		if f then
+			local across = -r.vel.x * math.sin(f.heading) + r.vel.z * math.cos(f.heading)
+			slideOn = { phase = "SlideOff", progress = air.time, side = towardSide(f.heading, if across >= 0 then 1 else -1) }
+		end
+	elseif air and Sim.Fsm.inAir(r.mode) and air.noFlip and not air.exit then
+		-- Popped beside a feature with no climb: an air-on (B) or a jump over (D).
+		local id = if air.crossing then air.crossing.featureId elseif r.approach then r.approach.featureId else nil
+		local f = if id ~= nil then findFeature(sim, id) else nil
+		if f then
+			slideOn = { phase = "AirOn", progress = air.time, side = towardSide(f.heading, if air.crossing then -air.crossing.side else towardOf(f)) }
+		end
+	elseif
+		jib
+		and r.mode == "onFeature"
+		and sideEntry(jib.entry)
+		and (jib.sketchy or jib.entry ~= "sideOllieOn")
+		and #jib.chain == 0
+	then
+		-- On from the side: settling, or a save (sketchy: the big wobble).
 		local f = findFeature(sim, jib.featureId)
 		if f then
-			slideOn = { phase = "Settle", progress = jib.time, side = towardSide(f.heading, jib.slideOnToward) }
+			local toward = if jib.slideOnToward ~= 0 then jib.slideOnToward else 1
+			slideOn = { phase = if jib.sketchy then "Save" else "Settle", progress = jib.time, side = towardSide(f.heading, toward) }
+		end
+	elseif r.mode == "riding" and r.approach and r.approach.side ~= "front" then
+		-- Carving toward a feature: the edge cut that loads the pop (v2 spec 1).
+		local load = Sim.FeatureRideSlideOn.edgeLoadAt(sim)
+		local f = if load > 0 then findFeature(sim, r.approach.featureId) else nil
+		if f then
+			slideOn = { phase = "Edge", progress = load, side = towardSide(f.heading, towardOf(f)) }
 		end
 	end
 

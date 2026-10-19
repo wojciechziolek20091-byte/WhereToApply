@@ -198,6 +198,40 @@ export const SLIDE_ON_CLIPS: PoseClip[] = [
       { t: 1, knee: [56, 56], joints: { Hips: { x: 10, y: 10 }, Waist: { x: 12, y: 16 }, Neck: { x: 6 } }, handle: { z: -0.06 } },
     ],
   },
+  /**
+   * v2 spec 4, the edge cut: hips dropped over the edge, knees 40-50
+   * degrees, loaded like a spring; the handle low at the lead hip, pulled
+   * in. The shoulders' turn toward or away from the feature is added by the
+   * animator (SlideOn.EdgeTwist). Weighted by the edge load.
+   */
+  { name: 'edgeCut', keys: [{ t: 0, knee: [48, 52], joints: { Hips: { x: 12 }, Waist: { x: 8 }, Neck: { x: -6 } }, handle: { y: -0.08, z: -0.06 } }] },
+  /**
+   * v2 spec 4, air from the side (an air-on or a jump over), over the
+   * flight: 0 the pop (legs through the edge, front knee driving up), 0.45
+   * tucked, 1 the legs reaching for the landing. The tuck is scaled by the
+   * air time (SlideOn.AirTuck).
+   */
+  {
+    name: 'sideAir',
+    keys: [
+      { t: 0, knee: [70, 30], joints: { Hips: { x: 6 }, Waist: { x: 4 }, Neck: { x: 6 } }, handle: { z: -0.06 } },
+      { t: 0.45, knee: [118, 110], joints: { Hips: { x: 18 }, Waist: { x: 22 }, Neck: { x: 12 } }, handle: { z: -0.1 } },
+      { t: 1, knee: [40, 44], joints: { Hips: { x: 8 }, Waist: { x: 10 }, Neck: { x: 14 } }, handle: { z: -0.06 } },
+    ],
+  },
+  /**
+   * v2 spec 4, sliding off the far side: 0 leaning back toward the feature
+   * (fighting it, the handle pulled in), 0.6 letting it go, 1 absorbing the
+   * drop into the water.
+   */
+  {
+    name: 'slideOff',
+    keys: [
+      { t: 0, knee: [58, 62], joints: { Hips: { x: -6, z: -10 }, Waist: { x: -10, z: -14 }, Neck: { x: 10 } }, handle: { z: -0.12 } },
+      { t: 0.6, knee: [50, 50], joints: { Hips: { x: 2 }, Waist: { x: 4 }, Neck: { x: 16 } }, handle: { z: -0.1 } },
+      { t: 1, knee: [78, 80], joints: { Hips: { x: 14 }, Waist: { x: 16 }, Neck: { x: 10 } }, handle: { z: -0.06 } },
+    ],
+  },
 ];
 
 /**

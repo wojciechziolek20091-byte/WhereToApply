@@ -290,6 +290,83 @@ end
 
 -- Name -> scenario, and the names in order (the scrubber's list).
 Driver.ORDER = {}
+-- A side approach (v2 spec 4) as one move: the edge cut toward the feature,
+-- the pop, then the outcome: over it into the water ("over"), on and off the
+-- far side ("slideOff"), or a sketchy save on top ("save").
+local function sideApproach(kind, side)
+	local T = 2
+	return {
+		duration = T,
+		at = function(u, _p, o)
+			local s = base(o)
+			s.tension = 900
+			if u < 0.3 then
+				-- Edging into it, the load building.
+				local k = smooth(u / 0.25)
+				s.edge = -side * k
+				s.ext.edgeDegrees = -side * 25 * k
+				s.boardCFrame.rot = compose(0, nil, 0, side * 25 * k * DEG)
+				s.velocity = { x = SPEED, y = 0, z = side * 3 }
+				s.ext.slideOn = { phase = "Edge", progress = k, side = side }
+				return s
+			end
+			if kind == "over" and u < 0.85 then
+				local v = (u - 0.3) / 0.55
+				s.state = "Airborne"
+				s.trick.id = "Ollie"
+				s.trick.phase = v
+				s.boardCFrame.pos.y += 4 * 1.1 * v * (1 - v)
+				s.velocity = { x = SPEED, y = 3 * (1 - 2 * v), z = side * 2 }
+				s.ext.airTime = v * 0.55 * T
+				s.ext.airDuration = 0.55 * T
+				s.ext.slideOn = { phase = "AirOn", progress = s.ext.airTime, side = side }
+				-- The edge rolls flat in the air.
+				s.boardCFrame.rot = compose(0, nil, 0, side * 25 * (1 - smooth(v / 0.4)) * DEG)
+				s.tension = 900 - 600 * smooth(v / 0.3)
+				return s
+			end
+			if kind == "over" then
+				return s
+			end
+			if u < 0.45 then
+				local v = (u - 0.3) / 0.15
+				s.state = "Airborne"
+				s.trick.id = "Ollie"
+				s.trick.phase = v
+				s.boardCFrame.pos.y += 0.6 * v
+				s.ext.airTime = v * 0.15 * T
+				s.ext.airDuration = 0.15 * T
+				s.ext.slideOn = if v < 0.6
+					then { phase = "Lift", progress = v / 0.6, side = side }
+					else { phase = "Contact", progress = (v - 0.6) / 0.4, side = side }
+				s.boardCFrame.rot = compose(0, { x = 0, y = 0, z = 1 }, 18 * math.min(1, v / 0.6) * DEG, side * 25 * (1 - smooth(v)) * DEG)
+				return s
+			end
+			if kind == "save" or u < 0.6 then
+				s.state = "OnFeature"
+				s.boardCFrame.pos.y += 0.6
+				s.feature = { slide = "FiftyFifty", balance = (if kind == "save" then 0.8 else 0.3) * side, entry = "slideOn" }
+				s.ext.slideOn = { phase = if kind == "save" then "Save" else "Settle", progress = (u - 0.45) * T, side = side }
+				return s
+			end
+			if u < 0.85 then
+				-- Off the far side and down into the water.
+				local v = (u - 0.6) / 0.25
+				s.state = "Airborne"
+				s.trick.id = "Ollie"
+				s.trick.phase = v
+				s.boardCFrame.pos.y += 0.6 * (1 - v * v)
+				s.velocity = { x = SPEED, y = -3 * v, z = side * 1.5 }
+				s.ext.airTime = v * 0.25 * T
+				s.ext.airDuration = 0.25 * T
+				s.ext.slideOn = { phase = "SlideOff", progress = s.ext.airTime, side = side }
+				return s
+			end
+			return s
+		end,
+	}
+end
+
 Driver.SCENARIOS = {}
 local function add(name, sc)
 	table.insert(Driver.ORDER, name)
@@ -354,6 +431,10 @@ add("CrashFellOffFeature", crash("fellOffFeature"))
 add("CrashRopeYank", crash("ropeYank"))
 add("SlideOnToeside", slideOn(1))
 add("SlideOnHeelside", slideOn(-1))
+add("SideOverHeelside", sideApproach("over", -1))
+add("SideOverToeside", sideApproach("over", 1))
+add("SideSlideOff", sideApproach("slideOff", -1))
+add("SideSave", sideApproach("save", 1))
 add("CrashNoseDig", crash("noseDig"))
 add("CrashHangUp", crash("hangUp"))
 

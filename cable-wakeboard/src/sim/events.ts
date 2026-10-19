@@ -10,6 +10,8 @@ export type SimEvent =
   | { type: 'ropeSnap'; tick: number; stretchRate: number }
   | { type: 'featureEnter'; tick: number; featureId: string }
   | { type: 'featureExit'; tick: number; featureId: string }
+  /** Over a feature from its side, the board brushed its top on the way (v2 spec 3 D). */
+  | { type: 'featureTap'; tick: number; featureId: string }
   /** Left the main of a box or rail (not by crashing): the whole slide. */
   | { type: 'slideDone'; tick: number; jib: JibState }
   /** A feature line is done: every slide, how it was left and the air off it (null when it rode straight into the water). */

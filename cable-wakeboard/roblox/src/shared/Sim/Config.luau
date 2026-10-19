@@ -253,6 +253,7 @@ Config.DEFAULT_CONFIG = {
 		EdgeLeadAngle = 1.0471975511965976,
 		CoyotePenalty = 0.05,
 		AirOnBonus = 60,
+		TapHeight = 0.12,
 		SubSteps = 4,
 		CalcSpeed = 8.3,
 		CalcAngle = 0.3490658503988659,

@@ -115,6 +115,8 @@ export interface SlideOnConfig {
   CoyotePenalty: number;
   /** Air-on (a side ollie-on that clears the board): points per second of air. */
   AirOnBonus: number;
+  /** Jump-over (v2 spec 3 D): the board passing this close above the top (m) brushes it, a Tap. */
+  TapHeight: number;
   /** Contact phase sub-steps per sim tick (1/240 s at 4). */
   SubSteps: number;
   /** The calculator's reference approach (spec 4.3: at 8.3 m/s). */
@@ -174,6 +176,7 @@ export const DEFAULT_SLIDE_ON: SlideOnConfig = {
   EdgeLeadAngle: deg(60),
   CoyotePenalty: 0.05,
   AirOnBonus: 60,
+  TapHeight: 0.12,
   SubSteps: 4,
   CalcSpeed: 8.3,
   CalcAngle: deg(20),

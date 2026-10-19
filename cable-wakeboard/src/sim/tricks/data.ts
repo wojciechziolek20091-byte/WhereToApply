@@ -55,6 +55,7 @@ export const POINTS = {
   ollie: 50,
   /** Side approach v2: clean over a feature from its side ("Ollie Over"). */
   overBonus: 40,
+  tapBonus: 15,
   spinPer180: 150,
   /** Backside spins need a handle pass, so they score more. */
   backsideSpinFactor: 1.2,

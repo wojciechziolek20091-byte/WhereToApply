@@ -628,7 +628,10 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   const was = air.overFeature;
   // Left a part it came over from the side, without landing: over the feature (v2 spec 3 D, not a crash).
   const c = air.crossing;
-  if (was !== null && c && c.part === was && c.side !== 0 && (!hit || `${hit.feature.def.id}:${hit.surface.piece.part}` !== was)) air.over = c.featureId;
+  if (was !== null && c && c.part === was && c.side !== 0 && (!hit || `${hit.feature.def.id}:${hit.surface.piece.part}` !== was)) {
+    if (air.tap && air.over === null) s.events.push({ type: 'featureTap', tick: s.tick, featureId: c.featureId });
+    air.over = c.featureId;
+  }
   if (!hit) {
     air.overFeature = null;
     return false;
@@ -653,6 +656,9 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
     }
     air.overFeature = part;
   }
+  // Brushing the top it came over from the side (a Tap, if it goes on over).
+  const cr = air.crossing;
+  if (cr && cr.part === part && cr.side !== 0 && r.pos.y >= surface.height && r.pos.y - surface.height < s.cfg.slideOn.TapHeight) air.tap = true;
   if (r.pos.y > surface.height || r.vel.y >= 0) return false;
   // Back under the top it slid off (the rope pulls it back): falling past its side, not landing on it.
   if (air.exit && air.exit.kind === 'slideOff' && air.featureId === feature.def.id && r.pos.y < surface.height - 0.1) return false;

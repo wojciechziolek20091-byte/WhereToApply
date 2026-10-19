@@ -678,6 +678,9 @@ function OnFeature.airOverFeature(s, air)
 		and c.side ~= 0
 		and (not hit or hit.feature.def.id .. ":" .. tostring(hit.surface.piece.part) ~= was)
 	then
+		if air.tap and air.over == nil then
+			table.insert(s.events, { type = "featureTap", tick = s.tick, featureId = c.featureId })
+		end
 		air.over = c.featureId
 	end
 	if not hit then
@@ -707,6 +710,17 @@ function OnFeature.airOverFeature(s, air)
 			end
 		end
 		air.overFeature = part
+	end
+	-- Brushing the top it came over from the side (a Tap, if it goes on over).
+	local cr = air.crossing
+	if
+		cr
+		and cr.part == part
+		and cr.side ~= 0
+		and r.pos.y >= surface.height
+		and r.pos.y - surface.height < s.cfg.slideOn.TapHeight
+	then
+		air.tap = true
 	end
 	if r.pos.y > surface.height or r.vel.y >= 0 then
 		return false

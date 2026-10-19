@@ -51,7 +51,8 @@ export const PACKET_LENGTH = 53;
 export const SEND_RATE = 18;
 
 const idx = <T>(list: T[], v: T): number => Math.max(0, list.indexOf(v));
-const SLIDE_ON_PHASES = ['Lift', 'Contact', 'Settle'] as const;
+// Appended, never reordered: the packet carries the index (v2 spec 4 added Edge to Save).
+const SLIDE_ON_PHASES = ['Lift', 'Contact', 'Settle', 'Edge', 'AirOn', 'SlideOff', 'Save'] as const;
 
 /** Encode a state (time in seconds). `flags` are the one-shots seen since the last send. */
 export function packAnimState(s: RiderAnimState, time: number, flags: number): number[] {

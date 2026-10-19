@@ -15,8 +15,9 @@ local HANDLES = { "InFront", "Behind", "Passing", "Dropped" }
 local SLIDES = { "", "FiftyFifty", "Backboard", "Frontboard", "SwitchFiftyFifty", "WallRide" }
 local SIDES = { "", "Frontside", "Backside" }
 local QUALITIES = { "", "Clean", "Sketchy" }
-local SLIDE_ON_PHASES = { "Lift", "Contact", "Settle" }
-local SLIDE_ON_INDEX = { Lift = 1, Contact = 2, Settle = 3 }
+-- Appended, never reordered: the packet carries the index (v2 spec 4 added Edge to Save).
+local SLIDE_ON_PHASES = { "Lift", "Contact", "Settle", "Edge", "AirOn", "SlideOff", "Save" }
+local SLIDE_ON_INDEX = { Lift = 1, Contact = 2, Settle = 3, Edge = 4, AirOn = 5, SlideOff = 6, Save = 7 }
 local ROLLS = { "", "back", "front" }
 local CRASHES = {
 	"",

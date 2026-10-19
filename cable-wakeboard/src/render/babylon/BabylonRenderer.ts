@@ -42,7 +42,7 @@ import { DEFAULT_CONFIG } from '../../sim/config';
 import { towerParts } from '../../art/tower';
 import { FEATURE_CONFIG } from '../../park/featureConfig';
 import { kickerHeightAt, toLocal, toWorld } from '../../sim/features';
-import { topPieceAt } from '../../sim/featureRide/slideOn';
+import { edgeLoadAt, topPieceAt } from '../../sim/featureRide/slideOn';
 import { createRng, nextFloat, nextRange } from '../../sim/math/rng';
 import { clamp01 } from '../../sim/math/scalar';
 import { horizontalLength, lerpVec, type Vec3 } from '../../sim/math/vec';
@@ -290,6 +290,10 @@ export class BabylonRenderer {
   private shake = 0;
   /** Slide-on effects: the phase last frame, scuff marks on edges (fading), the camera's shift away from the feature. */
   private slideOnPhase: string | null = null;
+  /** Side approach v2 effects: the last tick's mode, and whether the air in progress went over (or slid off) a feature / tapped it. */
+  private fxMode: string | null = null;
+  private fxOutcome = false;
+  private fxOver = false;
   private readonly scuffs: { mesh: Mesh; age: number }[] = [];
   private scuffMat: StandardMaterial | null = null;
   private camShift = new Vector3();
@@ -1034,6 +1038,28 @@ export class BabylonRenderer {
   private updateSlideOnFx(sim: SimState, dt: number): void {
     const SO = DEFAULT_ANIM_CONFIG.SlideOn;
     const r = sim.rider;
+    // v2 spec 4: more spray off an edge cut into a feature, a burst at the pop off it,
+    // a tap over a top, a bigger splash landing off a slide-off or a jump over.
+    if (!this.scrub) {
+      if (r.mode === 'riding' && r.approach && r.approach.side !== 'front') this.spray.emitRate *= 1 + (SO.EdgeSpray - 1) * clamp01(edgeLoadAt(sim));
+      const air = r.air;
+      if (air && r.mode === 'airborne' && this.fxMode === 'riding' && (air.noFlip || air.slideOn)) {
+        this.splashEmitter.set(r.pos.x, 0.05, r.pos.z);
+        this.splash.manualEmitCount = SO.PopSpray;
+      }
+      const over = !!air && air.over !== null;
+      if (over && !this.fxOver && air!.tap) this.playScrape(SO.TapVolume, 0.06, 3200);
+      this.fxOver = over;
+      if (air) this.fxOutcome = over || (!!air.exit && air.exit.kind === 'slideOff');
+      else if (this.fxOutcome) {
+        if (r.mode === 'landing' || r.mode === 'riding') {
+          this.splashEmitter.set(r.pos.x, 0.05, r.pos.z);
+          this.splash.manualEmitCount = Math.round(DEFAULT_ANIM_CONFIG.Vfx.SplashPerMS * 4 * SO.OutcomeSplash);
+        }
+        this.fxOutcome = false;
+      }
+    }
+    this.fxMode = r.mode;
     const so = r.air?.slideOn ?? null;
     const phase = so ? so.phase : null;
     if (so && phase === 'contact' && this.slideOnPhase === 'air' && !this.scrub) {
@@ -1085,13 +1111,13 @@ export class BabylonRenderer {
     while (this.scuffs.length > 12) this.scuffs.shift()!.mesh.dispose();
   }
 
-  /** A short filtered-noise scrape (web audio; silent until the page has had a key press). */
-  private playScrape(volume: number): void {
+  /** A short filtered-noise scrape, or with a short high band a tap (web audio; silent until the page has had a key press). */
+  private playScrape(volume: number, seconds = 0.3, freq = 1800): void {
     if (volume <= 0.01 || typeof AudioContext === 'undefined') return;
     try {
       this.audio ??= new AudioContext();
       const ctx = this.audio;
-      const len = Math.floor(ctx.sampleRate * 0.3);
+      const len = Math.floor(ctx.sampleRate * seconds);
       const buf = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = buf.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
@@ -1099,7 +1125,7 @@ export class BabylonRenderer {
       src.buffer = buf;
       const band = ctx.createBiquadFilter();
       band.type = 'bandpass';
-      band.frequency.value = 1800;
+      band.frequency.value = freq;
       band.Q.value = 0.9;
       const gain = ctx.createGain();
       gain.gain.value = volume;

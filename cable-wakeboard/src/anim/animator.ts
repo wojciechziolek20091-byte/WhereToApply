@@ -135,6 +135,8 @@ export interface Animator {
   slideOnW: Spring;
   slideOnT: number;
   slideOnSide: number;
+  /** Side approach v2 (spec 4): per clip (edge cut, air from the side, slide-off) its weight, time and depth; they cross-fade. */
+  side: Record<SideClip, { w: Spring; t: number; amt: number }>;
   tweakW: Spring;
   grab: GrabName | null;
   grabStart: number;
@@ -211,6 +213,11 @@ export function createAnimator(rig: RigDef, cfg: AnimConfig = DEFAULT_ANIM_CONFI
     slideOnW: spring(0),
     slideOnT: 0,
     slideOnSide: 0,
+    side: {
+      edgeCut: { w: spring(0), t: 0, amt: 0 },
+      sideAir: { w: spring(0), t: 0, amt: 0 },
+      slideOff: { w: spring(0), t: 0, amt: 0 },
+    },
     tweakW: spring(0),
     grab: null,
     grabStart: 0,
@@ -261,6 +268,14 @@ function blendTime(cfg: AnimConfig, key: string): number {
 }
 
 /** p[name] += v. */
+type SideClip = 'edgeCut' | 'sideAir' | 'slideOff';
+/** Side approach v2 clips and the phase each plays in, in blend order. */
+const SIDE_CLIPS: [SideClip, string][] = [
+  ['edgeCut', 'Edge'],
+  ['sideAir', 'AirOn'],
+  ['slideOff', 'SlideOff'],
+];
+
 function bump(p: ChannelPose, name: string, v: number): void {
   const i = CH[name]!;
   p[i] = p[i]! + v;
@@ -418,7 +433,7 @@ function canonicalPose(a: Animator, s: RiderAnimState, dt: number): ChannelPose 
     } else if (so.phase === 'Contact') {
       a.slideOnT = 0.35 + 0.4 * so.progress;
       soOn = true;
-    } else if (so.progress < SO.SettleTime) {
+    } else if ((so.phase === 'Settle' || so.phase === 'Save') && so.progress < SO.SettleTime) {
       a.slideOnT = 0.75 + (0.25 * so.progress) / SO.SettleTime;
       soOn = true;
     }
@@ -429,6 +444,33 @@ function canonicalPose(a: Animator, s: RiderAnimState, dt: number): ChannelPose 
     const w = clamp01(a.slideOnW.x);
     blendInto(p, sample(a, 'slideOn', a.slideOnT), w, a.clips.slideOn!.mask);
     bump(p, 'Waist.x', a.slideOnSide * SO.Lean * Math.sin(Math.PI * Math.min(1, a.slideOnT / 0.9)) * w);
+  }
+  // Side approach v2 (spec 4): the edge cut, air from the side (tucked by the air time), the slide-off.
+  const sd = a.side;
+  if (so && so.phase === 'Edge') sd.edgeCut.amt = clamp01(so.progress);
+  if (so && so.phase === 'AirOn') {
+    const dur = Math.max(s.ext.airDuration, 0.2);
+    sd.sideAir.t = clamp01(so.progress / dur);
+    sd.sideAir.amt = 0.4 + 0.6 * clamp01(dur / SO.AirTuck);
+  }
+  if (so && so.phase === 'SlideOff') {
+    sd.slideOff.t = clamp01(so.progress / SO.SlideOffTime);
+    sd.slideOff.amt = 1;
+  }
+  for (const [clip, phase] of SIDE_CLIPS) {
+    const c = sd[clip];
+    stepSpring(c.w, so && so.phase === phase ? 1 : 0, SO.Blend, dt);
+    if (c.w.x <= 0.001) continue;
+    const w = clamp01(c.w.x) * c.amt;
+    blendInto(p, sample(a, clip, c.t), w, a.clips[clip]!.mask);
+    // Heelside the shoulders open toward the feature, toeside they turn away.
+    if (clip === 'edgeCut') bump(p, 'Waist.y', -a.slideOnSide * SO.EdgeTwist * w);
+  }
+  // A save: the big wobble, fading.
+  if (so && so.phase === 'Save' && so.progress < SO.SaveTime) {
+    const wob = SO.SaveWobble * (1 - so.progress / SO.SaveTime) * Math.sin(2 * Math.PI * SO.SaveHz * so.progress);
+    bump(p, 'Waist.z', wob);
+    bump(p, 'Hips.z', -0.5 * wob);
   }
 
   // Crash lead-in.
@@ -1002,6 +1044,10 @@ function resetForRespawn(a: Animator): void {
   a.tweakW.x = 0;
   a.slideOnW.x = 0;
   a.slideOnW.v = 0;
+  for (const c of Object.values(a.side)) {
+    c.w.x = 0;
+    c.w.v = 0;
+  }
   for (const s of [a.landDrop, a.wobble, a.yank, a.bob, a.leadHips, a.leadShoulders, a.leadHead, a.preWind]) {
     s.x = 0;
     s.v = 0;

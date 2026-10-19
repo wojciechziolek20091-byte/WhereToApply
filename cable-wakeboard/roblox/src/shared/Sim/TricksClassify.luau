@@ -133,6 +133,10 @@ function TricksClassify.classifyAir(air, landing, cfg)
 	if air.over then
 		name = name .. " Over"
 		table.insert(tokens, token("Bonus", "Over", POINTS.overBonus, domain))
+		-- A brief touch on the top on the way over (v2 spec 3 D).
+		if air.tap then
+			table.insert(tokens, token("Bonus", "Tap", POINTS.tapBonus, domain))
+		end
 	end
 
 	local points = sumPoints(tokens)

@@ -694,6 +694,8 @@ end
 -- chase camera shifts away from the feature during the slide-on.
 local shake = 0
 local slideOnPhase = nil
+-- Side approach v2 effects: the last tick's mode, and whether the air in progress went over (or slid off) a feature / tapped it.
+local fxMode, fxOutcome, fxOver = nil, false, false
 local scuffs = {}
 local camShift = Vector3.zero
 local function featureOf(sim, id)
@@ -707,6 +709,30 @@ end
 local function updateSlideOnFx(sim, dt)
 	local SO = AC.SlideOn
 	local r = sim.rider
+	-- v2 spec 4: a burst at the pop off the edge, a tap over a top, a bigger splash landing off a slide-off or a jump over.
+	if not scrubOn then
+		local air = r.air
+		if air and r.mode == "airborne" and fxMode == "riding" and (air.noFlip or air.slideOn) then
+			splashPart.CFrame = CFrame.new(Vector3.new(r.pos.x, 0.05, r.pos.z) * S)
+			splash:Emit(math.floor(SO.PopSpray / 4))
+		end
+		local over = air ~= nil and air.over ~= nil
+		if over and not fxOver and air.tap then
+			play("Tap", SO.TapVolume)
+		end
+		fxOver = over
+		if air then
+			fxOutcome = over or (air.exit ~= nil and air.exit.kind == "slideOff")
+		elseif fxOutcome then
+			if r.mode == "landing" or r.mode == "riding" then
+				splashPart.CFrame = CFrame.new(Vector3.new(r.pos.x, 0.05, r.pos.z) * S)
+				splash:Emit(math.floor(AC.Vfx.SplashPerMS * 4 * SO.OutcomeSplash / 4))
+				play("Splash", 0.5)
+			end
+			fxOutcome = false
+		end
+	end
+	fxMode = r.mode
 	local so = if r.air then r.air.slideOn else nil
 	local phase = if so then so.phase else nil
 	if so and phase == "contact" and slideOnPhase == "air" and not scrubOn then
@@ -954,6 +980,10 @@ RunService.RenderStepped:Connect(function(rawDt)
 	local edgeN = if animState then animState.edge else 0
 	local intensity = if onWater and not scrubOn then math.clamp((speed - 3) / 10, 0, 1) * (0.35 + 0.65 * math.clamp(r.edgeLoad / 1400, 0, 1)) else 0
 	local rooster = edgeN > AC.Vfx.RoosterEdge
+	-- v2 spec 4: more spray off an edge cut into a feature.
+	if r.mode == "riding" and r.approach and r.approach.side ~= "front" and not scrubOn then
+		intensity *= 1 + (AC.SlideOn.EdgeSpray - 1) * math.clamp(Sim.FeatureRideSlideOn.edgeLoadAt(sim), 0, 1)
+	end
 	WaterSpray.setIntensity(spray, intensity * (if rooster then 1.6 else 1))
 	wake.Enabled = onWater
 	loop("Carve", onWater and speed > 2, math.clamp(speed / 12, 0, 1) * (0.3 + 0.7 * math.abs(edgeN)))

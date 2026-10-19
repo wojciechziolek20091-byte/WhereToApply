@@ -193,6 +193,8 @@ export interface AirState {
   noFlip: boolean;
   /** Flew over a feature from its side without landing on it (v2 spec 3 D): its id ("Ollie Over"). */
   over: string | null;
+  /** The board passed within SlideOn.TapHeight of the top it flew over (a Tap). */
+  tap: boolean;
   /** A side entry's nose-lift slide-on in progress (slideOn.ts), else null. */
   slideOn: SlideOnAir | null;
 }

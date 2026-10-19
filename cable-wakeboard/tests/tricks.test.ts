@@ -56,6 +56,20 @@ describe('trick names (spec 11.2)', () => {
     expect(name(air({ trick: 'backroll', spin: 180 }))).toBe('Backroll 180');
   });
 
+  it('over a feature from its side (side approach v2 spec 3 D): "<air> Over", a Tap adds a little', () => {
+    const over = air({});
+    over.over = 'f';
+    const plain = classifyAir(over, landing(over), cfg)!;
+    expect(plain.name).toBe('Ollie Over');
+    expect(plain.tokens.some((t) => t.name === 'Over' && t.points === POINTS.overBonus)).toBe(true);
+    const spun = air({ spin: 360, side: 'frontside' });
+    spun.over = 'f';
+    expect(name(spun)).toBe('Frontside 360 Over');
+    over.tap = true;
+    const tapped = classifyAir(over, landing(over), cfg)!;
+    expect(tapped.points - plain.points).toBe(POINTS.tapBonus);
+  });
+
   it('plain hops and short grabs', () => {
     expect(name(air({}))).toBe('Ollie');
     expect(name(air({ grab: { id: 'tail', time: 0.1 } }))).toBe('Ollie'); // under one 0.25 s interval

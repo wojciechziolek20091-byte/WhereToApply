@@ -4,6 +4,8 @@ import type { LandingResult } from '../sim/landing';
 import { GRAVITY } from '../sim/config';
 import type { SimEvent } from '../sim/events';
 import { slideIdAt } from '../sim/onFeature';
+import { edgeLoadAt } from '../sim/featureRide/slideOn';
+import { toLocal } from '../sim/features';
 import { wallHeightAt } from '../sim/featureShapes';
 import type { RiderState } from '../sim/rider';
 import type { SimState } from '../sim/world';
@@ -99,14 +101,22 @@ export interface RiderAnimState {
     /** Blind riding: seconds and the spin-out direction in progress (0 when none). */
     spinOut: number;
     /**
-     * A slide-on (side approaches spec 5): the nose lifting in the air (Lift:
-     * `progress` the lift over its most), climbing over the edge (Contact:
-     * the share of the board on top), or just on (Settle: seconds on the
-     * feature). `side` +1 when the feature is on the toes' side.
+     * A side approach (side approaches spec 5, v2 spec 4), by phase:
+     * - Edge: carving toward a feature on the water (`progress` the edge load, 0..1.5);
+     * - Lift: the nose lifting in the air (the lift over its most);
+     * - Contact: climbing over the edge (the share of the board on top);
+     * - Settle: just on (seconds on the feature);
+     * - AirOn: popped beside a feature and in the air with no slide-on climb:
+     *   an air-on or a jump over (seconds in the air);
+     * - SlideOff: slid off the far side (seconds since);
+     * - Save: a sketchy entry from the side (seconds on the feature).
+     * `side` +1 when the feature is on the toes' side.
      */
-    slideOn: { phase: 'Lift' | 'Contact' | 'Settle'; progress: number; side: number } | null;
+    slideOn: { phase: SideApproachPhase; progress: number; side: number } | null;
   };
 }
+
+export type SideApproachPhase = 'Lift' | 'Contact' | 'Settle' | 'Edge' | 'AirOn' | 'SlideOff' | 'Save';
 
 const MODE: Record<RiderState['mode'], AnimRiderMode> = {
   riding: 'Riding',
@@ -283,15 +293,34 @@ export function animStateFromSim(sim: SimState, events: SimEvent[], prev: RiderA
     const d = -Math.sin(r.heading) * -Math.sin(heading) + Math.cos(r.heading) * Math.cos(heading);
     return (d * toward >= 0 ? 1 : -1) * p.toes;
   };
+  const sideEntry = (e: string): boolean => e === 'slideOn' || e === 'edgeSlideOn' || e === 'sideOllieOn';
   if (so && (so.phase === 'air' || so.phase === 'contact') && inAir(r.mode)) {
     slideOn = {
       phase: so.phase === 'air' ? 'Lift' : 'Contact',
       progress: so.phase === 'air' ? Math.min(1, so.pitch / cfg.slideOn.MaxNoseLift) : so.p,
       side: towardSide(so.featureHeading, so.toward),
     };
-  } else if (jib && r.mode === 'onFeature' && (jib.entry === 'slideOn' || jib.entry === 'edgeSlideOn') && jib.chain.length === 0) {
+  } else if (air && inAir(r.mode) && air.exit && air.exit.kind === 'slideOff') {
+    // Off the far side: still going the way it carried across.
+    const f = sim.features.find((x) => x.def.id === air.featureId);
+    if (f) {
+      const across = -r.vel.x * Math.sin(f.heading) + r.vel.z * Math.cos(f.heading);
+      slideOn = { phase: 'SlideOff', progress: air.time, side: towardSide(f.heading, across >= 0 ? 1 : -1) };
+    }
+  } else if (air && inAir(r.mode) && air.noFlip && !air.exit) {
+    // Popped beside a feature with no climb: an air-on (B) or a jump over (D).
+    const id = air.crossing ? air.crossing.featureId : r.approach ? r.approach.featureId : null;
+    const f = id !== null ? sim.features.find((x) => x.def.id === id) : undefined;
+    if (f) slideOn = { phase: 'AirOn', progress: air.time, side: towardSide(f.heading, air.crossing ? -air.crossing.side : toLocal(f, r.pos).v < f.shape.vMin ? 1 : -1) };
+  } else if (jib && r.mode === 'onFeature' && sideEntry(jib.entry) && (jib.sketchy || jib.entry !== 'sideOllieOn') && jib.chain.length === 0) {
+    // On from the side: settling, or a save (sketchy: the big wobble).
     const f = sim.features.find((x) => x.def.id === jib.featureId);
-    if (f) slideOn = { phase: 'Settle', progress: jib.time, side: towardSide(f.heading, jib.slideOnToward) };
+    if (f) slideOn = { phase: jib.sketchy ? 'Save' : 'Settle', progress: jib.time, side: towardSide(f.heading, jib.slideOnToward || 1) };
+  } else if (r.mode === 'riding' && r.approach && r.approach.side !== 'front') {
+    // Carving toward a feature: the edge cut that loads the pop (v2 spec 1).
+    const load = edgeLoadAt(sim);
+    const f = load > 0 ? sim.features.find((x) => x.def.id === r.approach!.featureId) : undefined;
+    if (f) slideOn = { phase: 'Edge', progress: load, side: towardSide(f.heading, toLocal(f, r.pos).v < f.shape.vMin ? 1 : -1) };
   }
 
   // Handle: the sim's rope attaches at the hips; the bar sits handleDist toward the carrier.

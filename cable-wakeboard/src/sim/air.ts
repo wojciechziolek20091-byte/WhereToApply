@@ -70,6 +70,7 @@ export function createAirState(
     preWind: 0,
     slideOn: null,
     over: null,
+    tap: false,
     noFlip: false,
   };
 }

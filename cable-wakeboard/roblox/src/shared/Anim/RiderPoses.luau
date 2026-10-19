@@ -172,6 +172,26 @@ RiderPoses.ALL_CLIPS = {
 			{ t = 1, knee = { 56, 56 }, joints = { Hips = { x = 10, y = 10 }, Waist = { x = 12, y = 16 }, Neck = { x = 6 } }, handle = { z = -0.06 } },
 		},
 	},
+	{
+		name = "edgeCut",
+		keys = { { t = 0, knee = { 48, 52 }, joints = { Hips = { x = 12 }, Waist = { x = 8 }, Neck = { x = -6 } }, handle = { y = -0.08, z = -0.06 } } },
+	},
+	{
+		name = "sideAir",
+		keys = {
+			{ t = 0, knee = { 70, 30 }, joints = { Hips = { x = 6 }, Waist = { x = 4 }, Neck = { x = 6 } }, handle = { z = -0.06 } },
+			{ t = 0.45, knee = { 118, 110 }, joints = { Hips = { x = 18 }, Waist = { x = 22 }, Neck = { x = 12 } }, handle = { z = -0.1 } },
+			{ t = 1, knee = { 40, 44 }, joints = { Hips = { x = 8 }, Waist = { x = 10 }, Neck = { x = 14 } }, handle = { z = -0.06 } },
+		},
+	},
+	{
+		name = "slideOff",
+		keys = {
+			{ t = 0, knee = { 58, 62 }, joints = { Hips = { x = -6, z = -10 }, Waist = { x = -10, z = -14 }, Neck = { x = 10 } }, handle = { z = -0.12 } },
+			{ t = 0.6, knee = { 50, 50 }, joints = { Hips = { x = 2 }, Waist = { x = 4 }, Neck = { x = 16 } }, handle = { z = -0.1 } },
+			{ t = 1, knee = { 78, 80 }, joints = { Hips = { x = 14 }, Waist = { x = 16 }, Neck = { x = 10 } }, handle = { z = -0.06 } },
+		},
+	},
 	{ name = "indy", keys = { { t = 0, joints = { Hips = { x = 26 }, Waist = { x = 50 }, Neck = { x = 24 } }, knee = { 134, 134 }, aim = 0.4 } } },
 	{
 		name = "indyTweak",

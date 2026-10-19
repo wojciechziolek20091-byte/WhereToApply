@@ -100,6 +100,11 @@ function Animator.create(rig, cfg)
 		slideOnW = spring(0),
 		slideOnT = 0,
 		slideOnSide = 0,
+		side = {
+			edgeCut = { w = spring(0), t = 0, amt = 0 },
+			sideAir = { w = spring(0), t = 0, amt = 0 },
+			slideOff = { w = spring(0), t = 0, amt = 0 },
+		},
 		grab = nil,
 		grabStart = 0,
 		releaseTimer = 0,
@@ -160,6 +165,9 @@ local function blendTime(cfg, key)
 	end
 	return cfg.Blend.Default
 end
+
+-- Side approach v2 clips and the phase each plays in, in blend order.
+local SIDE_CLIPS = { { "edgeCut", "Edge" }, { "sideAir", "AirOn" }, { "slideOff", "SlideOff" } }
 
 local function bump(p, name, v)
 	local i = CH[name]
@@ -356,7 +364,7 @@ local function canonicalPose(a, s, dt)
 		elseif so.phase == "Contact" then
 			a.slideOnT = 0.35 + 0.4 * so.progress
 			soOn = true
-		elseif so.progress < SO.SettleTime then
+		elseif (so.phase == "Settle" or so.phase == "Save") and so.progress < SO.SettleTime then
 			a.slideOnT = 0.75 + (0.25 * so.progress) / SO.SettleTime
 			soOn = true
 		end
@@ -367,6 +375,39 @@ local function canonicalPose(a, s, dt)
 		local w = clamp01(a.slideOnW.x)
 		Channels.blendInto(p, sample(a, "slideOn", a.slideOnT), w, a.clips.slideOn.mask)
 		bump(p, "Waist.x", a.slideOnSide * SO.Lean * math.sin(math.pi * math.min(1, a.slideOnT / 0.9)) * w)
+	end
+	-- Side approach v2 (spec 4): the edge cut, air from the side (tucked by the air time), the slide-off.
+	local sd = a.side
+	if so and so.phase == "Edge" then
+		sd.edgeCut.amt = clamp01(so.progress)
+	end
+	if so and so.phase == "AirOn" then
+		local dur = math.max(s.ext.airDuration, 0.2)
+		sd.sideAir.t = clamp01(so.progress / dur)
+		sd.sideAir.amt = 0.4 + 0.6 * clamp01(dur / SO.AirTuck)
+	end
+	if so and so.phase == "SlideOff" then
+		sd.slideOff.t = clamp01(so.progress / SO.SlideOffTime)
+		sd.slideOff.amt = 1
+	end
+	for _, entry in SIDE_CLIPS do
+		local clip, phase = entry[1], entry[2]
+		local c = sd[clip]
+		stepSpring(c.w, if so and so.phase == phase then 1 else 0, SO.Blend, dt)
+		if c.w.x > 0.001 then
+			local w = clamp01(c.w.x) * c.amt
+			Channels.blendInto(p, sample(a, clip, c.t), w, a.clips[clip].mask)
+			-- Heelside the shoulders open toward the feature, toeside they turn away.
+			if clip == "edgeCut" then
+				bump(p, "Waist.y", -a.slideOnSide * SO.EdgeTwist * w)
+			end
+		end
+	end
+	-- A save: the big wobble, fading.
+	if so and so.phase == "Save" and so.progress < SO.SaveTime then
+		local wob = SO.SaveWobble * (1 - so.progress / SO.SaveTime) * math.sin(2 * math.pi * SO.SaveHz * so.progress)
+		bump(p, "Waist.z", wob)
+		bump(p, "Hips.z", -0.5 * wob)
 	end
 
 	if st == "Crashed" then
@@ -525,6 +566,11 @@ local function resetForRespawn(a)
 	a.tweakW.x = 0
 	a.slideOnW.x = 0
 	a.slideOnW.v = 0
+	for _, entry in SIDE_CLIPS do
+		local c = a.side[entry[1]]
+		c.w.x = 0
+		c.w.v = 0
+	end
 	for _, sp in { a.landDrop, a.wobble, a.yank, a.bob, a.leadHips, a.leadShoulders, a.leadHead, a.preWind } do
 		sp.x = 0
 		sp.v = 0
