@@ -224,6 +224,62 @@ Example outcomes on a 1 m wide box (tests/slideOn.test.ts):
   `CrashNoseDig` and `CrashHangUp` were added to testDriver (F7 scrubber) and
   to the TS/Luau animation parity check.
 
+## Scenario table (spec 8)
+
+`tests/scenarios/slideOnScenarios.ts` holds every line;
+`tests/slideOnScenarios.test.ts` runs them, and
+`npx vite-node scripts/slide-on-report.ts` prints the table. Each line is
+the same scripted rider:
+- the feature is set off to the side and turned in across the line;
+- the pop is held from one distance off its side and released at another;
+- W, A/D in the air (the 90 of an Edge Slide-on), counter-steer on the
+  main, or the edge held through the charge, where the line says so.
+
+| # | Line | Result | OK |
+| --- | --- | --- | --- |
+| P1 | 0.3 m table (Slider), 15 degrees in | Slide-on 50-50, 112 pts, nose 18 deg | yes |
+| P2 | 0.5 m box, 15 degrees in | Slide-on 50-50, 120 pts, nose 18 deg | yes |
+| P3 | 0.8 m ledge, 18 degrees in, W lifts the nose to 30 | Slide-on 50-50, 125 pts, nose 30 deg | yes |
+| P4 | 0.63 m pipe, 12 degrees in | Slide-on 50-50, 105 pts, nose 18 deg | yes |
+| P5 | 0.6 m thin rail: the board's middle over it (a side ollie-on) | Side Ollie-on 50-50 (sketchy), 86 pts, nose 18 deg | yes |
+| P6 | bank pyramid (0.5 m, 1 m banks): up the bank onto the top, 20 degrees in | slideOn fiftyFifty, nose 18 deg | yes |
+| P7 | 0.5 m box, 25 degrees in, counter-steer saves the overshoot | Slide-on 50-50 (sketchy), 94 pts, nose 18 deg | yes |
+| P8 | 0.5 m box, 20 degrees in, a 90 in the air: Edge Slide-on (90 out to ride off) | Backside Edge Slide-on Lipslide to Fakie, 291 pts, nose 30 deg | yes |
+| F1 | 0.8 m ledge without W: NoseDig | crash: noseDig, nose 18 deg | yes |
+| F2 | shallow (6.5 degrees): too little inward speed to climb, HangUp | crash: hangUp, nose 18 deg | yes |
+| F3 | 40 degrees in: the nose meets the side face, NoseDig | crash: noseDig, nose 17 deg | yes |
+| F4 | 25 degrees in, no counter-steer: Overshoot | crash: overshoot, nose 18 deg | yes |
+| F5 | a hard heelside edge held into the pop: SlippedOut | crash: slippedOut, nose 18 deg | yes |
+| F6 | a wall above the top blocks it: no slide-on | no slide-on | yes |
+| F7 | popped too close, 20 degrees: NoseDig | crash: noseDig, nose 4 deg | yes |
+
+Notes:
+- **Thin rail (P5).** It comes out as a Side Ollie-on: there is no side
+  face to climb, so the board's middle has to clear the rail, as spec 4.5
+  says.
+- **Bank pyramid (P6).** It uses a low pyramid: 0.5 m high with 1 m banks
+  and a 6 m top. The catalogue Pyramid (1.3 m) is out of reach from the
+  side, so it ends in a hang-up.
+- **The spec's "HangUp at 3°".** It is tested at 6.5°. Below MinAngle (6°)
+  the approach is a plain side ollie. Making shallower approaches tryable
+  broke the existing side ollie-ons, SlippedOut and the wake map's ride
+  test.
+
+## Captures (the web build, slow motion ×0.25, paused)
+
+The rider is set 1.6 m off the Funbox's side, turned 15° in, with the pop
+charged, and released 1.0 m off. The script is a Playwright run against
+`vite preview`.
+
+| | | |
+| --- | --- | --- |
+| ![Lift](slide-on/lift.jpg) The nose lifts as the board rises | ![Contact](slide-on/contact.jpg) Over the edge: the spray burst, the nose coming down | ![Settle](slide-on/settle.jpg) On top, settling: "Slide-on 50-50" |
+
+In the real game the rope straightens the rider fast: a 15° turn-in drops
+to 2° within a few metres unless the rider keeps carving toward the
+feature. A slide-on is carved in, flattened just before the pop (a hard
+edge into the pop is SlippedOut), and popped close to the side.
+
 ## Decisions (where the spec and the game differ)
 
 1. **Side-entry pop height.**
@@ -250,3 +306,9 @@ Example outcomes on a 1 m wide box (tests/slideOn.test.ts):
    the inward speed left after mounting. With only the slide's friction, a
    15° slide-on overshot a 1 m box. At 0.8 g, 15° stays on and 25° needs
    counter-steer.
+7. **Pipes grip (`RoundInwardFriction`, new).** The base wraps a round top,
+   so the inward speed bleeds at 3 g instead of 0.8 g. A 12° slide-on stays
+   on a 0.63 m pipe; 18° and over needs counter-steer.
+8. **Thin rails wait for the rise.** When the nose passes over a rail
+   while the board is still rising, the hang-up check waits until the board
+   tops out, or until the board's middle reaches the rail low.

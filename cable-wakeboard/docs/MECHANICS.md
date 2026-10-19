@@ -397,8 +397,18 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     a nose / tail tap (`jib.endTap`, a small bonus).
   - The animation state carries `feature.press` and `feature.fore`.
 - **Slide-on** (side approaches, docs/SLIDE_ON.md): side entries lift the nose
-  over the edge and slide the base on; `SlideOnConfig` and the reachable-height
-  calculator are in `slideOnConfig.ts`.
+  over the edge and slide the base on.
+  - `SlideOnConfig` and the reachable-height calculator are in
+    `slideOnConfig.ts`. The physics (pop, nose lift, lead crossing, contact
+    climb) is in `slideOn.ts`; the mount and the carry-over (overshoot) are
+    in `onFeature.ts`.
+  - Near a feature, W lifts the nose instead of flipping. A/D on the main
+    counter-steers the inward carry.
+  - New crash reasons: `noseDig`, `hangUp`. `noseDig` replaces
+    `noseHitSide` for steep side approaches; the old id stays defined.
+  - New entries: `slideOn`, `edgeSlideOn`, named "Slide-on" and
+    "Edge Slide-on".
+  - The cue (F9) glows on the edge when a slide-on is possible.
 - **SlideController** (`slideController.ts`, spec 5.1, 5.6, 5.7): what the
   feature does to a slide.
   - *Speed along the feature*: rope pull along it, gravity along the slope,

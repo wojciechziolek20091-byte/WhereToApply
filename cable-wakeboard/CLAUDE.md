@@ -70,7 +70,9 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
   featureRide/ Feature riding spec (docs/MECHANICS.md section 7, docs/FEATURE_RIDING.md):
               config (DEFAULT_CONFIG.featureRide), approachTracker, entryResolver,
               slideController, featureRotation, pressController, exitResolver,
-              featureSpecials, featureTrickNamer, featureScoring. Twins:
+              featureSpecials, featureTrickNamer, featureScoring, slideOnConfig +
+              slideOn (side approaches: the nose-lift slide-on, docs/SLIDE_ON.md;
+              `npx vite-node scripts/slide-on-report.ts`). Twins:
               Sim/FeatureRide<Name>.luau. A whole feature line is one
               `featureLine` event, scored by the session.
   rider.ts    RiderState and the mode / handle / crash types.
