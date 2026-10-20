@@ -416,6 +416,11 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     board drops back into the water.
   - Near a feature, W lifts the nose instead of flipping. A/D on the main
     counter-steers the inward carry (held, it starts no rotation).
+  - Space held while carving into the side pops on its own at the point its
+    arc reaches the top (`autoPopDue`). From 8 degrees of turn-in, the board
+    turns sideways in the air and lands in a boardslide (`startSideTurn`).
+    It turns back in line if it will land in the water, and turns out by
+    itself off the end.
   - `noseDig` replaced `noseHitSide`. Since v2, side approaches no longer give
     `hangUp`, `overshoot`, `clippedSide` or `slippedOut`; the ids stay defined.
   - New entries: `slideOn`, `edgeSlideOn`, named "Slide-on" and

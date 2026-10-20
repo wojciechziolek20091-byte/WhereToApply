@@ -136,7 +136,8 @@ function chargeAndPopArc(
 export function runSideApproach(
   def: FeatureDef,
   inp: SweepInput,
-  cfg: SimConfig = makeConfig({ feature: { balanceEnabled: false } }),
+  // The sweep times the release itself (spec 6.1): no auto pop while it charges.
+  cfg: SimConfig = makeConfig({ feature: { balanceEnabled: false }, slideOn: { AutoPop: false } }),
   trace?: (s: SimState) => void,
 ): SweepResult {
   const a = deg(inp.angle);

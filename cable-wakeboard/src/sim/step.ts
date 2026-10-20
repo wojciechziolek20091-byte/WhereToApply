@@ -9,7 +9,7 @@ import { edgeNorm } from './edge';
 import { type InputFrame, updateInputMemory } from './input';
 import { addScaled, horizontalLength, scale, UP, vec3, add } from './math/vec';
 import { airOverFeature, stepRamp, stepSlide, stepSlideOnContact, tryEnterFeature } from './onFeature';
-import { besideFeature, coyoteContact, edgeLoadAt, leadCrossing, predictSlideOn, sideApproachOn, stepNoseLift } from './featureRide/slideOn';
+import { autoPopDue, besideFeature, stepSideTurnBack, coyoteContact, edgeLoadAt, leadCrossing, predictSlideOn, sideApproachOn, startSideTurn, stepNoseLift } from './featureRide/slideOn';
 import { trackApproach } from './featureRide/approachTracker';
 import { landedInGap, startEntry } from './featureRide/entryResolver';
 import { stepExitAssist } from './featureRide/exitResolver';
@@ -81,9 +81,12 @@ function stepWater(s: SimState, input: InputFrame): void {
     else return;
   }
 
-  // Coyote time (side approach v2): charging into a feature's side, the pop goes off at the edge.
-  const coyote = !mem.popReleased && input.pop && r.mode === 'riding' && coyoteContact(s);
-  if (mem.popReleased || coyote) {
+  // Charging into a feature's side the pop goes off on its own: at the point its arc reaches the top
+  // (auto pop), or at the latest when the nose meets the edge (coyote time, a little lower).
+  const charging = !mem.popReleased && input.pop && r.mode === 'riding' && mem.popHeldTime > 0;
+  const auto = charging && autoPopDue(s, ollieCharge(mem.popHeldTime, cfg));
+  const coyote = charging && !auto && coyoteContact(s);
+  if (mem.popReleased || auto || coyote) {
     const charge = ollieCharge(mem.popHeldTime, cfg);
     if (r.mode === 'waterTrickLoad') {
       const plan = planWaterTrick(r.tensionSmooth, waterTrickTiming(r, cfg, DT), input, cfg);
@@ -91,13 +94,14 @@ function stepWater(s: SimState, input: InputFrame): void {
       air.trick = plan.trick;
       return;
     }
-    if (coyote) mem.popSpent = true;
+    if (auto || coyote) mem.popSpent = true;
     // A side approach pops off its edge (v2 spec 1.1): measure the edge before leaving the water.
     const edgeLoad = edgeLoadAt(s);
     const popSpeed = ollieSpeed(charge, cfg) * (coyote ? 1 - cfg.slideOn.CoyotePenalty : 1);
     const air = takeOff(s, r.mode === 'ridingBlind' ? 'blindPop' : 'flat', null, popSpeed, charge);
     predictSlideOn(s, air, popSpeed, edgeLoad);
     air.noFlip = besideFeature(s);
+    startSideTurn(s, air, auto || coyote);
     startEntry(s, air, sign(input.steer), charge);
     return;
   }
@@ -124,6 +128,7 @@ function stepAirborne(s: SimState, input: InputFrame): void {
   if (!rope) return;
   // A slide-on climbing over the side edge (slideOn.ts) instead of flying.
   if (stepSlideOnContact(s, air, input)) return;
+  stepSideTurnBack(s, air);
   if (stepAir(r, air, rope.force, input, s.inputs, cfg)) s.events.push({ type: 'handlePass', tick: s.tick });
   stepExitAssist(s, air, input);
   stepNoseLift(s, air, input);

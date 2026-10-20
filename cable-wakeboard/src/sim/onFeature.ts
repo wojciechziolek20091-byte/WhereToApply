@@ -138,6 +138,7 @@ function startJib(s: SimState, feature: ResolvedFeature, boardAngle: number, ent
     counterHeld: false,
     slideOnClean: false,
     entryAir: 0,
+    autoSideways: false,
   };
 }
 
@@ -177,6 +178,8 @@ function leaveFeature(
   // The part left from: landing on another one is a transfer.
   air.cleared.push(air.overFeature);
   if (jib) air.exit = exitOf(jib, kind, r.switchStance);
+  // Turned sideways onto it by the game: off the end the board turns out in line again (a 90 out).
+  if (jib && jib.autoSideways && isBoardslide(jib.boardAngle) && (kind === 'rideOff' || kind === 'popOff')) air.sideTurn = { axis: air.takeoffHeading, target: 0 };
   r.handle = keepHandle === 'passing' ? 'inFront' : keepHandle;
   return air;
 }
@@ -185,8 +188,8 @@ function leaveFeature(
 function rideOut(s: SimState, f: ResolvedFeature): void {
   const r = s.rider;
   const jib = r.jib;
-  if (jib && isBoardslide(jib.boardAngle)) {
-    // Down into the water still across the board: it catches.
+  if (jib && isBoardslide(jib.boardAngle) && !jib.autoSideways) {
+    // Down into the water still across the board: it catches (turned sideways by the game, it turns out).
     endSlide(s);
     crash(s, 'badAngle');
     return;
@@ -630,6 +633,11 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   const c = air.crossing;
   if (was !== null && c && c.part === was && c.side !== 0 && (!hit || `${hit.feature.def.id}:${hit.surface.piece.part}` !== was)) {
     if (air.tap && air.over === null) s.events.push({ type: 'featureTap', tick: s.tick, featureId: c.featureId });
+    // Over it with the board turned sideways: turn it back in line for the water.
+    if (air.sideTurned && !air.sideTurnBack && air.over === null) {
+      air.sideTurn = { axis: air.takeoffHeading, target: 0 };
+      air.sideTurnBack = true;
+    }
     air.over = c.featureId;
   }
   if (!hit) {
@@ -686,6 +694,7 @@ export function airOverFeature(s: SimState, air: AirState): boolean {
   const speed = Math.max(dot(r.vel, surface.tangent) * keep, s.cfg.feature.stallSpeed + 0.5);
   r.air = null;
   mountMain(s, feature, piece, local.u, local.v, speed, e.kind, e.sketchy, e.boardAngle);
+  r.jib!.autoSideways = air.sideTurned && isBoardslide(e.boardAngle);
   const j = r.jib!;
   j.balance = e.balance;
   j.inRotation = e.inRotation;
@@ -792,6 +801,7 @@ function mountSlideOn(s: SimState, air: AirState, input: InputFrame, hung: boole
   const landing = evaluateLanding(r, level, surface ? surface.normal : vec3(0, 1, 0), cfg);
   r.air = null;
   mountMain(s, f, piece, so.u, mv, speed, edge ? 'edgeSlideOn' : 'slideOn', sketchy, boardAngle);
+  r.jib!.autoSideways = air.sideTurned && isBoardslide(boardAngle);
   const j = r.jib!;
   // Thrown inward, the way the board was going.
   j.balance = clamp(so.toward * hit, -L.MaxHit, L.MaxHit);

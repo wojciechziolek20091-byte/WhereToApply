@@ -89,9 +89,12 @@ local function stepWater(s, input)
 		end
 	end
 
-	-- Coyote time (side approach v2): charging into a feature's side, the pop goes off at the edge.
-	local coyote = not mem.popReleased and input.pop and r.mode == "riding" and FeatureRideSlideOn.coyoteContact(s)
-	if mem.popReleased or coyote then
+	-- Charging into a feature's side the pop goes off on its own: at the point its arc reaches the top
+	-- (auto pop), or at the latest when the nose meets the edge (coyote time, a little lower).
+	local charging = not mem.popReleased and input.pop and r.mode == "riding" and mem.popHeldTime > 0
+	local auto = charging and FeatureRideSlideOn.autoPopDue(s, Pop.ollieCharge(mem.popHeldTime, cfg))
+	local coyote = charging and not auto and FeatureRideSlideOn.coyoteContact(s)
+	if mem.popReleased or auto or coyote then
 		local charge = Pop.ollieCharge(mem.popHeldTime, cfg)
 		if r.mode == "waterTrickLoad" then
 			local vy, trick = WaterTrick.planWaterTrick(r.tensionSmooth, Pop.waterTrickTiming(r, cfg, DT), input, cfg)
@@ -99,7 +102,7 @@ local function stepWater(s, input)
 			air.trick = trick
 			return
 		end
-		if coyote then
+		if auto or coyote then
 			mem.popSpent = true
 		end
 		-- A side approach pops off its edge (v2 spec 1.1): measure the edge before leaving the water.
@@ -108,6 +111,7 @@ local function stepWater(s, input)
 		local air = Actions.takeOff(s, if r.mode == "ridingBlind" then "blindPop" else "flat", nil, popSpeed, charge)
 		FeatureRideSlideOn.predictSlideOn(s, air, popSpeed, edgeLoad)
 		air.noFlip = FeatureRideSlideOn.besideFeature(s)
+		FeatureRideSlideOn.startSideTurn(s, air, auto or coyote)
 		FeatureRideEntryResolver.startEntry(s, air, Scalar.sign(input.steer), charge)
 		return
 	end
@@ -144,6 +148,7 @@ local function stepAirborne(s, input)
 	if OnFeature.stepSlideOnContact(s, air, input) then
 		return
 	end
+	FeatureRideSlideOn.stepSideTurnBack(s, air)
 	if Air.stepAir(r, air, rope.force, input, s.inputs, cfg) then
 		table.insert(s.events, { type = "handlePass", tick = s.tick })
 	end

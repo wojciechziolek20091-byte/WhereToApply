@@ -14,6 +14,46 @@ bit (parity test).
   (`tests/scenarios/slideOnScenarios.ts`, tested in `tests/slideOnScenarios.test.ts`).
 - Practice park: `?park=side` (the sweep's features, 3 m off the cable line).
 
+## Space held into the side: auto pop and a sideways landing
+
+Added after the v2 report: carving into a feature's side with Space held
+(never released) used to reach the side still on the water and crash.
+
+- **Auto pop** (`autoPopDue`, `SlideOn.AutoPop`): while Space is held beside
+  a feature, the pop goes off on its own. A charge whose arc clears the top
+  pops when it will come back down to the top over the feature's centre line
+  (an air-on). A lower one pops when its arc peaks as the nose reaches the
+  edge (a slide-on). Cutting into a safety ramp's side, it pops for the ramp.
+  Coyote time (the pop at the edge, 5% lower) stays as the last chance.
+- **Sideways landing** (`startSideTurn`): an auto pop from 8° of turn-in or
+  more (`SideTurnAngle`) turns the board on to 90° to the feature in the
+  air (`SideTurnRate`, 450°/s), so it lands across the feature in a
+  boardslide. A/D in the air cancels it (your own spin). A pop you release by
+  hand keeps the v2 behaviour; `SideTurnManualAngle` (default 0, off) turns
+  it on for those too.
+- **No crash from the turn:**
+  - If the arc will come down in the water instead of on a top (sampled
+    every 1/30 s, `SideTurnReach` 0.45 m), the board turns back in line for
+    the water (`stepSideTurnBack`). It also turns back if it flies over the
+    feature.
+  - A slide the game turned sideways (`jib.autoSideways`) turns out by
+    itself off the end (a 90 out), and riding it down into the water does
+    not catch.
+  - A pop from beside a feature lines up into a slide (`alignSlide`) even
+    across the main's front edge.
+- **Tests:**
+  - `tests/slideOn.test.ts` holds Space into the side on both sides: it pops
+    on its own, lands in a boardslide, no crash.
+  - The parity entry scenario "auto pop, sideways".
+  - The sweep below times its own releases, so it runs with `AutoPop` off.
+- **On the wake park:**
+  - Held into the Slider, Gap box, Flat rail and Pipe rail from 6-12 m, it
+    lands sideways in most runs.
+  - What still crashes: weak pops (Space held for only the last 3 m) as
+    `noseDig`, and the boardslide's own fore/aft balance on a down-sloping
+    exit ramp (the Funbox) as `fellOffFeature`. W/S corrects that, as on any
+    boardslide.
+
 ## Results
 
 The same harness and the same 13,824-run grid (spec 6.1: 8 angles × 4

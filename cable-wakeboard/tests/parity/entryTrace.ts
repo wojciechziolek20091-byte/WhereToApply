@@ -45,6 +45,8 @@ export const ENTRY_SCENARIOS: EntryScenario[] = [
   { name: 'slide-on, A held (was a nose dig)', def: { offset: -2, yaw: 0.2618 }, stance: 'regular', steps: [[2.9, 3.3, 1, 0], [3.3, 3.9, 0, -1]] },
   // A quarter turn in the air: across the board at the edge (v2 alignment: 60-120 degrees).
   { name: 'edge slide-on', def: { offset: -2, yaw: 0.35 }, stance: 'regular', steps: [[2.6, 3.0, 1, 0], [3.0, 3.15, 0, -1]] },
+  // Space held into the side, never released: it pops on its own and turns the board sideways (a boardslide).
+  { name: 'auto pop, sideways', def: { offset: -2 }, stance: 'regular', steps: [[2.8, 6, 1, 0], [2.5, 3.1, 0, -1]] },
 ];
 
 /** One row per tick until a crash or 6 s: state, approach, entry. */

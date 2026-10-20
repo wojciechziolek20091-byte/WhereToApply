@@ -116,6 +116,24 @@ export interface SlideOnConfig {
   EdgeLeadAngle: number;
   /** Coyote time: charging into the side, the pop goes off on its own at the edge, CoyotePenalty lower. */
   CoyotePenalty: number;
+  /**
+   * Auto pop: Space held while carving into a feature's side pops on its own
+   * when the arc of the charge so far brings the board to the top
+   * (+ AutoPopClearance) just as it reaches the edge.
+   */
+  AutoPop: boolean;
+  AutoPopClearance: number;
+  /**
+   * Sideways landing: an auto pop (Space held into the side) from a turn-in
+   * of SideTurnAngle or more turns the board on in the air to 90 degrees to
+   * the feature (a boardslide), at SideTurnRate, unless A/D spins it. A pop
+   * released by hand does so from SideTurnManualAngle (0: never). 0 turns it off.
+   */
+  SideTurnAngle: number;
+  SideTurnManualAngle: number;
+  SideTurnRate: number;
+  /** Sideways in the air, it stays turned only if its arc comes down over a top within this of its height (m); else it turns back for the water. */
+  SideTurnReach: number;
   /** Air-on (a side ollie-on that clears the board): points per second of air. */
   AirOnBonus: number;
   /** Jump-over (v2 spec 3 D): the board passing this close above the top (m) brushes it, a Tap. */
@@ -179,6 +197,12 @@ export const DEFAULT_SLIDE_ON: SlideOnConfig = {
   AlignHitAmount: 0.4,
   EdgeLeadAngle: deg(60),
   CoyotePenalty: 0.05,
+  AutoPop: true,
+  AutoPopClearance: 0.05,
+  SideTurnAngle: deg(8),
+  SideTurnManualAngle: 0,
+  SideTurnRate: deg(450),
+  SideTurnReach: 0.45,
   AirOnBonus: 60,
   TapHeight: 0.12,
   SubSteps: 4,

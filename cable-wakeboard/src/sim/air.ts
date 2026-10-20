@@ -8,6 +8,7 @@ import type { AirState, RiderState, TakeoffSource } from './rider';
 import { flipRateScale, preWindScale, spinRateScale } from './bodyPhysics';
 import { createRotation, rotationSide, stepFlip, stepSpin } from './rotation';
 import { stepWaterTrick } from './waterTrick';
+import { approach, sign, wrapAngle } from './math/scalar';
 
 /** Handle-pass window for a takeoff (spec section 8.3). */
 export function passWindowFor(source: TakeoffSource, cfg: SimConfig): number {
@@ -71,6 +72,9 @@ export function createAirState(
     slideOn: null,
     over: null,
     tap: false,
+    sideTurn: null,
+    sideTurned: false,
+    sideTurnBack: false,
     noFlip: false,
   };
 }
@@ -102,7 +106,21 @@ export function stepAir(r: RiderState, air: AirState, ropeForce: Vec3, input: In
   // Section 11: tuck sets the rate within a turn; a pre-wound spin is faster.
   const spinDir = steerForSpin !== 0 ? steerForSpin : air.rot.spinDir;
   const spinRate = cfg.spin.rate * spinRateScale(cfg, air.rot) * preWindScale(cfg, air.preWind, spinDir);
-  stepSpin(air.rot, steerForSpin, () => rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading), cfg, DT, spinRate);
+  if (air.sideTurn && (steerForSpin !== 0 || air.trick)) air.sideTurn = null;
+  if (air.sideTurn) {
+    // Turning the board sideways onto the feature (a boardslide), unless A/D spins it.
+    const yaw = wrapAngle(air.takeoffHeading + air.rot.spinAngle - air.sideTurn.axis);
+    const rem = air.sideTurn.target - yaw;
+    const dir = sign(rem);
+    if (dir !== 0 && air.rot.spinSide === null) {
+      air.rot.spinSide = rotationSide(dir, boardYaw, toes, r.ropeHeading);
+      air.rot.startDir = dir;
+    }
+    if (dir !== 0) air.rot.spinDir = dir;
+    air.rot.spinAngle += approach(0, rem, cfg.slideOn.SideTurnRate * DT);
+    air.rot.maxSpin = Math.max(air.rot.maxSpin, Math.abs(air.rot.spinAngle));
+    if (Math.abs(rem) <= cfg.slideOn.SideTurnRate * DT) air.sideTurn = null;
+  } else stepSpin(air.rot, steerForSpin, () => rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading), cfg, DT, spinRate);
   // Beside a feature W lifts the nose (slide-on), it does not flip.
   const noseLift = air.noFlip || (air.slideOn !== null && air.slideOn.phase === 'air');
   if (!air.trick && !noseLift) stepFlip(air.rot, input.forward ? 1 : input.back ? -1 : 0, cfg, DT, flipRateScale(cfg, air.rot.flipAngle));

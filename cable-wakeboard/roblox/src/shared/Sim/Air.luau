@@ -4,6 +4,7 @@ local Config = require(script.Parent.Config)
 local Edge = require(script.Parent.Edge)
 local Handle = require(script.Parent.Handle)
 local Rotation = require(script.Parent.Rotation)
+local Scalar = require(script.Parent.Scalar)
 local Vec = require(script.Parent.Vec)
 local WaterTrick = require(script.Parent.WaterTrick)
 
@@ -67,6 +68,9 @@ function Air.createAirState(r, source, featureId, popSpeed, popQuality, cfg, spi
 		slideOn = nil,
 		over = nil,
 		tap = false,
+		sideTurn = nil,
+		sideTurned = false,
+		sideTurnBack = false,
 		noFlip = false,
 	}
 end
@@ -97,9 +101,31 @@ function Air.stepAir(r, air, ropeForce, input, mem, cfg)
 	-- Section 11: tuck sets the rate within a turn; a pre-wound spin is faster.
 	local spinDir = if steerForSpin ~= 0 then steerForSpin else air.rot.spinDir
 	local spinRate = cfg.spin.rate * BodyPhysics.spinRateScale(cfg, air.rot) * BodyPhysics.preWindScale(cfg, air.preWind, spinDir)
-	Rotation.stepSpin(air.rot, steerForSpin, function()
-		return Rotation.rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading)
-	end, cfg, DT, spinRate)
+	if air.sideTurn and (steerForSpin ~= 0 or air.trick) then
+		air.sideTurn = nil
+	end
+	if air.sideTurn then
+		-- Turning the board sideways onto the feature (a boardslide), unless A/D spins it.
+		local yaw = Scalar.wrapAngle(air.takeoffHeading + air.rot.spinAngle - air.sideTurn.axis)
+		local rem = air.sideTurn.target - yaw
+		local dir = Scalar.sign(rem)
+		if dir ~= 0 and air.rot.spinSide == nil then
+			air.rot.spinSide = Rotation.rotationSide(dir, boardYaw, toes, r.ropeHeading)
+			air.rot.startDir = dir
+		end
+		if dir ~= 0 then
+			air.rot.spinDir = dir
+		end
+		air.rot.spinAngle += Scalar.approach(0, rem, cfg.slideOn.SideTurnRate * DT)
+		air.rot.maxSpin = math.max(air.rot.maxSpin, math.abs(air.rot.spinAngle))
+		if math.abs(rem) <= cfg.slideOn.SideTurnRate * DT then
+			air.sideTurn = nil
+		end
+	else
+		Rotation.stepSpin(air.rot, steerForSpin, function()
+			return Rotation.rotationSide(steerForSpin, boardYaw, toes, r.ropeHeading)
+		end, cfg, DT, spinRate)
+	end
 	-- Beside a feature W lifts the nose (slide-on), it does not flip.
 	local noseLift = air.noFlip or (air.slideOn ~= nil and air.slideOn.phase == "air")
 	if not air.trick and not noseLift then

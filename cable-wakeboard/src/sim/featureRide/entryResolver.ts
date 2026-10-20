@@ -147,8 +147,8 @@ export function resolveLanding(s: SimState, air: AirState, f: ResolvedFeature, s
         ? 'sideOllieOn'
         : 'ollieOn';
   const yaw = wrapAngle(boardYawInAir(air) - heading);
-  // From the side any angle lines up into a slide (v2 spec 2); else the nearest 90.
-  const aligned = crossSide !== 0 ? alignSlide(yaw, cfg) : null;
+  // From the side (or popped beside the feature) any angle lines up into a slide (v2 spec 2); else the nearest 90.
+  const aligned = crossSide !== 0 || air.sideTurned || air.noFlip ? alignSlide(yaw, cfg) : null;
   const boardAngle = aligned ? aligned.boardAngle : Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
   const level = { ...air, rot: { ...air.rot, spinAngle: Math.round(air.rot.spinAngle / Math.PI) * Math.PI } };
   const landing = evaluateLanding(r, level, surface.normal, cfg);

@@ -333,6 +333,87 @@ function SlideOn.coyoteContact(s)
 	return a.sideGap <= (cfg.slideOn.BoardLength / 2) * math.abs(sin(a.turnIn)) + 0.05
 end
 
+-- Auto pop: charging (`charge` so far) into a feature's side, is this the tick
+-- to pop? A pop clearing the top goes when it comes back down to it over the
+-- centre line (an air-on); a lower one when it peaks as the nose reaches the edge.
+function SlideOn.autoPopDue(s, charge)
+	local r, cfg = s.rider, s.cfg
+	local S = cfg.slideOn
+	local a = r.approach
+	if not S.AutoPop or not a or a.side == "front" or a.inwardSpeed <= 0.3 then
+		return false
+	end
+	local f = featureOf(s, a.featureId)
+	if not f then
+		return false
+	end
+	-- Cutting into a safety ramp's side (no top there yet): pop onto the ramp.
+	local top = a.topHeight
+	local across = 0
+	if a.slideOnBlock == "noTop" then
+		local surf = Features.surfaceAt(f, { u = a.contactU, v = (f.shape.vMin + f.shape.vMax) / 2 })
+		if not surf or surf.piece.role ~= "Safety" then
+			return false
+		end
+		top = surf.height
+		across = surf.piece.width / 2
+	elseif not tryable(a) then
+		return false
+	else
+		local p = SlideOn.topPieceAt(f, a.contactU, Features.toLocal(f, r.pos).v)
+		across = if p then p.width / 2 else 0
+	end
+	local load = SlideOn.edgeLoadAt(s)
+	local vy = SlideOnConfig.sidePopSpeed(charge, cfg, load)
+	local vin = a.inwardSpeed + S.EdgeReleaseBonus * load
+	local h = top + S.AutoPopClearance
+	local disc = vy * vy - 2 * GRAVITY * h
+	if disc > 0 then
+		return a.sideGap + across <= (vin * (vy + math.sqrt(disc))) / GRAVITY
+	end
+	return a.sideGap <= (vin * vy) / GRAVITY + (S.BoardLength / 2) * math.abs(sin(a.turnIn))
+end
+
+-- Sideways landing: auto-popped toward a feature at SideTurnAngle or more (by
+-- hand: SideTurnManualAngle), the board turns on to 90 degrees to its axis in the air.
+function SlideOn.startSideTurn(s, air, auto)
+	local r, cfg = s.rider, s.cfg
+	local S = cfg.slideOn
+	local a = r.approach
+	local min = if auto then S.SideTurnAngle else S.SideTurnManualAngle
+	if min <= 0 or not a or a.side == "front" or a.slideOnBlock == "noTop" or a.turnIn < min or a.inwardSpeed <= 0 then
+		return
+	end
+	local f = featureOf(s, a.featureId)
+	if not f then
+		return
+	end
+	local yaw = Scalar.wrapAngle(EntryResolver.boardYawInAir(air) - f.heading)
+	air.sideTurn = { axis = f.heading, target = (if yaw >= 0 then 1 else -1) * (math.pi / 2) }
+	air.sideTurned = true
+end
+
+-- Turned sideways but its arc comes down in the water, not on a top: turn back in line for the water.
+function SlideOn.stepSideTurnBack(s, air)
+	if not air.sideTurned or air.sideTurnBack or (air.slideOn and air.slideOn.phase == "contact") then
+		return
+	end
+	local r = s.rider
+	local vy = r.vel.y
+	local tw = (vy + math.sqrt(vy * vy + 2 * GRAVITY * math.max(0, r.pos.y))) / GRAVITY
+	local n = math.max(1, math.ceil(tw * 30))
+	for k = 0, n do
+		local t = (tw * k) / n
+		local y = r.pos.y + vy * t - 0.5 * GRAVITY * t * t
+		local hit = Features.featureUnder(s.features, Vec.vec3(r.pos.x + r.vel.x * t, y, r.pos.z + r.vel.z * t))
+		if hit and hit.surface.onTop and math.abs(y - hit.surface.height) <= s.cfg.slideOn.SideTurnReach then
+			return
+		end
+	end
+	air.sideTurn = { axis = air.takeoffHeading, target = 0 }
+	air.sideTurnBack = true
+end
+
 -- A side approach is on (v2 spec 1): beside a feature, moving or carving toward it (no water trick arms).
 function SlideOn.sideApproachOn(s)
 	local a = s.rider.approach

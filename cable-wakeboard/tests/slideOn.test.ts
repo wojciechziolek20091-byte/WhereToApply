@@ -157,7 +157,7 @@ describe('Slide-on physics (side approaches spec 4)', () => {
   it('a 0.8 m ledge with W: the nose lifts to 30 degrees (and does not flip); a weak pop without it digs in', () => {
     const w = sideLine(0.8, 18, -2, 5, 1.2, { w: true });
     expect(w.crash).toBeNull();
-    expect(w.jib?.entry).toBe('slideOn');
+    expect(['slideOn', 'edgeSlideOn']).toContain(w.jib?.entry);
     expect(w.maxPitch).toBeCloseTo(deg(30), 3);
     expect(w.maxFlip).toBe(0);
     expect(sideLine(0.8, 18, -2, 1.5, 1.2).crash).toBe('noseDig');
@@ -196,7 +196,7 @@ describe('Slide-on edge cases (side approaches spec 7)', () => {
     expect(left.jib?.entry).toBe('slideOn');
     expect(Math.abs(left.mountV!)).toBeLessThan(0.45);
     const right = sideLineOn(feature('Transfer'), 18, -4, 5, 0.9, { w: true });
-    expect(right.jib?.entry).toBe('slideOn');
+    expect(['slideOn', 'edgeSlideOn']).toContain(right.jib?.entry);
     expect(right.mountV!).toBeGreaterThan(1.7);
   });
 
@@ -207,3 +207,50 @@ describe('Slide-on edge cases (side approaches spec 7)', () => {
   });
 });
 
+
+import { makeConfig } from '../src/sim/config';
+import { stepSim } from '../src/sim/step';
+import { neutralInput } from '../src/sim/input';
+import { createSim } from '../src/sim/world';
+import { toLocal } from '../src/sim/features';
+import { isBoardslide } from '../src/sim/featureRide/slideController';
+
+/**
+ * The player's line: a box `off` m to the side of the cable line; A/D toward it from `start` m before
+ * its main and Space held from `hold` m before, never released. Returns the slides and how it ended.
+ */
+function holdInto(off: number, start: number, hold: number) {
+  const def = { kind: 'slider', id: 'b', name: 'Box', style: 'box', s: 135, offset: off, length: 8, width: 1, height: 0.5, entryLength: 3, safety: 'flush' } as FeatureDef;
+  const s = createSim(makeConfig({}), { name: 'hold', features: [def] }, 125);
+  const f = s.features[0]!;
+  const m0 = f.shape.pieces.find((p) => p.slide)!.u0;
+  const jibs: { entry: string; boardAngle: number }[] = [];
+  let crashed: string | null = null;
+  let off_ = false;
+  for (let i = 0; i < 60 * 14 && !crashed; i++) {
+    const toMain = m0 - toLocal(f, s.rider.pos).u;
+    const inp = neutralInput();
+    if (s.rider.mode === 'riding' && !off_) {
+      if (toMain < start) inp.steer = off < 0 ? -1 : 1;
+      if (toMain < hold) inp.pop = true;
+    }
+    stepSim(s, inp);
+    for (const e of s.events) {
+      if (e.type === 'crash') crashed = e.reason;
+      if (e.type === 'featureEnter' && s.rider.jib) jibs.push({ entry: s.rider.jib.entry, boardAngle: s.rider.jib.boardAngle });
+      if (e.type === 'featureExit') off_ = true;
+    }
+  }
+  return { jibs, crashed };
+}
+
+describe('Space held into the side (auto pop, a sideways landing)', () => {
+  it('pops on its own, lands across the box (a boardslide) and turns out off the end', () => {
+    for (const [off, start, hold] of [[-3, 6, 6], [-3, 8, 3], [-4, 8, 6], [-4, 10, 6], [3, 6, 6], [4, 8, 6]] as const) {
+      const r = holdInto(off, start, hold);
+      expect(r.crashed, `${off}/${start}/${hold}`).toBeNull();
+      expect(r.jibs.length, `${off}/${start}/${hold}`).toBeGreaterThan(0);
+      expect(isBoardslide(r.jibs[0]!.boardAngle), `${off}/${start}/${hold}: ${r.jibs[0]!.entry}`).toBe(true);
+    }
+  });
+});

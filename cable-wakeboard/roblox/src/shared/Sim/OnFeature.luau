@@ -157,6 +157,7 @@ startJib = function(s, feature, boardAngle, entry, sketchy)
 		counterHeld = false,
 		slideOnClean = false,
 		entryAir = 0,
+		autoSideways = false,
 	}
 end
 
@@ -203,6 +204,11 @@ local function leaveFeature(s, f, popSpeed, popQuality, from, kind)
 	if jib then
 		air.exit = ExitResolver.exitOf(jib, kind or "rideOff", r.switchStance)
 	end
+	-- Turned sideways onto it by the game: off the end the board turns out in line again (a 90 out).
+	local k = kind or "rideOff"
+	if jib and jib.autoSideways and SlideController.isBoardslide(jib.boardAngle) and (k == "rideOff" or k == "popOff") then
+		air.sideTurn = { axis = air.takeoffHeading, target = 0 }
+	end
 	r.handle = if keepHandle == "passing" then "inFront" else keepHandle
 	return air
 end
@@ -211,8 +217,8 @@ end
 local function rideOut(s, f)
 	local r = s.rider
 	local jib = r.jib
-	if jib and SlideController.isBoardslide(jib.boardAngle) then
-		-- Down into the water still across the board: it catches.
+	if jib and SlideController.isBoardslide(jib.boardAngle) and not jib.autoSideways then
+		-- Down into the water still across the board: it catches (turned sideways by the game, it turns out).
 		endSlide(s)
 		Actions.crash(s, "badAngle")
 		return
@@ -681,6 +687,11 @@ function OnFeature.airOverFeature(s, air)
 		if air.tap and air.over == nil then
 			table.insert(s.events, { type = "featureTap", tick = s.tick, featureId = c.featureId })
 		end
+		-- Over it with the board turned sideways: turn it back in line for the water.
+		if air.sideTurned and not air.sideTurnBack and air.over == nil then
+			air.sideTurn = { axis = air.takeoffHeading, target = 0 }
+			air.sideTurnBack = true
+		end
 		air.over = c.featureId
 	end
 	if not hit then
@@ -756,6 +767,7 @@ function OnFeature.airOverFeature(s, air)
 	r.air = nil
 	mountMain(s, feature, piece, l.u, l.v, speed, e.kind, e.sketchy, e.boardAngle)
 	local j = r.jib
+	j.autoSideways = air.sideTurned and SlideController.isBoardslide(e.boardAngle)
 	j.balance = e.balance
 	j.inRotation = e.inRotation
 	j.entryQuality = e.quality
@@ -822,6 +834,7 @@ local function mountSlideOn(s, air, input, hung)
 	r.air = nil
 	mountMain(s, f, piece, so.u, mv, speed, if edge then "edgeSlideOn" else "slideOn", sketchy, boardAngle)
 	local j = r.jib
+	j.autoSideways = air.sideTurned and SlideController.isBoardslide(boardAngle)
 	j.balance = Scalar.clamp(so.toward * hit, -L.MaxHit, L.MaxHit)
 	j.inRotation = air.rot.spinAngle - air.spinStart
 	j.entryQuality = if sketchy then landing.quality * 0.6 else landing.quality

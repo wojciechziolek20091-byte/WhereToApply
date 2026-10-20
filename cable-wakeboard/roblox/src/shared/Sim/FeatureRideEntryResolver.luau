@@ -120,7 +120,8 @@ function EntryResolver.resolveLanding(s, air, f, surface, l, heading)
 		else "ollieOn"
 	local yaw = Scalar.wrapAngle(EntryResolver.boardYawInAir(air) - heading)
 	-- From the side any angle lines up into a slide (v2 spec 2); else the nearest 90.
-	local aligned = if crossSide ~= 0 then SlideOnConfig.alignSlide(yaw, cfg) else nil
+	-- From the side (or popped beside the feature) any angle lines up into a slide (v2 spec 2).
+	local aligned = if crossSide ~= 0 or air.sideTurned or air.noFlip then SlideOnConfig.alignSlide(yaw, cfg) else nil
 	local boardAngle = if aligned then aligned.boardAngle else Scalar.round(yaw / (math.pi / 2)) * (math.pi / 2)
 	local level = table.clone(air)
 	level.rot = table.clone(air.rot)

@@ -273,7 +273,7 @@ describe('Entry scenarios (feature ride M2-M3, spec 12.2)', () => {
     for (const [offset, yaw, steer] of [[-3, 0.7, -1], [3, -0.7, 1]] as const) {
       const r = play(slider({ offset, yaw }), (t) => ({ pop: between(3.0, 3.3)(t), steer: between(3.3 - 1 / 60, 3.3 + 1 / 60)(t) ? steer : 0 }));
       expect(r.crash).toBeNull();
-      expect(r.jib?.entry).toBe('slideOn');
+      expect(['slideOn', 'edgeSlideOn']).toContain(r.jib?.entry);
     }
   });
 

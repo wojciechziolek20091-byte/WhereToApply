@@ -1,5 +1,5 @@
 import { DT, GRAVITY } from '../config';
-import { type FeatureLocal, toLocal } from '../features';
+import { featureUnder, type FeatureLocal, surfaceAt, toLocal } from '../features';
 import { pieceCentre, pieceHeightAt, type RidePiece } from '../featureShapes';
 import type { InputFrame } from '../input';
 import { atan2, cos, sin } from '../math/detmath';
@@ -11,7 +11,7 @@ import type { AirState, ApproachState, CrashReason } from '../rider';
 import type { SimConfig } from '../config';
 import type { SimState } from '../world';
 import { boardYawInAir } from './entryResolver';
-import { maxReachableHeight, type SideType } from './slideOnConfig';
+import { maxReachableHeight, sidePopSpeed, type SideType } from './slideOnConfig';
 import { partEnd } from './slideController';
 
 /**
@@ -347,6 +347,85 @@ export function coyoteContact(s: SimState): boolean {
   const a = r.approach;
   if (!a || a.side === 'front' || !tryable(a) || a.inwardSpeed <= 0) return false;
   return a.sideGap <= (cfg.slideOn.BoardLength / 2) * Math.abs(sin(a.turnIn)) + 0.05;
+}
+
+/**
+ * Auto pop: charging (`charge` so far) into a feature's side, is this the
+ * tick to pop? A pop whose arc clears the top (plus AutoPopClearance) goes
+ * when, carried in at the inward speed, it comes back down to the top over
+ * the feature's centre line (an air-on); a lower one when its arc peaks as
+ * the nose reaches the edge (a slide-on).
+ */
+export function autoPopDue(s: SimState, charge: number): boolean {
+  const { rider: r, cfg } = s;
+  const S = cfg.slideOn;
+  const a = r.approach;
+  if (!S.AutoPop || !a || a.side === 'front' || a.inwardSpeed <= 0.3) return false;
+  const f = s.features.find((x) => x.def.id === a.featureId);
+  if (!f) return false;
+  // Cutting into a safety ramp's side (no top there yet): pop onto the ramp.
+  let top = a.topHeight;
+  let across = 0;
+  if (a.slideOnBlock === 'noTop') {
+    const surf = surfaceAt(f, { u: a.contactU, v: (f.shape.vMin + f.shape.vMax) / 2 });
+    if (!surf || surf.piece.role !== 'Safety') return false;
+    top = surf.height;
+    across = surf.piece.width / 2;
+  } else if (!tryable(a)) return false;
+  else {
+    const p = topPieceAt(f, a.contactU, toLocal(f, r.pos).v);
+    across = p ? p.width / 2 : 0;
+  }
+  const load = edgeLoadAt(s);
+  const vy = sidePopSpeed(charge, cfg, load);
+  const vin = a.inwardSpeed + S.EdgeReleaseBonus * load;
+  const h = top + S.AutoPopClearance;
+  const disc = vy * vy - 2 * GRAVITY * h;
+  if (disc > 0) {
+    return a.sideGap + across <= (vin * (vy + Math.sqrt(disc))) / GRAVITY;
+  }
+  return a.sideGap <= (vin * vy) / GRAVITY + (S.BoardLength / 2) * Math.abs(sin(a.turnIn));
+}
+
+/**
+ * Sideways landing: auto-popped toward a feature at SideTurnAngle or more
+ * (by hand: SideTurnManualAngle), the board turns on to 90 degrees to its
+ * axis in the air (a boardslide). Sets `air.sideTurn` (the axis and the
+ * target board angle to it), else leaves it null.
+ */
+export function startSideTurn(s: SimState, air: AirState, auto: boolean): void {
+  const { rider: r, cfg } = s;
+  const S = cfg.slideOn;
+  const a = r.approach;
+  const min = auto ? S.SideTurnAngle : S.SideTurnManualAngle;
+  if (min <= 0 || !a || a.side === 'front' || a.slideOnBlock === 'noTop' || a.turnIn < min || a.inwardSpeed <= 0) return;
+  const f = s.features.find((x) => x.def.id === a.featureId);
+  if (!f) return;
+  const yaw = wrapAngle(boardYawInAir(air) - f.heading);
+  air.sideTurn = { axis: f.heading, target: (yaw >= 0 ? 1 : -1) * (Math.PI / 2) };
+  air.sideTurned = true;
+}
+
+/**
+ * Turned sideways but short of the feature: if, flying on as it goes, the
+ * board comes down in the water rather than on a top (sampled every 1/30 s,
+ * a top within SideTurnReach of the board's height counts), it turns back in
+ * line with the takeoff for a water landing.
+ */
+export function stepSideTurnBack(s: SimState, air: AirState): void {
+  if (!air.sideTurned || air.sideTurnBack || (air.slideOn && air.slideOn.phase === 'contact')) return;
+  const r = s.rider;
+  const vy = r.vel.y;
+  const tw = (vy + Math.sqrt(vy * vy + 2 * GRAVITY * Math.max(0, r.pos.y))) / GRAVITY;
+  const n = Math.max(1, Math.ceil(tw * 30));
+  for (let k = 0; k <= n; k++) {
+    const t = (tw * k) / n;
+    const y = r.pos.y + vy * t - 0.5 * GRAVITY * t * t;
+    const hit = featureUnder(s.features, vec3(r.pos.x + r.vel.x * t, y, r.pos.z + r.vel.z * t));
+    if (hit && hit.surface.onTop && Math.abs(y - hit.surface.height) <= s.cfg.slideOn.SideTurnReach) return;
+  }
+  air.sideTurn = { axis: air.takeoffHeading, target: 0 };
+  air.sideTurnBack = true;
 }
 
 /**

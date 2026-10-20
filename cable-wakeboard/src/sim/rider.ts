@@ -195,6 +195,12 @@ export interface AirState {
   over: string | null;
   /** The board passed within SlideOn.TapHeight of the top it flew over (a Tap). */
   tap: boolean;
+  /** Turning the board sideways in the air for a boardslide: the feature's axis and the board angle to it (SlideOn.SideTurnAngle). */
+  sideTurn: { axis: number; target: number } | null;
+  /** The board was turned sideways for a boardslide (it lines up into a slide however it lands on). */
+  sideTurned: boolean;
+  /** ...and turned back in line for the water: it will not reach the feature (or went over it). */
+  sideTurnBack: boolean;
   /** A side entry's nose-lift slide-on in progress (slideOn.ts), else null. */
   slideOn: SlideOnAir | null;
 }
@@ -350,6 +356,8 @@ export interface JibState {
   slideOnClean: boolean;
   /** Seconds in the air before getting on (a side ollie-on's air-time bonus). */
   entryAir: number;
+  /** The game turned the board sideways onto it (an auto-popped side approach): off the end it turns out by itself. */
+  autoSideways: boolean;
 }
 
 /** One rotation on a feature: 90-degree steps chained while A/D is held (FeatureRotation). */
