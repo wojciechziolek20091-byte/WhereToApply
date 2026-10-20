@@ -324,7 +324,7 @@ export const DEFAULT_ANIM_CONFIG: AnimConfig = {
     SaveWobble: 9,
     SaveHz: 3.2,
     EdgeSpray: 1.6,
-    PopSpray: 70,
+    PopSpray: 24,
     TapVolume: 0.3,
     OutcomeSplash: 1.6,
   },

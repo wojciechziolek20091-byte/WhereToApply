@@ -1,5 +1,10 @@
 # Side approaches: the slide-on
 
+> Superseded in part by **side approach v2** (docs/SIDE_APPROACH_V2.md): the
+> wider window, the edge-loaded pop, outcomes A-F and no side-approach
+> crashes but a clear NoseDig. The numbers and decisions below are the
+> first version's; where they differ, v2's are current.
+
 The "Side Approaches Re-imagined (Ollie + Nose-Lift Slide-On)" spec. A side
 entry no longer needs the whole board to clear the top. The rider lifts the
 nose over the side edge and the base slides up and over it. The numbers are

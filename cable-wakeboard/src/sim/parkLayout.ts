@@ -28,7 +28,7 @@
  * `npx vite-node scripts/gen-luau-data.ts`. The sketch park's towers are in config.ts
  * (`cable.towers`); the wake and beginner parks carry their own `cable`.
  */
-import type { CatalogFeatureDef, ParkDef, SiteDef } from './park';
+import type { CatalogFeatureDef, FeatureDef, ParkDef, SiteDef } from './park';
 import { buildCablePath, cablePointAt } from './cable';
 import { type CableConfig, DEFAULT_CONFIG } from './config';
 import { FEATURE_CATALOG } from './featureCatalog';
@@ -198,6 +198,28 @@ export const TEST_PARK: ParkDef = {
     { kind: 'slider', id: 'tf', name: 'Flush funbox', style: 'box', s: 120, offset: 0, length: 6, width: 1, height: 0.5, entryLength: 3, safety: 'flush' },
     { kind: 'slider', id: 'tg', name: 'Gap box', style: 'box', s: 170, offset: 0, length: 6, width: 0.8, height: 0.5, entryLength: 3, safety: 'gap' },
     { kind: 'slider', id: 'tr', name: '8 m rail', style: 'rail', s: 215, offset: 0, length: 8, width: 0.12, height: 0.6, entryLength: 3, safety: 'flush' },
+  ],
+  site: LAKESIDE_PARK.site,
+};
+
+/**
+ * Side approach practice (side approach v2): the sweep's reference features
+ * 3 m to the left of the cable line, so the line runs past their sides. Open
+ * it with `?park=side`; the slow-motion captures replay the sweep's
+ * scripted rider here.
+ */
+const sideFeature = (id: string, name: string, s: number, o: { width: number; height: number; style?: 'box' | 'rail'; sideType?: 'Coping' }): FeatureDef => ({
+  kind: 'slider', id, name, style: o.style ?? 'box', s, offset: -3, length: 8, width: o.width, height: o.height, entryLength: 3, safety: 'flush', ...(o.sideType ? { sideType: o.sideType } : {}),
+});
+export const SIDE_APPROACH_PARK: ParkDef = {
+  name: 'Side approach practice',
+  startS: 12,
+  features: [
+    sideFeature('st', 'Low table', 40, { width: 1.2, height: 0.3 }),
+    sideFeature('sb', 'Box', 120, { width: 1, height: 0.5 }),
+    sideFeature('sn', 'Narrow box', 160, { width: 0.6, height: 0.5 }),
+    sideFeature('sl', 'Ledge', 200, { width: 1, height: 0.8, sideType: 'Coping' }),
+    sideFeature('sr', 'Rail', 236, { width: 0.12, height: 0.6, style: 'rail' }),
   ],
   site: LAKESIDE_PARK.site,
 };

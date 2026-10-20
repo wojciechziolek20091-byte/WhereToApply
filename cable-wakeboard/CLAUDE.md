@@ -71,8 +71,9 @@ src/sim/      Pure TypeScript simulation. NO three.js, NO DOM, NO Math.random, N
               config (DEFAULT_CONFIG.featureRide), approachTracker, entryResolver,
               slideController, featureRotation, pressController, exitResolver,
               featureSpecials, featureTrickNamer, featureScoring, slideOnConfig +
-              slideOn (side approaches: the nose-lift slide-on, docs/SLIDE_ON.md;
-              `npx vite-node scripts/slide-on-report.ts`). Twins:
+              slideOn (side approaches: the nose-lift slide-on, docs/SLIDE_ON.md,
+              v2 docs/SIDE_APPROACH_V2.md; `npx vite-node scripts/slide-on-report.ts`,
+              sweep `scripts/side-approach-sweep.ts`, practice park `?park=side`). Twins:
               Sim/FeatureRide<Name>.luau. A whole feature line is one
               `featureLine` event, scored by the session.
   rider.ts    RiderState and the mode / handle / crash types.

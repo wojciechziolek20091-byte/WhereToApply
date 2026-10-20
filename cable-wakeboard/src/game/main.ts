@@ -4,7 +4,7 @@ import { LOOKS } from '../render/babylon/looks';
 import { GrayboxRenderer, snapshotOf, type RenderSnapshot } from '../render/graybox';
 import { DEFAULT_CONFIG } from '../sim/config';
 import { DEFAULT_PARK, type ParkDef } from '../sim/park';
-import { BEGINNER_PARK, CATALOG_TEST_PARK, LAKESIDE_PARK, TEST_PARK } from '../sim/parkLayout';
+import { BEGINNER_PARK, CATALOG_TEST_PARK, LAKESIDE_PARK, SIDE_APPROACH_PARK, TEST_PARK } from '../sim/parkLayout';
 import { createRun, stepRun, type RunState } from '../sim/session';
 import { advanceStepper, createStepper } from '../sim/stepper';
 import type { SimEvent } from '../sim/events';
@@ -38,7 +38,7 @@ const params = new URLSearchParams(location.search);
  * `?park=sketch`: the user's sketch layout. `?park=test`: the mechanics spec's
  * test map. `?park=catalog`: every catalogue feature on the line.
  */
-const PARKS: Record<string, ParkDef> = { test: TEST_PARK, catalog: CATALOG_TEST_PARK, beginner: BEGINNER_PARK, sketch: LAKESIDE_PARK };
+const PARKS: Record<string, ParkDef> = { test: TEST_PARK, catalog: CATALOG_TEST_PARK, beginner: BEGINNER_PARK, sketch: LAKESIDE_PARK, side: SIDE_APPROACH_PARK };
 const PARK = PARKS[params.get('park') ?? ''] ?? DEFAULT_PARK;
 
 /** `?physics=old`: section 11 of the animation spec off (no tuck-driven rotation, pre-wind, shoulder rope, landing cost, COM pivot). */

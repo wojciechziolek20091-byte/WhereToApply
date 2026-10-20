@@ -290,24 +290,26 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
     went through most recently. The base must be `Entry.Clearance` (0.08 m)
     above the top there. Short by up to `TailClipTolerance` (0.10 m) is a
     tail clip: on, but 25% slower, sketchy and a balance hit. More is
-    `shortOllie` at the front and `clippedSide` at a side. A side crossing at
-    more than `SideEntry.MaxAngle` (25 degrees) to the axis is `noseHitSide`.
-    Leaving across the far side on the way down, less than
-    `OvershootCatch` (0.3 m) above the top, is `overshoot`; higher is a clean
-    hop over.
+    `shortOllie` at the front. At a side (side approach v2) the allowance
+    adds the nose tolerance and the scrape band: a little low scrapes up
+    onto the top, deeper is `noseDig`, and any angle goes. Leaving across
+    the far side without landing is a jump over (`<air> Over`, not a crash).
   - *Contact with a main* (`resolveLanding`), in the spec's order:
     1. Base roll over `Landing.MaxRoll` (12 degrees) is `slippedOut`, over 8
-       is sketchy.
+       is sketchy. Only a front approach rolls: a side approach pops off its
+       edge (v2).
     2. The board's yaw in the air (the takeoff direction turned by the spin:
        a sideways hop drifts the board, it does not turn it) snaps to the
        nearest 90 degrees within `SnapTolerance` (20). To `SketchyAngle`
        (30) it is sketchy with a big balance hit; past that it is `badAngle`.
+       From the side, `alignSlide` instead: a 50-50 to 60 degrees (a balance
+       hit past 35), the nearest 90 slide between 60 and 120; never a crash.
     3. Across the feature it must land within the balance width: a box's
        top minus 0.2 m, 0.15 m from the centre on a flat rail, 0.1 m on a
-       pipe. Short of it on the side it came in from is `clippedSide`. Just
+       pipe. From the side, outside it is sketchy and what the board carries
+       across goes on (it may slide off the far side). From the front, just
        past it (`OvershootRecover`, 0.1 m; none on a pipe's round top) is a
-       sketchy recovery; further is `overshoot` from the side and
-       `fellOffFeature` from the front.
+       sketchy recovery; further is `fellOffFeature`.
     4. Impact along the normal over `HardImpact` (5 m/s) is a balance hit
        growing to `CrashImpact` (8 m/s); past that it is `hardLanding`.
     5. Still spinning faster than `SkidRate` (90 degrees/s) skids: sketchy.
@@ -396,16 +398,26 @@ twins `Sim/FeatureRide*.luau`). Its tunables are `DEFAULT_CONFIG.featureRide`
   - *End taps*: a W/S tap in the last `EndTapZone` (0.5 m) of the feature is
     a nose / tail tap (`jib.endTap`, a small bonus).
   - The animation state carries `feature.press` and `feature.fore`.
-- **Slide-on** (side approaches, docs/SLIDE_ON.md): side entries lift the nose
-  over the edge and slide the base on.
+- **Slide-on** (side approaches, docs/SLIDE_ON.md; v2: docs/SIDE_APPROACH_V2.md):
+  a side approach is one move. The rider cuts an edge toward the feature, pops
+  off that edge, and slides on.
   - `SlideOnConfig` and the reachable-height calculator are in
-    `slideOnConfig.ts`. The physics (pop, nose lift, lead crossing, contact
-    climb) is in `slideOn.ts`; the mount and the carry-over (overshoot) are
-    in `onFeature.ts`.
+    `slideOnConfig.ts`. The physics is in `slideOn.ts`: the edge load, pop,
+    nose lift, lead crossing, scrape-up and contact climb. `onFeature.ts` has
+    the mount, the carry-over and the slide-off.
+  - The edge load (edge × rope tension) adds pop height and inward speed.
+    A side approach never slips out, and no water trick arms beside a
+    feature. Charging into the side, the pop goes off at the edge by itself
+    (coyote time).
+  - Every side approach is one outcome: A slide-on, B air-on (`Side Ollie-on`
+    + air bonus), C slide-off (exit `slideOff`, into the water), D jump-over
+    (`Ollie Over`, a `Tap` if it brushes the top), E save (sketchy), F only a
+    clear `noseDig`. Short of the top with less than half the board on, the
+    board drops back into the water.
   - Near a feature, W lifts the nose instead of flipping. A/D on the main
-    counter-steers the inward carry.
-  - New crash reasons: `noseDig`, `hangUp`. `noseDig` replaces
-    `noseHitSide` for steep side approaches; the old id stays defined.
+    counter-steers the inward carry (held, it starts no rotation).
+  - `noseDig` replaced `noseHitSide`. Since v2, side approaches no longer give
+    `hangUp`, `overshoot`, `clippedSide` or `slippedOut`; the ids stay defined.
   - New entries: `slideOn`, `edgeSlideOn`, named "Slide-on" and
     "Edge Slide-on".
   - The cue (F9) glows on the edge when a slide-on is possible.
@@ -474,10 +486,9 @@ Every crash goes through `crash(s, reason)` in `actions.ts`: the handle goes
 | `hardLanding` | Impact beyond what the legs absorb (on a feature: over 8 m/s) |
 | `hitFeature` | Rode or flew into a kicker or safety the wrong way |
 | `letGo` | Let go of the handle (X) |
-| `clippedSide` | Side ollie-on short of the side edge, or landed short of the balance width (spec 3.3) |
-| `noseHitSide` | Side ollie-on at more than 25 degrees to the feature |
-| `overshoot` | Side hop past the far side of the balance width, or down low past its far edge |
-| `slippedOut` | Hard edge held into the pop: the base lands rolled |
+| `noseDig` | From the side, the nose well under the top with no way up the face (side approach v2: the only side-approach crash) |
+| `clippedSide`, `noseHitSide`, `overshoot`, `hangUp` | No longer produced (side approach v2); kept as ids |
+| `slippedOut` | Hard edge held into the pop from the front: the base lands rolled |
 | `badAngle` | Board more than 30 degrees off a slide angle, or off a safety's slope |
 | `landedInGap` | Popped off a gap safety and came down in the gap |
 | `stalled` | Slower than 1 m/s along a feature (up a rooftop with the rope slack) |

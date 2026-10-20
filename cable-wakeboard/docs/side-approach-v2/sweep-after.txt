@@ -1,0 +1,85 @@
+13824 runs in 43.0 s
+
+| Feature | A | B | C | D | E | F | N | A+B | no crash (A-E) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| table 0.30 | 1381 | 178 | 301 | 133 | 9 | 0 | 302 | 68% | 87% |
+| box 0.50 | 1611 | 1 | 364 | 36 | 0 | 0 | 292 | 70% | 87% |
+| ledge 0.80 | 1425 | 0 | 362 | 8 | 24 | 139 | 346 | 62% | 79% |
+| pipe 0.63 | 1591 | 0 | 420 | 19 | 2 | 0 | 272 | 69% | 88% |
+| kanted 0.65 | 1403 | 0 | 560 | 18 | 8 | 3 | 312 | 61% | 86% |
+| rail 0.60 | 1246 | 0 | 724 | 43 | 6 | 11 | 274 | 54% | 88% |
+| all | 8657 | 179 | 2731 | 257 | 49 | 153 | 1798 | 64% | 86% |
+
+A+B by angle band (all features):
+
+| Feature | 0-5 | 10-45 | 60-75 |
+| --- | --- | --- | --- |
+| table 0.30 | 48% | 95% | 33% |
+| box 0.50 | 49% | 100% | 31% |
+| ledge 0.80 | 37% | 89% | 33% |
+| pipe 0.63 | 52% | 100% | 25% |
+| kanted 0.65 | 47% | 91% | 14% |
+| rail 0.60 | 48% | 83% | 2% |
+| all | 47% | 93% | 23% |
+
+Roughly-right inputs (10-45 deg, 0.3-2.5 m, charge >= 0.5, on time), A+B (W held for the ledge):
+
+- table 0.30: 97% of 216
+- box 0.50: 100% of 216
+- ledge 0.80: 96% of 108
+- pipe 0.63: 100% of 216
+- kanted 0.65: 92% of 216
+- rail 0.60: 84% of 216
+
+Section 5 targets:
+
+- roughly right, features <= 0.65 m, A+B: 95% (target >= 90%) PASS
+- roughly right, ledge 0.80 with W, A+B: 96% (target >= 80%) PASS
+- steep (45-75 deg): F 33 of 5184; B/C/D 57%
+- low effort (charge 0.25, table), A: 90% (target >= 85%) PASS
+- sloppy timing (+0.15 s), drop in A+B: 0% (target <= 10%) PASS
+- clearly bad (charge 0.1, ledge 0.80, no W, 10-45 deg): F 83% (target: mostly F) PASS; F 30, A 6
+
+Crash reasons (F):
+
+- crash: noseDig: 153
+
+No contact (N):
+
+- back in the water on the near side: 1798
+
+Slide-on availability block at the pop:
+
+- available: 6660 (48%)
+- none: 5688 (41%)
+- angle: 1062 (8%)
+- height: 296 (2%)
+- end: 118 (1%)
+
+Outcome by availability block:
+
+- available -> A: 4985
+- none -> A: 3377
+- none -> C: 1666
+- available -> C: 1065
+- angle -> N: 1007
+- none -> N: 357
+- available -> N: 313
+- height -> A: 172
+- available -> D: 150
+- none -> B: 100
+- height -> N: 99
+- end -> A: 88
+- none -> D: 85
+- none -> F: 81
+- available -> B: 79
+- available -> F: 48
+- angle -> A: 35
+- height -> F: 24
+- end -> N: 22
+- none -> E: 22
+- available -> E: 20
+- angle -> D: 14
+- end -> D: 8
+- angle -> E: 6
+- height -> E: 1
