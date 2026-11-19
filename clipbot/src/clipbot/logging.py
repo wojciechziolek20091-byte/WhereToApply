@@ -24,6 +24,7 @@ _SENSITIVE_KEY = re.compile(
 # Common credential shapes, as a backstop when the value is not in the known list.
 _SECRET_PATTERNS = [
     re.compile(r"sk-ant-[A-Za-z0-9_\-]{10,}"),
+    re.compile(r"sk-or-v1-[A-Za-z0-9]{10,}"),  # OpenRouter keys
     re.compile(r"AIza[0-9A-Za-z_\-]{30,}"),  # Google API keys
     re.compile(r"(?i)(bearer|apikey)\s+[A-Za-z0-9._\-]{12,}"),
 ]

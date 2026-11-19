@@ -31,7 +31,7 @@ def test_shipped_config_files_are_valid() -> None:
     cfg = load_config(REPO_CONFIG, env_file=None)
     assert cfg.settings.dry_run is True
     assert cfg.settings.publish.posts_per_day == 3
-    assert cfg.settings.llm.select_model == "claude-sonnet-5-5"
+    assert cfg.settings.llm.provider == "openrouter" and cfg.settings.llm.free_only is True
     assert [w.start for w in cfg.settings.publish.windows] == [time(12), time(17)]
 
 
@@ -138,8 +138,8 @@ def test_config_error_names_the_field(config_dir: Path) -> None:
 
 def test_secrets_are_not_in_repr(tmp_path: Path, config_dir: Path) -> None:
     env = tmp_path / ".env"
-    env.write_text("ANTHROPIC_API_KEY=sk-ant-supersecretvalue123\n")
+    env.write_text("OPENROUTER_API_KEY=sk-or-v1-supersecretvalue123\n")
     cfg = load_config(config_dir, env_file=env)
-    assert cfg.secrets.anthropic_api_key is not None
+    assert cfg.secrets.openrouter_api_key is not None
     assert "supersecret" not in repr(cfg)
-    assert "sk-ant-supersecretvalue123" in cfg.secrets.values()
+    assert "sk-or-v1-supersecretvalue123" in cfg.secrets.values()

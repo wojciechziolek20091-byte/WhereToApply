@@ -184,9 +184,9 @@ def check_secrets(cfg: AppConfig) -> list[CheckResult]:
 
     out = [
         CheckResult(
-            "ANTHROPIC_API_KEY",
-            "ok" if present(s.anthropic_api_key) else "fail",
-            "set" if present(s.anthropic_api_key) else "missing",
+            "OPENROUTER_API_KEY",
+            "ok" if present(s.openrouter_api_key) else "fail",
+            "set" if present(s.openrouter_api_key) else "missing",
         ),
         CheckResult(
             "YOUTUBE_API_KEY",
@@ -265,16 +265,74 @@ def run_checks(cfg: AppConfig, paths: DataPaths, online: bool = False) -> list[C
     results += check_sources(cfg)
     results.append(check_pause(paths))
     if online:
+        results += check_openrouter(cfg)
         results.append(
             CheckResult(
-                "online checks",
+                "other online checks",
                 "skip",
-                "API, test download and Upload-Post checks arrive in phases 1-5",
+                "YouTube, test download and Upload-Post checks arrive in phases 1-5",
             )
         )
     else:
         results.append(CheckResult("online checks", "skip", "run with --online"))
     return results
+
+
+def check_openrouter(cfg: AppConfig) -> list[CheckResult]:
+    """List free models and make one tiny JSON call through the free-model router."""
+    from clipbot.select.llm import InvalidOutput, LLMError, router_from_config
+
+    key = cfg.secrets.openrouter_api_key
+    if key is None or not key.get_secret_value():
+        return [CheckResult("openrouter", "fail", "OPENROUTER_API_KEY missing")]
+    try:
+        router = router_from_config(cfg)
+        cands = router.candidates()
+    except LLMError as e:
+        return [CheckResult("openrouter", "fail", str(e))]
+    except Exception as e:  # network trouble: report, don't crash doctor
+        return [CheckResult("openrouter", "fail", f"{type(e).__name__}: {e}")]
+    out = [
+        CheckResult(
+            "openrouter free models",
+            "ok" if cands else "fail",
+            f"{len(cands)} usable: "
+            + ", ".join(m.id for m in cands[:4])
+            + (" ..." if len(cands) > 4 else ""),
+        )
+    ]
+
+    def validate(v: object) -> bool:
+        if not isinstance(v, dict) or v.get("ok") is not True:
+            raise InvalidOutput("expected {'ok': true}")
+        return True
+
+    try:
+        res = router.complete_json(
+            purpose="doctor",
+            messages=[{"role": "user", "content": 'Reply with exactly this JSON: {"ok": true}'}],
+            validate=validate,
+            schema={
+                "type": "object",
+                "properties": {"ok": {"type": "boolean"}},
+                "required": ["ok"],
+                "additionalProperties": False,
+            },
+            max_tokens=200,
+            min_context=0,
+        )
+    except LLMError as e:
+        out.append(CheckResult("openrouter test call", "fail", str(e)))
+        return out
+    tried = len(res.attempts)
+    out.append(
+        CheckResult(
+            "openrouter test call",
+            "ok" if res.cost_usd == 0 else "fail",
+            f"answered by {res.model} after {tried} attempt(s), cost ${res.cost_usd:g}",
+        )
+    )
+    return out
 
 
 def render(results: list[CheckResult]) -> str:

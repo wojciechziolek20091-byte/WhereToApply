@@ -3,7 +3,15 @@ data_dir: data             # relative paths resolve against the working director
 dry_run: true              # renders and logs, never calls a poster
 review_mode: auto          # auto | hold
 whisper: {model: large-v3-turbo, device: auto, compute_type: int8}
-llm: {select_model: claude-sonnet-5-5, safety_model: claude-haiku-5-5}
+llm:
+  provider: openrouter
+  free_only: true          # only $0 models are ever called; no paid fallback
+  preferred_models:        # tried first while free; then any other free model
+    - nvidia/nemotron-3.5-super-vl:free
+    - google/gemma-4-31b-it:free
+  min_context_tokens: 32000
+  max_models_per_call: 6   # models tried per request before giving up until later
+  cooldown_minutes: 15     # rest a model after a rate limit or error
 discovery: {poll_minutes: 30, min_duration_sec: 180, max_duration_sec: 14400, backfill_days: 0}
 clips: {min_seconds: 20, max_seconds: 60, per_video: 3, min_score: 70, pre_roll: 0.2, post_roll: 0.4}
 render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness_lufs: -14}

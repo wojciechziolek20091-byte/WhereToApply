@@ -51,8 +51,18 @@ class WhisperSettings(_Strict):
 
 
 class LLMSettings(_Strict):
-    select_model: str = "claude-sonnet-5-5"
-    safety_model: str = "claude-haiku-5-5"
+    provider: Literal["openrouter"] = "openrouter"
+    # Only models OpenRouter prices at $0 are ever called. There is no paid
+    # fallback; a call with no free model available fails and is retried later.
+    free_only: Literal[True] = True
+    # Tried first, in this order, while they are free. Any other free model on
+    # OpenRouter is used after these.
+    preferred_models: list[str] = Field(
+        default_factory=lambda: ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-31b-it:free"]
+    )
+    min_context_tokens: int = Field(32_000, ge=8_000)
+    max_models_per_call: int = Field(6, ge=1, le=20)
+    cooldown_minutes: float = Field(15, ge=1)
 
 
 class DiscoverySettings(_Strict):
@@ -283,7 +293,7 @@ class Secrets(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    anthropic_api_key: SecretStr | None = None
+    openrouter_api_key: SecretStr | None = None
     youtube_api_key: SecretStr | None = None
     upload_post_api_key: SecretStr | None = None
     upload_post_profile: str | None = None
@@ -292,7 +302,7 @@ class Secrets(BaseSettings):
     def values(self) -> list[str]:
         """All secret values, for the log redactor."""
         out = []
-        for name in ("anthropic_api_key", "youtube_api_key", "upload_post_api_key", "notify_url"):
+        for name in ("openrouter_api_key", "youtube_api_key", "upload_post_api_key", "notify_url"):
             v = getattr(self, name)
             if v is not None and v.get_secret_value():
                 out.append(v.get_secret_value())
