@@ -147,7 +147,18 @@ class PublishWindow(_Strict):
         return self.start <= t < self.end
 
 
+PRIVACY_LEVELS = (
+    "account_default",
+    "PUBLIC_TO_EVERYONE",
+    "MUTUAL_FOLLOW_FRIENDS",
+    "FOLLOWER_OF_CREATOR",
+    "SELF_ONLY",
+)
+
+
 class PublishSettings(_Strict):
+    poster: Literal["uploadpost", "tiktok_direct"] = "uploadpost"
+    privacy: Literal[PRIVACY_LEVELS] = "account_default"  # type: ignore[valid-type]
     posts_per_day: int = Field(3, ge=1)
     min_gap_minutes: int = Field(120, ge=0)
     windows: list[PublishWindow]
@@ -351,12 +362,19 @@ class Secrets(BaseSettings):
     youtube_api_key: SecretStr | None = None
     upload_post_api_key: SecretStr | None = None
     upload_post_profile: str | None = None
+    tiktok_access_token: SecretStr | None = None  # sandbox testing only
     notify_url: SecretStr | None = None
 
     def values(self) -> list[str]:
         """All secret values, for the log redactor."""
         out = []
-        for name in ("openrouter_api_key", "youtube_api_key", "upload_post_api_key", "notify_url"):
+        for name in (
+            "openrouter_api_key",
+            "youtube_api_key",
+            "upload_post_api_key",
+            "notify_url",
+            "tiktok_access_token",
+        ):
             v = getattr(self, name)
             if v is not None and v.get_secret_value():
                 out.append(v.get_secret_value())

@@ -284,7 +284,7 @@ def run_checks(cfg: AppConfig, paths: DataPaths, online: bool = False) -> list[C
     if online:
         results += check_openrouter(cfg)
         results += check_youtube(cfg)
-        results.append(CheckResult("upload-post", "skip", "connection check arrives in phase 5"))
+        results += check_uploadpost(cfg)
     else:
         results.append(CheckResult("online checks", "skip", "run with --online"))
     return results
@@ -411,3 +411,44 @@ def check_ytdlp_extract(fail_level: str = "warn") -> CheckResult:
     if "not a bot" in text or "Sign in to confirm" in text:
         hint = " (YouTube bot check on this host: use local_folder sources or a home connection)"
     return CheckResult("yt-dlp test extract", fail_level, f"yt-dlp {v}: {_last_error(text)}{hint}")
+
+
+def check_uploadpost(cfg: AppConfig) -> list[CheckResult]:
+    """Key, profile, TikTok connection and the account's allowed privacy levels."""
+    from clipbot.post.base import PosterError
+    from clipbot.post.uploadpost import UploadPostPoster
+
+    dry = cfg.settings.dry_run
+    level = "warn" if dry else "fail"
+    key = cfg.secrets.upload_post_api_key
+    if key is None or not key.get_secret_value() or not cfg.secrets.upload_post_profile:
+        return [
+            CheckResult(
+                "upload-post",
+                level,
+                "not configured" + (" (fine while dry_run is true)" if dry else ""),
+            )
+        ]
+    try:
+        poster = UploadPostPoster(key.get_secret_value(), cfg.secrets.upload_post_profile)
+        ok, msg = poster.tiktok_connected()
+    except PosterError as e:
+        return [CheckResult("upload-post", level, str(e))]
+    out = [CheckResult("upload-post", "ok" if ok else level, msg)]
+    if ok:
+        try:
+            st = poster.tiktok_settings()
+            opts = st.get("privacy_level_options") or []
+            want = cfg.settings.publish.privacy
+            good = want == "account_default" or want in opts
+            out.append(
+                CheckResult(
+                    "tiktok privacy",
+                    "ok" if good else level,
+                    f"allowed: {', '.join(opts) or '?'}; configured: {want}; "
+                    f"max video {st.get('max_video_post_duration_sec', '?')}s",
+                )
+            )
+        except PosterError as e:
+            out.append(CheckResult("tiktok privacy", "warn", f"could not read: {e}"))
+    return out

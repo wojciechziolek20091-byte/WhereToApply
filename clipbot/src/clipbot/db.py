@@ -345,9 +345,14 @@ def get_pause(conn: sqlite3.Connection, now: datetime | None = None) -> PauseSta
 
 def set_pause(conn: sqlite3.Connection, reason: str, until: datetime | None = None) -> None:
     with tx(conn):
-        kv_set(conn, "paused", "1")
-        kv_set(conn, "pause_reason", reason)
-        kv_set(conn, "pause_until", iso(until) if until else None)
+        set_pause_in_tx(conn, reason, until)
+
+
+def set_pause_in_tx(conn: sqlite3.Connection, reason: str, until: datetime | None) -> None:
+    """set_pause for callers already inside a transaction."""
+    kv_set(conn, "paused", "1")
+    kv_set(conn, "pause_reason", reason)
+    kv_set(conn, "pause_until", iso(until) if until else None)
 
 
 def clear_pause(conn: sqlite3.Connection) -> None:
