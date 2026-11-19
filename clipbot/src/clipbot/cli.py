@@ -60,11 +60,6 @@ def _open_db(ctx: Ctx):
     return conn
 
 
-def _not_yet(phase: int) -> None:
-    typer.echo(f"not implemented yet (arrives in phase {phase})", err=True)
-    raise typer.Exit(3)
-
-
 @app.command()
 def doctor(
     config_dir: ConfigDirOpt = Path("config"),
@@ -295,30 +290,116 @@ def discover(
     typer.echo(f"{len(found)} new video(s)")
 
 
-@app.command()
-def run() -> None:
-    """Run the long-lived scheduler loop."""
-    _not_yet(6)
+def _scheduler(ctx: Ctx, conn):
+    from clipbot.notify import make_notifier
+    from clipbot.publish import Publisher, make_poster
+    from clipbot.scheduler import Scheduler
+
+    pipe = _pipeline(ctx, conn)
+    url = ctx.cfg.secrets.notify_url
+    pub = Publisher(
+        conn,
+        ctx.cfg,
+        make_poster(ctx.cfg, ctx.paths),
+        youtube=lambda: pipe.yt,
+        alert=pipe.alert,
+        clock=pipe.now,
+        source_by_id=pipe.source_by_id,
+    )
+    return Scheduler(pipe, pub, make_notifier(url.get_secret_value() if url else None))
 
 
 @app.command()
-def tick() -> None:
+def run(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Run the bot: discover, process, check and post, until stopped (Ctrl+C)."""
+    from clipbot.scheduler import run_forever
+
+    ctx = _load(config_dir, env_file)
+    clog.configure(
+        log_dir=ctx.paths.logs,
+        secrets=ctx.cfg.secrets.values(),
+        json_stdout=not sys.stdout.isatty(),
+    )
+    conn = _open_db(ctx)
+    lock = _try_lock(ctx)
+    if lock is None:
+        typer.echo("another clipbot is already running", err=True)
+        raise typer.Exit(1)
+    try:
+        if ctx.cfg.settings.dry_run:
+            typer.echo("dry_run is on: clips are rendered and checked but never posted")
+        run_forever(_scheduler(ctx, conn))
+    finally:
+        lock.release()
+
+
+@app.command()
+def tick(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
     """Run one scheduler tick and exit."""
-    _not_yet(6)
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    lock = _try_lock(ctx)
+    if lock is None:
+        typer.echo("another clipbot is already running", err=True)
+        raise typer.Exit(1)
+    try:
+        db.recover_stuck(conn)
+        rep = _scheduler(ctx, conn).tick()
+    finally:
+        lock.release()
+    for a in rep.actions or ["nothing to do"]:
+        typer.echo(a)
 
 
 @app.command()
-def approve(clip_id: str) -> None:
-    """Approve a clip held for review."""
-    _ = clip_id
-    _not_yet(6)
+def approve(
+    clip_id: str,
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Approve a clip waiting for review (review_mode: hold). It posts in the next window."""
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    try:
+        _scheduler(ctx, conn).approve(clip_id)
+    except db.StateConflict as e:
+        typer.echo(f"cannot approve: {e}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"approved {clip_id}; it will post in the next open window")
 
 
 @app.command()
-def reject(clip_id: str) -> None:
-    """Reject a clip held for review."""
-    _ = clip_id
-    _not_yet(6)
+def reject(
+    clip_id: str,
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Reject a clip waiting for review. It will never be posted."""
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    try:
+        _scheduler(ctx, conn).reject(clip_id)
+    except db.StateConflict as e:
+        typer.echo(f"cannot reject: {e}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(f"rejected {clip_id}")
+
+
+@app.command()
+def digest(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Print the daily digest now (the bot also sends it at 20:00)."""
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    typer.echo(_scheduler(ctx, conn).digest_text())
 
 
 def main() -> None:  # pragma: no cover
