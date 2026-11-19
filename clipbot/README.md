@@ -57,6 +57,15 @@ A file on disk uses the rights tag of the source you name with `--source`
    sentence boundaries, pads it slightly, enforces 20-60 s, drops overlaps,
    sponsor reads and flagged money or health claims, and keeps the best 3.
    Everything sent and received is saved in `data/work/<video>/select/`.
+4. **Render** each clip to 1080x1920: a static crop centred on the speaker's face
+   when there is one, otherwise the whole frame over a blurred copy (slides,
+   screen shares). Word-by-word captions with the spoken word highlighted, and
+   the AI's hook in a white box at the top for the first 2.5 seconds. Loudness
+   is levelled to -14 LUFS. A 6-frame contact sheet is saved next to each clip.
+5. **QA**: eight automatic checks must all pass before a clip can be posted:
+   file spec, enough speech, loudness, no black or stuck frames, every word
+   captioned, captions/hook/credit present, not a duplicate, and a safety review
+   by a free AI model. If no free model can do the safety review, the clip waits.
 
 A link is accepted when the channel is in `sources.yaml` with a rights tag, or when
 YouTube reports the video as Creative Commons. Anything else is refused with the

@@ -31,7 +31,11 @@ clips:
   blocked_risk_flags: [hate, sexual, violence, personal_data, sponsor_read,
                        copyrighted_music, medical_claim, financial_claim]
 render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness_lufs: -14}
-captions: {words_per_line: 3, bottom_margin_pct: 20, right_margin_pct: 15}
+captions: {words_per_line: 3, font_size: 70, hook_font_size: 74, hook_seconds: 2.5,
+           bottom_margin_pct: 20, right_margin_pct: 15}
+post:
+  extra_hashtags: []       # your own tags on every post, e.g. [fyp]
+  max_hashtags: 5
 publish:
   posts_per_day: 3         # hard ceiling 8
   min_gap_minutes: 120

@@ -16,10 +16,16 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from clipbot import db
+from clipbot import qa as qa_mod
+from clipbot.assets import AssetError, face_model, font_files
 from clipbot.config import AppConfig, Source
 from clipbot.logging import get_logger
 from clipbot.media import ProbeError, probe
 from clipbot.models import DataPaths
+from clipbot.post.text import build_post_text, youtube_url
+from clipbot.render.captions import CaptionLayout, build_ass, clip_words, count_caption_words
+from clipbot.render.encode import EncodeSettings, RenderError, contact_sheet, render_clip
+from clipbot.render.reframe import FaceDetector, plan_clip
 from clipbot.select.llm import FreeModelRouter, LLMAuthError, NoFreeModelAvailable
 from clipbot.select.prompt import (
     CLIP_SCHEMA,
@@ -83,6 +89,7 @@ class Pipeline:
         self._fetch_feed = feed_fetcher
         self.now = clock
         self._router = router
+        self._faces: FaceDetector | None = None
         self._transcribe = transcriber
 
     # ------------------------------------------------------------------ helpers
@@ -750,6 +757,30 @@ class Pipeline:
             return self.transcribe(video_id)
         if st == "transcribed" and due:
             return self.select(video_id)
+        if st == "selected":
+            nxt = self.conn.execute(
+                "SELECT id FROM clips WHERE video_id = ? AND state = 'selected' "
+                "ORDER BY score DESC LIMIT 1",
+                (video_id,),
+            ).fetchone()
+            if nxt is not None:
+                self.render(nxt["id"])
+                return "rendering"  # keep going until every clip is rendered
+            due_qa = self.clips_due_for_qa(video_id)
+            if due_qa:
+                self.qa(due_qa[0])
+                return "checking"
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="selected",
+                    to="done",
+                    reason=row["state_reason"],
+                    now=self.now(),
+                )
+            return "done"
         return None
 
     def process(self, video_id: str) -> list[str]:
@@ -761,6 +792,243 @@ class Pipeline:
             if after is None or after == before:
                 return seen
             seen.append(after)
+
+    # ------------------------------------------------------------------ render
+
+    def face_detector(self) -> FaceDetector:
+        if self._faces is None:
+            self._faces = FaceDetector(face_model(self.paths.models))
+        return self._faces
+
+    def caption_layout(self) -> CaptionLayout:
+        c, r = self.cfg.settings.captions, self.cfg.settings.render
+        return CaptionLayout(
+            width=r.width,
+            height=r.height,
+            words_per_line=c.words_per_line,
+            font_size=c.font_size,
+            hook_font_size=c.hook_font_size,
+            bottom_margin_pct=c.bottom_margin_pct,
+            right_margin_pct=c.right_margin_pct,
+            hook_seconds=c.hook_seconds,
+        )
+
+    def encode_settings(self) -> EncodeSettings:
+        r = self.cfg.settings.render
+        return EncodeSettings(
+            width=r.width,
+            height=r.height,
+            fps=r.fps,
+            crf=r.crf,
+            preset=r.preset,
+            loudness_lufs=r.loudness_lufs,
+        )
+
+    def render(self, clip_id: str) -> str:
+        c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+        if c is None:
+            raise LookupError(f"unknown clip {clip_id}")
+        v = self._row(c["video_id"])
+        with db.tx(self.conn):
+            db.transition(
+                self.conn, "clips", clip_id, expect="selected", to="rendering", now=self.now()
+            )
+        start, end = c["start_ms"] / 1000, c["end_ms"] / 1000
+        src = Path(v["raw_path"])
+        work = self.paths.work_dir(v["id"]) / "render" / clip_id
+        out = self.paths.render(clip_id)
+        sheet = self.paths.contact_sheet(clip_id)
+        try:
+            info = probe(src)
+            scenes = plan_clip(src, self.face_detector(), start, end, info.width, info.height)
+            tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+            words = clip_words(tr.words, start, end)
+            ass = build_ass(words, end - start, c["hook"], self.caption_layout())
+            render_clip(
+                src, start, end, scenes, ass, font_files(), out, work, self.encode_settings()
+            )
+            contact_sheet(out, sheet, end - start)
+        except (RenderError, AssetError, ProbeError, OSError) as e:
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "clips",
+                    clip_id,
+                    expect="rendering",
+                    to="failed",
+                    reason=f"render failed: {e}"[:500],
+                    now=self.now(),
+                )
+                self.alert("render_failed", f"clip {clip_id}: {e}", clip_id=clip_id)
+            return "failed"
+        report = {
+            "scenes": [s.__dict__ for s in scenes],
+            "caption_words": count_caption_words(ass),
+            "transcript_words": len(words),
+            "source": f"{info.width}x{info.height}",
+        }
+        (work / "render.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
+        shutil.rmtree(work / "fonts", ignore_errors=True)
+        modes = sorted({s.mode for s in scenes})
+        with db.tx(self.conn):
+            db.transition(
+                self.conn,
+                "clips",
+                clip_id,
+                expect="rendering",
+                to="rendered",
+                reason=f"{len(scenes)} scene(s): {', '.join(modes)}",
+                now=self.now(),
+                render_path=str(out),
+                contact_sheet_path=str(sheet),
+            )
+            db.log_event(
+                self.conn, "render", "rendered", video_id=v["id"], clip_id=clip_id, data=report
+            )
+        return "rendered"
+
+    # ------------------------------------------------------------------ QA
+
+    def clips_due_for_qa(self, video_id: str | None = None) -> list[str]:
+        sql = (
+            "SELECT id FROM clips WHERE state = 'rendered' AND "
+            "(next_attempt_at IS NULL OR next_attempt_at <= ?)"
+        )
+        args: list[object] = [db.iso(self.now())]
+        if video_id:
+            sql += " AND video_id = ?"
+            args.append(video_id)
+        return [r["id"] for r in self.conn.execute(sql + " ORDER BY score DESC", args)]
+
+    def post_text(self, clip: sqlite3.Row, video: sqlite3.Row) -> str:
+        source = self.source_by_id(video["source_id"])
+        return build_post_text(
+            hook=clip["hook"],
+            summary=clip["summary"],
+            model_tags=json.loads(clip["hashtags_json"] or "[]"),
+            source=source,
+            channel_title=video["channel_title"] or "",
+            video_url=youtube_url(video["id"], video["license"]),
+            ps=self.cfg.settings.post,
+        )
+
+    def qa(self, clip_id: str) -> str:
+        c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+        v = self._row(c["video_id"])
+        source = self.source_by_id(v["source_id"])
+        start, end = c["start_ms"] / 1000, c["end_ms"] / 1000
+        work = self.paths.work_dir(v["id"]) / "render" / clip_id
+        ass_path = work / "clip.ass"
+        ass = ass_path.read_text(encoding="utf-8") if ass_path.is_file() else ""
+        tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+        words = clip_words(tr.words, start, end)
+        text = self.post_text(c, v)
+        render = Path(c["render_path"] or "")
+        lim = self.cfg.settings.clips
+
+        gates: dict[str, qa_mod.Gate] = {}
+        info, err = qa_mod.probe_or_none(render)
+        gates["spec"] = qa_mod.gate_spec(info, lim.min_seconds, lim.max_seconds, err)
+        gates["speech"] = qa_mod.gate_speech(words, end - start)
+        if info is not None:
+            gates["loudness"] = qa_mod.gate_loudness(qa_mod.measure_lufs(render))
+            black, freezes = qa_mod.measure_black_and_frozen(render)
+            static = {
+                f: qa_mod.source_static_share(Path(v["raw_path"]), start + f[0], start + f[1])
+                for f in freezes
+                if f[1] - f[0] > qa_mod.MAX_BLACK_OR_FROZEN
+            }
+            gates["visual"] = qa_mod.gate_visual(black, freezes, static)
+        gates["caption_sync"] = qa_mod.gate_caption_sync(ass, len(words))
+        gates["transformation"] = qa_mod.gate_transformation(ass, source.rights, text)
+        others = [
+            (r["id"], r["start_ms"] / 1000, r["end_ms"] / 1000)
+            for r in self.conn.execute(
+                f"SELECT id, start_ms, end_ms FROM clips WHERE video_id = ? AND id != ? "
+                f"AND state IN ({','.join('?' * len(qa_mod.ACTIVE_STATES))})",
+                (v["id"], clip_id, *qa_mod.ACTIVE_STATES),
+            )
+        ]
+        gates["duplicates"] = qa_mod.gate_duplicates(clip_id, start, end, others)
+
+        # Only spend a model call when everything else passed.
+        if all(g.ok for g in gates.values()):
+            spoken = " ".join(w.w for w in words)
+            try:
+                res = self.router.complete_json(
+                    purpose="safety",
+                    messages=qa_mod.safety_messages(spoken, text),
+                    validate=qa_mod.parse_safety,
+                    schema=qa_mod.SAFETY_SCHEMA,
+                    schema_name="safety",
+                    max_tokens=1500,
+                    min_context=0,
+                )
+            except NoFreeModelAvailable as e:
+                retry = self.now() + SELECT_RETRY_DELAY
+                with db.tx(self.conn):
+                    self.conn.execute(
+                        "UPDATE clips SET next_attempt_at = ?, state_reason = ?, "
+                        "updated_at = ? WHERE id = ?",
+                        (
+                            db.iso(retry),
+                            f"safety check waiting: {e}"[:500],
+                            db.iso(self.now()),
+                            clip_id,
+                        ),
+                    )
+                return "rendered"
+            except LLMAuthError as e:
+                db.set_pause(self.conn, f"OpenRouter auth error: {e}")
+                self.alert(
+                    "llm_auth",
+                    f"Paused: OpenRouter refused the key ({e}). Fix "
+                    "OPENROUTER_API_KEY, then run `clipbot resume`.",
+                )
+                return "rendered"
+            gates["safety"] = qa_mod.gate_safety(res.value, res.model)
+            db.log_event(
+                self.conn,
+                "llm_call",
+                f"safety: {res.model}",
+                clip_id=clip_id,
+                video_id=v["id"],
+                data={
+                    "model": res.model,
+                    "input_tokens": res.input_tokens,
+                    "output_tokens": res.output_tokens,
+                    "cost_usd": res.cost_usd,
+                    "decision": res.value.decision,
+                },
+            )
+        else:
+            gates["safety"] = qa_mod.Gate(False, "not checked: an earlier gate failed")
+
+        result = qa_mod.QAResult(gates)
+        to = "qa_passed" if result.passed else "qa_rejected"
+        reason = "all gates passed" if result.passed else result.first_failure
+        with db.tx(self.conn):
+            db.transition(
+                self.conn,
+                "clips",
+                clip_id,
+                expect="rendered",
+                to=to,
+                reason=reason,
+                now=self.now(),
+                next_attempt_at=None,
+                qa_json=json.dumps(result.to_json()),
+                post_text=text,
+            )
+            db.log_event(
+                self.conn,
+                "qa",
+                f"{to}: {reason}",
+                clip_id=clip_id,
+                video_id=v["id"],
+                level="info" if result.passed else "warning",
+            )
+        return to
 
 
 def local_video_id(path: Path) -> str:

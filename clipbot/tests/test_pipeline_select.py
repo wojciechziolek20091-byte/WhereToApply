@@ -74,7 +74,9 @@ def to_transcribed(env, router, tr=None):
     src = make_mp4(env[1].root / "in" / "ep1.mp4", seconds=181)
     reg = p.ingest_file(src, "mine", title="Episode 1")
     assert reg.state == "discovered"
-    p.process(reg.video_id)
+    p.acquire(reg.video_id)
+    p.transcribe(reg.video_id)
+    p.step(reg.video_id)  # select (rendering is tested separately)
     return p, reg.video_id
 
 

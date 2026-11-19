@@ -132,6 +132,9 @@ class RenderSettings(_Strict):
 
 class CaptionSettings(_Strict):
     words_per_line: int = Field(3, ge=2, le=4)
+    font_size: int = Field(70, ge=40, le=120)
+    hook_font_size: int = Field(74, ge=40, le=140)
+    hook_seconds: float = Field(2.5, ge=1, le=10)  # how long the hook box stays up
     bottom_margin_pct: float = Field(20, ge=0, le=50)
     right_margin_pct: float = Field(15, ge=0, le=40)
 
@@ -182,6 +185,27 @@ class PublishSettings(_Strict):
         return out
 
 
+class PostSettings(_Strict):
+    # Your own tags, put first on every post (e.g. ["fyp"]). The AI's topic tags
+    # fill the rest, up to max_hashtags.
+    extra_hashtags: list[str] = Field(default_factory=list)
+    max_hashtags: int = Field(5, ge=1, le=10)
+    license_labels: dict[str, str] = Field(
+        default_factory=lambda: {"cc_by": "CC BY", "permission": "used with permission"}
+    )
+
+    @field_validator("extra_hashtags")
+    @classmethod
+    def _tags(cls, v: list[str]) -> list[str]:
+        out = []
+        for t in v:
+            t = t.strip().lstrip("#").lower()
+            if not re.fullmatch(r"[a-z0-9_]{1,40}", t):
+                raise ValueError(f"bad hashtag {t!r}")
+            out.append(t)
+        return out
+
+
 class RightsSettings(_Strict):
     # A link pasted with `clipbot clip` from a channel that is not in sources.yaml
     # is accepted only when YouTube reports the video as Creative Commons.
@@ -214,6 +238,7 @@ class Settings(_Strict):
     captions: CaptionSettings = CaptionSettings()
     publish: PublishSettings = PublishSettings(windows=["12:00-14:00", "17:00-21:00"])  # type: ignore[list-item]
     rights: RightsSettings = RightsSettings()
+    post: PostSettings = PostSettings()
     acquire: AcquireSettings = AcquireSettings()
     retention: RetentionSettings = RetentionSettings()
     safety: SafetySettings = SafetySettings()

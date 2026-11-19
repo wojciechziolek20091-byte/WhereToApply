@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import textwrap
 from pathlib import Path
 
@@ -51,6 +52,8 @@ def _no_real_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
         "UPLOAD_POST_PROFILE",
         "NOTIFY_URL",
     ):
+        if k == "OPENROUTER_API_KEY" and os.environ.get("CLIPBOT_LIVE") == "1":
+            continue  # live tests call the real free models
         monkeypatch.delenv(k, raising=False)
 
 
