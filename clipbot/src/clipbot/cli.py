@@ -139,6 +139,98 @@ def resume(
         typer.echo(f"note: {ctx.paths.pause_file} still exists and keeps the bot paused", err=True)
 
 
+def _pipeline(ctx: Ctx, conn):
+    from clipbot.pipeline import Pipeline
+
+    return Pipeline(conn, ctx.cfg, ctx.paths)
+
+
+def _try_lock(ctx: Ctx) -> db.ProcessLock | None:
+    lock = db.ProcessLock(ctx.paths.lock)
+    try:
+        lock.acquire()
+    except db.LockHeld:
+        return None
+    return lock
+
+
+@app.command()
+def clip(
+    url: Annotated[str | None, typer.Argument(help="YouTube video link or id.")] = None,
+    queue_only: Annotated[
+        bool, typer.Option("--queue-only", help="Register it; let the running bot download.")
+    ] = False,
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Clip a video by link. Asks for the link if you leave it out."""
+    from clipbot.sources.youtube_api import BadVideoURL, YouTubeError
+
+    if not url:
+        url = typer.prompt("YouTube video link")
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    pipe = _pipeline(ctx, conn)
+    try:
+        reg = pipe.ingest_url(url)
+    except BadVideoURL as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from None
+    except (LookupError, YouTubeError) as e:
+        typer.echo(f"could not look up the video: {e}", err=True)
+        raise typer.Exit(1) from None
+
+    label = f"{reg.title!r} by {reg.channel}" if reg.title else reg.video_id
+    if reg.state == "skipped":
+        typer.echo(f"refused {label}\n  reason: {reg.reason}")
+        raise typer.Exit(1)
+    typer.echo(
+        f"{'accepted' if reg.new else 'already known'}: {label}\n"
+        f"  state: {reg.state} ({reg.reason})"
+    )
+    if queue_only or reg.state not in ("discovered", "acquire_failed"):
+        return
+    lock = _try_lock(ctx)
+    if lock is None:
+        typer.echo("the bot is running and will download it shortly")
+        return
+    try:
+        typer.echo("downloading...")
+        state = pipe.acquire(reg.video_id)
+    finally:
+        lock.release()
+    row = conn.execute(
+        "SELECT state_reason, next_attempt_at FROM videos WHERE id = ?", (reg.video_id,)
+    ).fetchone()
+    typer.echo(f"  {state}: {row['state_reason']}")
+    if state == "acquire_failed":
+        typer.echo(f"  will retry automatically after {row['next_attempt_at']}")
+        raise typer.Exit(1)
+    if state == "failed":
+        raise typer.Exit(1)
+
+
+@app.command()
+def discover(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Check every enabled channel's feed for new uploads once."""
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    lock = _try_lock(ctx)
+    if lock is None:
+        typer.echo("the bot is running; it discovers on its own schedule", err=True)
+        raise typer.Exit(1)
+    try:
+        found = _pipeline(ctx, conn).discover()
+    finally:
+        lock.release()
+    for r in found:
+        typer.echo(f"{r.state:10} {r.video_id}  {r.title[:60]}  ({r.reason})")
+    typer.echo(f"{len(found)} new video(s)")
+
+
 @app.command()
 def run() -> None:
     """Run the long-lived scheduler loop."""

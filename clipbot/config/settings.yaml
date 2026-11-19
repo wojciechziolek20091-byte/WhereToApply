@@ -13,6 +13,8 @@ llm:
   max_models_per_call: 6   # models tried per request before giving up until later
   cooldown_minutes: 15     # rest a model after a rate limit or error
 discovery: {poll_minutes: 30, min_duration_sec: 180, max_duration_sec: 14400, backfill_days: 0}
+rights: {allow_unlisted_cc_by: true}   # pasted links from unlisted channels: CC BY only
+acquire: {timeout_minutes: 45}
 clips: {min_seconds: 20, max_seconds: 60, per_video: 3, min_score: 70, pre_roll: 0.2, post_roll: 0.4}
 render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness_lufs: -14}
 captions: {words_per_line: 3, bottom_margin_pct: 20, right_margin_pct: 15}

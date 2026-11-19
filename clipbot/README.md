@@ -33,6 +33,20 @@ providers may log prompts.
 
 `clipbot doctor --online` lists the usable free models and makes one test call.
 
+## Clip a video by link
+
+```bash
+uv run clipbot clip "https://www.youtube.com/watch?v=VIDEO_ID"
+uv run clipbot clip            # asks for the link
+uv run clipbot discover        # check listed channels for new uploads now
+```
+
+A link is accepted when the channel is in `sources.yaml` with a rights tag, or when
+YouTube reports the video as Creative Commons. Anything else is refused with the
+reason. If YouTube blocks the download (bot check, common on cloud servers), the
+bot retries after 1, 6 and 16 hours, then alerts. It never uses cookies or proxies
+to get around this; put the file in the source's local folder instead.
+
 ## Rights
 
 Every enabled source in `config/sources.yaml` needs `rights: own | cc_by | permission`.

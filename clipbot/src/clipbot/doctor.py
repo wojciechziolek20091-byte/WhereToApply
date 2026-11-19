@@ -266,13 +266,8 @@ def run_checks(cfg: AppConfig, paths: DataPaths, online: bool = False) -> list[C
     results.append(check_pause(paths))
     if online:
         results += check_openrouter(cfg)
-        results.append(
-            CheckResult(
-                "other online checks",
-                "skip",
-                "YouTube, test download and Upload-Post checks arrive in phases 1-5",
-            )
-        )
+        results += check_youtube(cfg)
+        results.append(CheckResult("upload-post", "skip", "connection check arrives in phase 5"))
     else:
         results.append(CheckResult("online checks", "skip", "run with --online"))
     return results
@@ -344,3 +339,58 @@ def render(results: list[CheckResult]) -> str:
     lines.append("")
     lines.append(f"{fails} failed, {warns} warnings, {len(results)} checks")
     return "\n".join(lines)
+
+
+# A short Creative Commons video used to test API access and yt-dlp extraction.
+TEST_CC_VIDEO = "Lx29DK56p1Q"
+
+
+def check_youtube(cfg: AppConfig) -> list[CheckResult]:
+    from clipbot.sources.youtube_api import YouTubeAPI, YouTubeError
+
+    key = cfg.secrets.youtube_api_key
+    if key is None or not key.get_secret_value():
+        return [CheckResult("youtube api", "fail", "YOUTUBE_API_KEY missing")]
+    out: list[CheckResult] = []
+    try:
+        meta = YouTubeAPI(key.get_secret_value()).video(TEST_CC_VIDEO)
+    except YouTubeError as e:
+        return [CheckResult("youtube api", "fail", str(e))]
+    if meta is None:
+        out.append(CheckResult("youtube api", "warn", f"test video {TEST_CC_VIDEO} not found"))
+    else:
+        out.append(
+            CheckResult(
+                "youtube api", "ok", f"videos.list works, test video license={meta.license}"
+            )
+        )
+
+    needs = any(s.acquire == "ytdlp" for s in cfg.enabled_sources)
+    out.append(check_ytdlp_extract(fail_level="fail" if needs else "warn"))
+    return out
+
+
+def check_ytdlp_extract(fail_level: str = "warn") -> CheckResult:
+    """Resolve formats for the test video without downloading it."""
+    from clipbot.sources.providers.ytdlp import FORMAT, _last_error, ytdlp_version
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "yt_dlp",
+        "--simulate",
+        "--no-playlist",
+        "--format",
+        FORMAT,
+        "--js-runtimes",
+        "deno",
+        f"https://www.youtube.com/watch?v={TEST_CC_VIDEO}",
+    ]
+    code, text = _run(cmd, timeout=180)
+    v = ytdlp_version()
+    if code == 0:
+        return CheckResult("yt-dlp test extract", "ok", f"yt-dlp {v} can fetch YouTube")
+    hint = ""
+    if "not a bot" in text or "Sign in to confirm" in text:
+        hint = " (YouTube bot check on this host: use local_folder sources or a home connection)"
+    return CheckResult("yt-dlp test extract", fail_level, f"yt-dlp {v}: {_last_error(text)}{hint}")

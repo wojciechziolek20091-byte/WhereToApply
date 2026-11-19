@@ -165,6 +165,16 @@ class PublishSettings(_Strict):
         return out
 
 
+class RightsSettings(_Strict):
+    # A link pasted with `clipbot clip` from a channel that is not in sources.yaml
+    # is accepted only when YouTube reports the video as Creative Commons.
+    allow_unlisted_cc_by: bool = True
+
+
+class AcquireSettings(_Strict):
+    timeout_minutes: float = Field(45, gt=0)
+
+
 class RetentionSettings(_Strict):
     raw_days: int = Field(3, ge=0)
     render_days: int = Field(14, ge=0)
@@ -186,6 +196,8 @@ class Settings(_Strict):
     render: RenderSettings = RenderSettings()
     captions: CaptionSettings = CaptionSettings()
     publish: PublishSettings = PublishSettings(windows=["12:00-14:00", "17:00-21:00"])  # type: ignore[list-item]
+    rights: RightsSettings = RightsSettings()
+    acquire: AcquireSettings = AcquireSettings()
     retention: RetentionSettings = RetentionSettings()
     safety: SafetySettings = SafetySettings()
 
