@@ -10,6 +10,7 @@ any other evasion (brief 4.2 and 8).
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -112,10 +113,18 @@ class YtDlpProvider:
             "3",
             "--js-runtimes",
             "deno",
+            *self._pot_args(),
             "--output",
             out_template,
             url,
         ]
+
+    @staticmethod
+    def _pot_args() -> list[str]:
+        """Point the bgutil PO token plugin at its server when one is configured
+        (the compose file runs it as a sidecar). Without it yt-dlp works as usual."""
+        url = os.environ.get("CLIPBOT_POT_URL")
+        return ["--extractor-args", f"youtubepot-bgutilhttp:base_url={url}"] if url else []
 
     def acquire(self, video_id: str, url: str, dest: Path) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)

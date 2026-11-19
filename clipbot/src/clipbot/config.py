@@ -6,6 +6,7 @@ tag, or a `permission` source without a `permission_ref`, stops the process.
 
 from __future__ import annotations
 
+import os
 import re
 from datetime import date, time
 from pathlib import Path
@@ -439,6 +440,9 @@ def load_sources(path: Path) -> list[Source]:
 
 def load_config(config_dir: Path, env_file: Path | None = Path(".env")) -> AppConfig:
     settings = load_settings(config_dir / "settings.yaml")
+    override = os.environ.get("CLIPBOT_DATA_DIR")
+    if override:  # containers keep their data in a mounted volume
+        settings = settings.model_copy(update={"data_dir": Path(override)})
     sources = load_sources(config_dir / "sources.yaml")
     secrets = Secrets(_env_file=env_file)  # type: ignore[call-arg]
     return AppConfig(settings=settings, sources=sources, secrets=secrets, config_dir=config_dir)

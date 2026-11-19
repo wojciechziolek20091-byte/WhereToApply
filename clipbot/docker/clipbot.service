@@ -1,0 +1,24 @@
+# systemd unit, an alternative to Docker. Install as your user:
+#   mkdir -p ~/.config/systemd/user
+#   cp docker/clipbot.service ~/.config/systemd/user/
+#   (edit WorkingDirectory below to where clipbot lives)
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now clipbot
+#   loginctl enable-linger $USER     # keep it running after you log out
+# Logs: journalctl --user -u clipbot -f
+[Unit]
+Description=clipbot: rights-cleared clips to TikTok
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/clipbot
+ExecStart=/usr/bin/env uv run --frozen clipbot run
+Restart=on-failure
+RestartSec=30
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target

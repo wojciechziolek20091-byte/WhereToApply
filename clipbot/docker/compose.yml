@@ -1,0 +1,29 @@
+# Run from the clipbot/ folder:
+#   docker compose -f docker/compose.yml up -d --build
+# Logs:   docker compose -f docker/compose.yml logs -f clipbot
+# Pause:  docker compose -f docker/compose.yml exec clipbot clipbot pause
+services:
+  clipbot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    env_file: ../.env              # keys: see .env.example
+    environment:
+      TZ: Europe/Warsaw
+      CLIPBOT_POT_URL: http://pot-provider:4416
+    volumes:
+      - ../config:/app/config:ro
+      - clipbot-data:/data
+      # Creator-supplied files for `acquire: local_folder` sources, e.g.
+      # local_folder: /incoming/my-channel
+      - ../incoming:/incoming:ro
+    depends_on: [pot-provider]
+
+  # PO token helper used by yt-dlp for YouTube (bgutil-ytdlp-pot-provider).
+  pot-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider:latest
+    restart: unless-stopped
+
+volumes:
+  clipbot-data:
