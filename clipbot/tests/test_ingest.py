@@ -7,9 +7,6 @@ from typing import Any
 
 import pytest
 
-from clipbot import db
-from clipbot.config import load_config
-from clipbot.models import DataPaths
 from clipbot.pipeline import ACQUIRE_RETRY_DELAYS, Pipeline
 from clipbot.sources.providers import AcquireBlocked, AcquireError, NotAvailableYet
 from clipbot.sources.providers.local import LocalFolderProvider
@@ -47,16 +44,6 @@ class FakeProvider:
         if isinstance(o, Exception):
             raise o
         return make_mp4(dest)
-
-
-@pytest.fixture
-def env(config_dir: Path):
-    cfg = load_config(config_dir, env_file=None)
-    paths = DataPaths(cfg.settings.data_dir)
-    paths.ensure()
-    conn = db.connect(paths.db)
-    db.sync_sources(conn, cfg.sources)
-    return cfg, paths, conn
 
 
 def make(env, yt=None, providers=None, feed=None, now=None) -> Pipeline:

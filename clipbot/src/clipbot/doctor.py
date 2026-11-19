@@ -124,6 +124,22 @@ def check_ytdlp_stack(cfg: AppConfig) -> list[CheckResult]:
     return out
 
 
+def check_transcription(cfg: AppConfig) -> CheckResult:
+    try:
+        import faster_whisper
+    except ImportError:
+        return CheckResult("transcription", "fail", "faster-whisper not installed")
+    from clipbot.transcribe import resolve_device
+
+    device, model, compute = resolve_device(cfg.settings.whisper)
+    note = "NVIDIA GPU found" if device == "cuda" else "no NVIDIA GPU, CPU mode"
+    return CheckResult(
+        "transcription",
+        "ok",
+        f"faster-whisper {faster_whisper.__version__}: {note}, model {model} ({compute})",
+    )
+
+
 def check_data_dir(paths: DataPaths, min_free_gb: float) -> list[CheckResult]:
     out: list[CheckResult] = []
     try:
@@ -258,6 +274,7 @@ def run_checks(cfg: AppConfig, paths: DataPaths, online: bool = False) -> list[C
     results.append(check_python())
     results += check_ffmpeg()
     results += check_ytdlp_stack(cfg)
+    results.append(check_transcription(cfg))
     results += check_data_dir(paths, cfg.settings.safety.min_free_disk_gb)
     results.append(check_database(paths))
     results.append(check_timezone(cfg))

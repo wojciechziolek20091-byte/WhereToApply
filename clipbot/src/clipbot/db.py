@@ -11,10 +11,10 @@ Rules from the brief, section 6:
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import sqlite3
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -428,9 +428,37 @@ class LockHeld(RuntimeError):
     pass
 
 
+def _lock_fd(fd: int) -> None:
+    """Exclusive, non-blocking OS lock on an open file. Raises BlockingIOError if
+    another process holds it. The OS drops it when the process dies, so a crash
+    never leaves a stale lock behind."""
+    if sys.platform == "win32":
+        import msvcrt
+
+        try:
+            msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+        except OSError:
+            raise BlockingIOError from None
+    else:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+
+def _unlock_fd(fd: int) -> None:
+    if sys.platform == "win32":
+        import msvcrt
+
+        os.lseek(fd, 0, os.SEEK_SET)
+        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(fd, fcntl.LOCK_UN)
+
+
 class ProcessLock:
-    """Exclusive, non-blocking flock. Released automatically if the process dies,
-    so a crash never leaves a stale lock behind."""
+    """One clipbot process at a time, on Linux, macOS and Windows."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
@@ -440,17 +468,18 @@ class ProcessLock:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
         try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _lock_fd(fd)
         except BlockingIOError:
             os.close(fd)
             raise LockHeld(f"another clipbot process holds {self.path}") from None
-        os.ftruncate(fd, 0)
-        os.write(fd, str(os.getpid()).encode())
+        # Record the owner's pid after the lock byte (Windows locks byte 0).
+        os.lseek(fd, 1, os.SEEK_SET)
+        os.write(fd, str(os.getpid()).encode().ljust(16))
         self._fd = fd
 
     def release(self) -> None:
         if self._fd is not None:
-            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            _unlock_fd(self._fd)
             os.close(self._fd)
             self._fd = None
 

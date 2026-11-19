@@ -6,16 +6,29 @@ transaction, so re-running a stage after a crash is safe.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import shutil
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 from clipbot import db
 from clipbot.config import AppConfig, Source
 from clipbot.logging import get_logger
 from clipbot.media import ProbeError, probe
 from clipbot.models import DataPaths
+from clipbot.select.llm import FreeModelRouter, LLMAuthError, NoFreeModelAvailable
+from clipbot.select.prompt import (
+    CLIP_SCHEMA,
+    build_messages,
+    parse_selection,
+    transcript_lines,
+    windows,
+)
+from clipbot.select.snap import SnapRules, merge_window_candidates, plan_clips
 from clipbot.sources import rss
 from clipbot.sources.providers import (
     AcquireBlocked,
@@ -27,12 +40,16 @@ from clipbot.sources.providers.local import LocalFolderProvider
 from clipbot.sources.providers.ytdlp import YtDlpProvider
 from clipbot.sources.rights import Decision, adhoc_cc_source, check_eligible, check_rights
 from clipbot.sources.youtube_api import VideoMeta, YouTubeAPI, parse_video_id
+from clipbot.transcribe import Transcript, transcript_path
+from clipbot.transcribe import transcribe as run_transcribe
 
 log = get_logger(__name__)
 
 # After the first failed download: retry after 1 h, 6 h, 16 h (about 24 h in all),
 # then give up and alert (brief 4.2).
 ACQUIRE_RETRY_DELAYS = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=16))
+# When every free model is busy, selection waits and tries again.
+SELECT_RETRY_DELAY = timedelta(minutes=30)
 
 
 @dataclass(frozen=True)
@@ -55,6 +72,8 @@ class Pipeline:
         providers: dict[str, Provider] | None = None,
         feed_fetcher=rss.fetch_feed,
         clock=db.utcnow,
+        router: FreeModelRouter | None = None,
+        transcriber=run_transcribe,
     ) -> None:
         self.conn = conn
         self.cfg = cfg
@@ -63,6 +82,8 @@ class Pipeline:
         self._providers = providers or {}
         self._fetch_feed = feed_fetcher
         self.now = clock
+        self._router = router
+        self._transcribe = transcriber
 
     # ------------------------------------------------------------------ helpers
 
@@ -72,6 +93,22 @@ class Pipeline:
             key = self.cfg.secrets.youtube_api_key
             self._yt = YouTubeAPI(key.get_secret_value() if key else "")
         return self._yt
+
+    @property
+    def router(self) -> FreeModelRouter:
+        if self._router is None:
+            from clipbot.select.llm import router_from_config
+
+            self._router = router_from_config(self.cfg, on_paid_usage=self._paid_usage)
+        return self._router
+
+    def _paid_usage(self, model: str, cost: float) -> None:
+        self.alert(
+            "llm_paid_usage",
+            f"model {model} charged ${cost:g}; it is now banned",
+            model=model,
+            cost_usd=cost,
+        )
 
     def today(self) -> date:
         return self.now().astimezone(self.cfg.settings.tz).date()
@@ -397,3 +434,339 @@ class Pipeline:
         for vid in self.due_for_acquire()[:limit]:
             done.append((vid, self.acquire(vid)))
         return done
+
+    # ------------------------------------------------------------------ local files
+
+    def ingest_file(self, path: Path, source_id: str, title: str | None = None) -> Registered:
+        """Register a video file you have on disk under a configured source, whose
+        rights tag applies. CC BY sources cannot be used: the license of a local
+        file cannot be verified."""
+        path = path.expanduser().resolve()
+        try:
+            source = self.cfg.source(source_id)
+        except KeyError:
+            raise LookupError(f"no source {source_id!r} in sources.yaml") from None
+        info = probe(path)
+        vid = local_video_id(path)
+        meta = VideoMeta(
+            id=vid,
+            channel_id=source.youtube_channel_id,
+            channel_title=source.name,
+            title=title or path.stem.replace("_", " "),
+            published_at=self.now(),
+            duration_sec=info.duration,
+            license="local_file",
+            privacy_status="public",
+            live_status="none",
+            upload_status="processed",
+            was_live=False,
+        )
+        decision = self._gate(meta, source, None)
+        reg = self.register(meta, source, decision, "file")
+        dest = self.paths.raw_video(vid)
+        if reg.state == "discovered" and not dest.exists():
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                os.link(path, dest)
+            except OSError:
+                shutil.copy2(path, dest)
+        return reg
+
+    # ------------------------------------------------------------------ transcribe
+
+    def transcribe(self, video_id: str) -> str:
+        row = self._row(video_id)
+        with db.tx(self.conn):
+            db.transition(
+                self.conn, "videos", video_id, expect="acquired", to="transcribing", now=self.now()
+            )
+        source = self.source_by_id(row["source_id"])
+        try:
+            tr = self._transcribe(
+                Path(row["raw_path"]),
+                self.paths.work_dir(video_id),
+                self.cfg.settings.whisper,
+                source.language_hint,
+                self.paths.models,
+            )
+        except Exception as e:
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="transcribing",
+                    to="failed",
+                    reason=f"transcription failed: {e}",
+                    now=self.now(),
+                )
+                self.alert("transcribe_failed", f"{video_id}: {e}", video_id=video_id)
+            return "failed"
+        if not tr.words:
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="transcribing",
+                    to="skipped",
+                    reason="no speech found",
+                    now=self.now(),
+                )
+            return "skipped"
+
+        tp = transcript_path(self.paths.work_dir(video_id), tr.model)
+        with db.tx(self.conn):
+            db.transition(
+                self.conn,
+                "videos",
+                video_id,
+                expect="transcribing",
+                to="transcribed",
+                reason=f"{len(tr.words)} words, {tr.language}, {tr.model} on {tr.device} "
+                f"in {tr.seconds_taken:.0f}s",
+                now=self.now(),
+                transcript_path=str(tp),
+            )
+            db.log_event(
+                self.conn,
+                "transcribe",
+                "transcribed",
+                video_id=video_id,
+                data={
+                    "model": tr.model,
+                    "device": tr.device,
+                    "seconds": tr.seconds_taken,
+                    "audio_seconds": tr.duration,
+                    "words": len(tr.words),
+                    "language": tr.language,
+                },
+            )
+        return "transcribed"
+
+    # ------------------------------------------------------------------ select
+
+    def rules(self) -> SnapRules:
+        c = self.cfg.settings.clips
+        return SnapRules(
+            min_seconds=c.min_seconds,
+            max_seconds=c.max_seconds,
+            pre_roll=c.pre_roll,
+            post_roll=c.post_roll,
+            min_score=c.min_score,
+            per_video=c.per_video,
+            blocked_flags=frozenset(c.blocked_risk_flags),
+        )
+
+    def select(self, video_id: str) -> str:
+        row = self._row(video_id)
+        with db.tx(self.conn):
+            db.transition(
+                self.conn, "videos", video_id, expect="transcribed", to="selecting", now=self.now()
+            )
+        tr = Transcript.from_json(Path(row["transcript_path"]).read_text(encoding="utf-8"))
+        source = self.source_by_id(row["source_id"])
+        clips = self.cfg.settings.clips
+        log_dir = self.paths.work_dir(video_id) / "select"
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        wins = windows(tr.duration)
+        per_window = []
+        total_cost = 0.0
+        try:
+            for i, (ws, we) in enumerate(wins):
+                lines = transcript_lines(tr.segments, ws, we)
+                if not lines.strip():
+                    continue
+                messages = build_messages(
+                    lines,
+                    topics_hint=source.topics_hint,
+                    min_s=clips.min_seconds,
+                    max_s=clips.max_seconds,
+                    n=max(clips.per_video * 2, 5),
+                    window=(ws, we) if len(wins) > 1 else None,
+                )
+                res = self.router.complete_json(
+                    purpose="select",
+                    messages=messages,
+                    validate=parse_selection,
+                    schema=CLIP_SCHEMA,
+                    schema_name="clips",
+                    max_tokens=6000,
+                )
+                cands, errors = res.value
+                per_window.append(cands)
+                total_cost += res.cost_usd
+                call = {
+                    "window": [ws, we],
+                    "model": res.model,
+                    "input_tokens": res.input_tokens,
+                    "output_tokens": res.output_tokens,
+                    "cost_usd": res.cost_usd,
+                    "attempts": [asdict(a) for a in res.attempts],
+                    "clip_errors": errors,
+                    "messages": messages,
+                    "response": res.raw_text,
+                }
+                (log_dir / f"window_{i}.json").write_text(
+                    json.dumps(call, indent=1, ensure_ascii=False), encoding="utf-8"
+                )
+                db.log_event(
+                    self.conn,
+                    "llm_call",
+                    f"select window {i}: {res.model}",
+                    video_id=video_id,
+                    data={
+                        k: call[k] for k in ("model", "input_tokens", "output_tokens", "cost_usd")
+                    }
+                    | {"attempts": len(res.attempts), "candidates": len(cands)},
+                )
+        except NoFreeModelAvailable as e:
+            retry = self.now() + SELECT_RETRY_DELAY
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="selecting",
+                    to="transcribed",
+                    reason=str(e)[:500],
+                    now=self.now(),
+                    next_attempt_at=db.iso(retry),
+                )
+            return "transcribed"
+        except LLMAuthError as e:
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="selecting",
+                    to="transcribed",
+                    reason=str(e),
+                    now=self.now(),
+                )
+            db.set_pause(self.conn, f"OpenRouter auth error: {e}")
+            self.alert(
+                "llm_auth",
+                f"Paused: OpenRouter refused the key ({e}). Fix "
+                "OPENROUTER_API_KEY, then run `clipbot resume`.",
+            )
+            return "transcribed"
+
+        merged = merge_window_candidates(per_window)
+        plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules())
+        (log_dir / "plan.json").write_text(
+            json.dumps(
+                {
+                    "kept": [
+                        {
+                            "clip_id": c.clip_id,
+                            "start": c.start,
+                            "end": c.end,
+                            **asdict(c.candidate),
+                        }
+                        for c in plan.kept
+                    ],
+                    "dropped": [{"reason": d.reason, **asdict(d.candidate)} for d in plan.dropped],
+                },
+                indent=1,
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        now = db.iso(self.now())
+        with db.tx(self.conn):
+            for c in plan.kept:
+                k = c.candidate
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO clips(id, video_id, start_ms, end_ms, score, hook, "
+                    "title, summary, hashtags_json, risk_flags_json, state, state_changed_at, "
+                    "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'selected', "
+                    "?, ?, ?)",
+                    (
+                        c.clip_id,
+                        video_id,
+                        c.start_ms,
+                        c.end_ms,
+                        k.score,
+                        k.hook,
+                        k.title,
+                        k.summary,
+                        json.dumps(list(k.hashtags)),
+                        json.dumps(list(k.risk_flags)),
+                        now,
+                        now,
+                        now,
+                    ),
+                )
+            to = "selected" if plan.kept else "done"
+            reason = (
+                f"{len(plan.kept)} clip(s) from {len(merged)} candidate(s)"
+                if plan.kept
+                else f"no clip passed ({len(merged)} candidate(s))"
+            )
+            db.transition(
+                self.conn,
+                "videos",
+                video_id,
+                expect="selecting",
+                to=to,
+                reason=reason,
+                now=self.now(),
+                next_attempt_at=None,
+                cost_usd=(row["cost_usd"] or 0) + total_cost,
+            )
+            db.log_event(
+                self.conn,
+                "select",
+                reason,
+                video_id=video_id,
+                data={
+                    "kept": [c.clip_id for c in plan.kept],
+                    "dropped": [d.reason for d in plan.dropped],
+                    "cost_usd": total_cost,
+                },
+            )
+        return to
+
+    # ------------------------------------------------------------------ process
+
+    def _row(self, video_id: str) -> sqlite3.Row:
+        row = self.conn.execute("SELECT * FROM videos WHERE id = ?", (video_id,)).fetchone()
+        if row is None:
+            raise LookupError(f"unknown video {video_id}")
+        return row
+
+    def step(self, video_id: str) -> str | None:
+        """Run the next stage for this video. None when nothing can run now."""
+        row = self._row(video_id)
+        st = row["state"]
+        due = row["next_attempt_at"] is None or db.parse_iso(row["next_attempt_at"]) <= self.now()
+        if st == "discovered" or (st == "acquire_failed" and due):
+            return self.acquire(video_id)
+        if st == "acquired":
+            return self.transcribe(video_id)
+        if st == "transcribed" and due:
+            return self.select(video_id)
+        return None
+
+    def process(self, video_id: str) -> list[str]:
+        """Run stages until the video stops moving. Returns the states visited."""
+        seen = []
+        while True:
+            before = self._row(video_id)["state"]
+            after = self.step(video_id)
+            if after is None or after == before:
+                return seen
+            seen.append(after)
+
+
+def local_video_id(path: Path) -> str:
+    """Stable 11-character id for a local file, from its size and first 8 MB."""
+    h = hashlib.sha1()  # noqa: S324
+    h.update(str(path.stat().st_size).encode())
+    with path.open("rb") as f:
+        h.update(f.read(8 * 1024 * 1024))
+    return "f" + h.hexdigest()[:10]

@@ -154,27 +154,90 @@ def _try_lock(ctx: Ctx) -> db.ProcessLock | None:
     return lock
 
 
+STAGE_LABEL = {
+    "acquired": "downloaded",
+    "transcribed": "transcribed",
+    "selected": "picked clips",
+    "done": "finished",
+}
+
+
+def _run_stages(ctx: Ctx, conn, pipe, video_id: str) -> int:
+    """Run every stage that can run now, holding the process lock. Exit code."""
+    lock = _try_lock(ctx)
+    if lock is None:
+        typer.echo("the bot is running and will process it shortly")
+        return 0
+    try:
+        typer.echo("working (transcription can take a while on CPU)...")
+        pipe.process(video_id)
+    finally:
+        lock.release()
+    row = conn.execute(
+        "SELECT state, state_reason, next_attempt_at FROM videos WHERE id = ?", (video_id,)
+    ).fetchone()
+    typer.echo(f"  {row['state']}: {row['state_reason']}")
+    if row["state"] in ("acquire_failed", "transcribed") and row["next_attempt_at"]:
+        typer.echo(f"  will retry automatically after {row['next_attempt_at']}")
+    clips = conn.execute(
+        "SELECT id, start_ms, end_ms, score, hook, title FROM clips WHERE video_id = ? "
+        "ORDER BY score DESC",
+        (video_id,),
+    ).fetchall()
+    for c in clips:
+        a, b = c["start_ms"] / 1000, c["end_ms"] / 1000
+        typer.echo(
+            f"  clip {c['id']}  {_mmss(a)}-{_mmss(b)} ({b - a:.0f}s)  score {c['score']}\n"
+            f"    hook:  {c['hook']}\n    title: {c['title']}"
+        )
+    return 1 if row["state"] in ("failed", "acquire_failed") else 0
+
+
+def _mmss(sec: float) -> str:
+    m, s = divmod(sec, 60)
+    return f"{int(m):02d}:{s:04.1f}"
+
+
 @app.command()
 def clip(
-    url: Annotated[str | None, typer.Argument(help="YouTube video link or id.")] = None,
+    target: Annotated[
+        str | None, typer.Argument(help="YouTube link or id, or a video file on disk.")
+    ] = None,
+    source: Annotated[
+        str | None,
+        typer.Option(help="For a file: the source in sources.yaml whose rights apply."),
+    ] = None,
+    title: Annotated[str | None, typer.Option(help="For a file: its title.")] = None,
     queue_only: Annotated[
-        bool, typer.Option("--queue-only", help="Register it; let the running bot download.")
+        bool, typer.Option("--queue-only", help="Register it; let the running bot do the rest.")
     ] = False,
     config_dir: ConfigDirOpt = Path("config"),
     env_file: EnvFileOpt = Path(".env"),
 ) -> None:
-    """Clip a video by link. Asks for the link if you leave it out."""
+    """Clip a video by link or file. Asks for the link if you leave it out."""
+    from clipbot.media import ProbeError
     from clipbot.sources.youtube_api import BadVideoURL, YouTubeError
 
-    if not url:
-        url = typer.prompt("YouTube video link")
+    if not target:
+        target = typer.prompt("YouTube video link")
     ctx = _load(config_dir, env_file)
     conn = _open_db(ctx)
     pipe = _pipeline(ctx, conn)
+    as_file = Path(target).expanduser()
     try:
-        reg = pipe.ingest_url(url)
+        if as_file.is_file():
+            if not source:
+                names = ", ".join(s.id for s in ctx.cfg.sources) or "none configured"
+                typer.echo(f"a file needs --source (one of: {names})", err=True)
+                raise typer.Exit(2)
+            reg = pipe.ingest_file(as_file, source, title)
+        else:
+            reg = pipe.ingest_url(target)
     except BadVideoURL as e:
-        typer.echo(str(e), err=True)
+        typer.echo(f"{e} (and no such file)", err=True)
+        raise typer.Exit(2) from None
+    except ProbeError as e:
+        typer.echo(f"not a usable video file: {e}", err=True)
         raise typer.Exit(2) from None
     except (LookupError, YouTubeError) as e:
         typer.echo(f"could not look up the video: {e}", err=True)
@@ -185,29 +248,30 @@ def clip(
         typer.echo(f"refused {label}\n  reason: {reg.reason}")
         raise typer.Exit(1)
     typer.echo(
-        f"{'accepted' if reg.new else 'already known'}: {label}\n"
+        f"{'accepted' if reg.new else 'already known'}: {label}  [{reg.video_id}]\n"
         f"  state: {reg.state} ({reg.reason})"
     )
-    if queue_only or reg.state not in ("discovered", "acquire_failed"):
+    if queue_only:
         return
-    lock = _try_lock(ctx)
-    if lock is None:
-        typer.echo("the bot is running and will download it shortly")
-        return
+    raise typer.Exit(_run_stages(ctx, conn, pipe, reg.video_id))
+
+
+@app.command()
+def process(
+    video_id: str,
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Run every stage a known video is ready for, now."""
+    ctx = _load(config_dir, env_file)
+    conn = _open_db(ctx)
+    pipe = _pipeline(ctx, conn)
     try:
-        typer.echo("downloading...")
-        state = pipe.acquire(reg.video_id)
-    finally:
-        lock.release()
-    row = conn.execute(
-        "SELECT state_reason, next_attempt_at FROM videos WHERE id = ?", (reg.video_id,)
-    ).fetchone()
-    typer.echo(f"  {state}: {row['state_reason']}")
-    if state == "acquire_failed":
-        typer.echo(f"  will retry automatically after {row['next_attempt_at']}")
-        raise typer.Exit(1)
-    if state == "failed":
-        raise typer.Exit(1)
+        pipe._row(video_id)
+    except LookupError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from None
+    raise typer.Exit(_run_stages(ctx, conn, pipe, video_id))
 
 
 @app.command()
@@ -241,13 +305,6 @@ def run() -> None:
 def tick() -> None:
     """Run one scheduler tick and exit."""
     _not_yet(6)
-
-
-@app.command()
-def process(video_id: str) -> None:
-    """Push one video through the pipeline now."""
-    _ = video_id
-    _not_yet(2)
 
 
 @app.command()

@@ -38,14 +38,37 @@ providers may log prompts.
 ```bash
 uv run clipbot clip "https://www.youtube.com/watch?v=VIDEO_ID"
 uv run clipbot clip            # asks for the link
+uv run clipbot clip episode.mp4 --source my-channel   # a file you have on disk
+uv run clipbot process VIDEO_ID   # run whatever stage a known video is ready for
 uv run clipbot discover        # check listed channels for new uploads now
 ```
+
+A file on disk uses the rights tag of the source you name with `--source`
+(`own` or `permission`; a `cc_by` source cannot vouch for a local file).
+
+### What happens to a video
+
+1. **Download** (or link the local file) into `data/raw/`.
+2. **Transcribe** locally with faster-whisper, word by word. With an NVIDIA GPU
+   this uses `whisper.model` (large-v3-turbo); without one, `whisper.cpu_model`
+   (small). `clipbot doctor` shows which one your machine will use.
+3. **Pick clips**: a free OpenRouter model reads the transcript (in 20-minute
+   windows for long videos) and proposes moments. Code then snaps each one to
+   sentence boundaries, pads it slightly, enforces 20-60 s, drops overlaps,
+   sponsor reads and flagged money or health claims, and keeps the best 3.
+   Everything sent and received is saved in `data/work/<video>/select/`.
 
 A link is accepted when the channel is in `sources.yaml` with a rights tag, or when
 YouTube reports the video as Creative Commons. Anything else is refused with the
 reason. If YouTube blocks the download (bot check, common on cloud servers), the
 bot retries after 1, 6 and 16 hours, then alerts. It never uses cookies or proxies
 to get around this; put the file in the source's local folder instead.
+
+## Test media
+
+`uv run --with piper-tts python scripts/make_fixtures.py talk` builds a 19-minute
+spoken test episode (`data/fixtures/talk.mp4`) from `tests/fixtures/talk_script.txt`
+with an open-source voice. No YouTube download needed.
 
 ## Rights
 

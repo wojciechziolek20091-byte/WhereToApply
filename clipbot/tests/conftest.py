@@ -45,10 +45,25 @@ def config_dir(tmp_path: Path) -> Path:
 @pytest.fixture(autouse=True)
 def _no_real_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
     for k in (
-        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
         "YOUTUBE_API_KEY",
         "UPLOAD_POST_API_KEY",
         "UPLOAD_POST_PROFILE",
         "NOTIFY_URL",
     ):
         monkeypatch.delenv(k, raising=False)
+
+
+@pytest.fixture
+def env(config_dir: Path):
+    """(config, data paths, open database) for pipeline tests."""
+    from clipbot import db
+    from clipbot.config import load_config
+    from clipbot.models import DataPaths
+
+    cfg = load_config(config_dir, env_file=None)
+    paths = DataPaths(cfg.settings.data_dir)
+    paths.ensure()
+    conn = db.connect(paths.db)
+    db.sync_sources(conn, cfg.sources)
+    return cfg, paths, conn

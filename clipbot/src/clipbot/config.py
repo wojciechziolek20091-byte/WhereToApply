@@ -45,9 +45,13 @@ class _Strict(BaseModel):
 
 
 class WhisperSettings(_Strict):
-    model: str = "large-v3-turbo"
+    model: str = "large-v3-turbo"  # used with an NVIDIA GPU
+    cpu_model: str | None = "small"  # used without one; null = always use `model`
     device: Literal["auto", "cpu", "cuda"] = "auto"
-    compute_type: str = "int8"
+    compute_type: str = "int8"  # CPU
+    gpu_compute_type: str = "float16"
+    beam_size: int = Field(5, ge=1, le=10)
+    cpu_threads: int = Field(0, ge=0)  # 0 = let CTranslate2 decide
 
 
 class LLMSettings(_Strict):
@@ -85,6 +89,19 @@ class ClipSettings(_Strict):
     min_score: int = Field(70, ge=0, le=100)
     pre_roll: float = Field(0.2, ge=0)
     post_roll: float = Field(0.4, ge=0)
+    # Clips the model flags with any of these are never made.
+    blocked_risk_flags: list[str] = Field(
+        default_factory=lambda: [
+            "hate",
+            "sexual",
+            "violence",
+            "personal_data",
+            "sponsor_read",
+            "copyrighted_music",
+            "medical_claim",
+            "financial_claim",
+        ]
+    )
 
     @model_validator(mode="after")
     def _range(self) -> ClipSettings:

@@ -369,7 +369,11 @@ def _looks_like_json(text: str | None) -> bool:
     return True
 
 
-def router_from_config(cfg: Any, http: httpx.Client | None = None) -> FreeModelRouter:
+def router_from_config(
+    cfg: Any,
+    http: httpx.Client | None = None,
+    on_paid_usage: Callable[[str, float], None] | None = None,
+) -> FreeModelRouter:
     """Build the router from AppConfig. `on_paid_usage` is wired by the pipeline,
     which records an alert and pauses."""
     key = cfg.secrets.openrouter_api_key
@@ -381,4 +385,5 @@ def router_from_config(cfg: Any, http: httpx.Client | None = None) -> FreeModelR
         max_models_per_call=llm.max_models_per_call,
         cooldown_s=llm.cooldown_minutes * 60,
         http=http,
+        on_paid_usage=on_paid_usage,
     )
