@@ -1,0 +1,16 @@
+timezone: Europe/Warsaw
+data_dir: data             # relative paths resolve against the working directory
+dry_run: true              # renders and logs, never calls a poster
+review_mode: auto          # auto | hold
+whisper: {model: large-v3-turbo, device: auto, compute_type: int8}
+llm: {select_model: claude-sonnet-5-5, safety_model: claude-haiku-5-5}
+discovery: {poll_minutes: 30, min_duration_sec: 180, max_duration_sec: 14400, backfill_days: 0}
+clips: {min_seconds: 20, max_seconds: 60, per_video: 3, min_score: 70, pre_roll: 0.2, post_roll: 0.4}
+render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness_lufs: -14}
+captions: {words_per_line: 3, bottom_margin_pct: 20, right_margin_pct: 15}
+publish:
+  posts_per_day: 3         # hard ceiling 8
+  min_gap_minutes: 120
+  windows: ["12:00-14:00", "17:00-21:00"]
+retention: {raw_days: 3, render_days: 14}
+safety: {min_free_disk_gb: 5}

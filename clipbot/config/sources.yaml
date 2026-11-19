@@ -1,0 +1,17 @@
+# Every enabled source needs a rights tag: own | cc_by | permission.
+# clipbot refuses to start if an enabled source has no valid tag, or if a
+# `permission` source has no permission_ref.
+sources:
+  - id: my-channel
+    youtube_channel_id: UCxxxxxxxxxxxxxxxxxxxxxx
+    name: "My Channel"
+    rights: own                  # own | cc_by | permission
+    permission_ref: null         # required for permission, e.g. "email 2026-11-02 from creator"
+    permission_expires: null     # YYYY-MM-DD, optional
+    attribution: null            # auto-built when null
+    tiktok_mention: null
+    acquire: local_folder        # local_folder | ytdlp
+    local_folder: /data/incoming/my-channel
+    language_hint: en
+    topics_hint: "what the channel is about, one line"
+    enabled: false               # example entry; set true once filled in
