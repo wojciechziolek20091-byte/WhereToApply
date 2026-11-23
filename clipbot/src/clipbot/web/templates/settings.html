@@ -8,7 +8,9 @@
   <ul class="accounts">
     <li><span><b>AI</b><br><span class="muted small">{% if accounts.ai_source == 'shared' %}Provided with this copy of clipbot{% elif accounts.ai %}Connected with your own key{% else %}Not connected{% endif %}</span></span><a class="btn" href="/setup/ai?from=settings">{% if accounts.ai_source == 'shared' %}Use My Own Key{% elif accounts.ai %}Change{% else %}Connect{% endif %}</a></li>
     <li><span><b>YouTube</b><br><span class="muted small">{{ 'Connected' if accounts.youtube else 'Not connected' }}</span></span><a class="btn" href="/setup/youtube?from=settings">{{ 'Change' if accounts.youtube else 'Connect' }}</a></li>
-    <li><span><b>TikTok</b><br><span class="muted small">{{ 'Connected as profile ' ~ accounts.tiktok if accounts.tiktok else 'Not connected: clips are made but not posted' }}</span></span><a class="btn" href="/setup/tiktok?from=settings">{{ 'Change' if accounts.tiktok else 'Connect' }}</a></li>
+    <li><span><b>TikTok</b><br><span class="muted small">{{ 'Connected through ' ~ accounts.tiktok if accounts.tiktok else 'Not connected: clips are made but not posted' }}</span></span>
+      <span class="row-actions"><a class="btn" href="/setup/tiktok?from=settings">{{ 'Change' if accounts.tiktok else 'Connect' }}</a>
+      {% if accounts.tiktok and accounts.tiktok_method == 'autotok' %}<form method="post" action="/setup/tiktok/disconnect" data-confirm="Disconnect TikTok? Clips will be made but not posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Disconnecting…">Disconnect</button></form>{% endif %}</span></li>
   </ul>
   <form method="post" action="/setup/notify" class="notify-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">

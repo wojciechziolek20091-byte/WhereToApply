@@ -1,10 +1,13 @@
 [project]
 name = "clipbot"
-version = "0.1.5"
+version = "0.1.6"
 description = "Cut rights-cleared long YouTube videos into captioned vertical clips and post them to one TikTok account."
 readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "autotok==2.1.0",
     "av>=14,<19",
     "bgutil-ytdlp-pot-provider>=2.0.2",
     "defusedxml>=0.7.1",

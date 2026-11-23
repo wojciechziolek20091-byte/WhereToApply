@@ -24,7 +24,7 @@
     <li><b>An OpenRouter account</b> for the free AI that picks the best moments.</li>
     {% endif %}
     <li><b>A Google account</b> to get a free YouTube key.</li>
-    <li><b>Optional: an Upload-Post plan</b> if you want clips posted to TikTok automatically.</li>
+    <li><b>Your TikTok login</b> if you want clips posted automatically.</li>
   </ul>
   <p class="muted small">Nothing is posted until you say so. Everything stays on this computer.</p>
   <div class="setup-actions"><a class="btn primary" href="/setup/{{ first_step }}">Start Setup</a></div>
@@ -98,25 +98,43 @@
 {% elif step == 'tiktok' %}
 <section class="panel setup">
   <h1>Connect TikTok</h1>
-  <p class="lead">To post automatically, clipbot uses Upload-Post, a paid service that TikTok allows to post for you. Skip this to try clipbot first: clips are still made, and you can upload them yourself.</p>
-  {% if accounts.tiktok %}<p class="have">Connected through the Upload-Post profile <b>{{ accounts.tiktok }}</b>.</p>{% endif %}
-  <ol class="guide">
-    <li>Sign up at <a href="https://www.upload-post.com" target="_blank" rel="noopener">upload-post.com</a> and choose a plan that includes TikTok.</li>
-    <li>In <b>Manage Users</b>, create a profile (for example <b>clipbot</b>) and connect your TikTok account to it.</li>
-    <li>In <b>API Keys</b>, create a key.</li>
-    <li>Paste the key and the profile name here.</li>
-  </ol>
-  <form method="post" action="/setup/tiktok" class="key-form">
+  {% if login and login.state in ('preparing', 'waiting') %}
+  <meta http-equiv="refresh" content="3">
+  <p class="lead">{{ login.message }}</p>
+  <p class="muted small">This page updates by itself. Come back here when you have logged in.</p>
+  {% else %}
+  <p class="lead">clipbot posts your clips with your own TikTok login. It is free.</p>
+  {% if accounts.tiktok %}<p class="have">Connected through {{ accounts.tiktok }}.</p>{% endif %}
+  {% if login and login.state == 'error' %}<p class="notice bad">{{ login.message }} Try again.</p>{% endif %}
+  <div class="warning-box">
+    <p><b>Please read before connecting.</b> This posts through TikTok's website, not TikTok's official way for apps. TikTok can limit or ban accounts that post like this.</p>
+    <p>clipbot posts at most {{ [s.publish.posts_per_day, 8]|min }} times a day, spread out, to lower that risk. Use an account you can afford to lose.</p>
+  </div>
+  <form method="post" action="/setup/tiktok/login" class="key-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
-    <label for="key">Upload-Post key</label>
-    <input id="key" name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key…">
-    <label for="profile">Profile name</label>
-    <input id="profile" name="profile" type="text" required autocomplete="off" spellcheck="false" placeholder="clipbot…" value="{{ accounts.tiktok or '' }}">
+    <label class="toggle"><input type="checkbox" name="consent" required><span><span class="toggle-title">I understand TikTok may limit or ban this account</span><span class="muted small">A browser window opens next. Log in to TikTok there; scanning the QR code with the TikTok app is quickest.</span></span></label>
     <div class="setup-actions">
-      <button class="btn primary" data-busy="Checking…">Check and Connect</button>
-      {% if not returning %}<a class="btn" href="/setup/done">Skip for Now</a>{% endif %}
+      <button class="btn primary" data-busy="Opening…">{{ 'Log In Again' if accounts.tiktok else 'Log In to TikTok' }}</button>
+      {% if not returning %}<a class="btn" href="/setup/done">{{ 'Continue' if accounts.tiktok else 'Skip for Now' }}</a>{% endif %}
     </div>
   </form>
+  <details class="alt-method"><summary>Use Upload-Post instead (official, paid)</summary>
+    <p class="muted small">Upload-Post is a paid service that TikTok allows to post for you, with no ban risk from the posting method.</p>
+    <ol class="guide">
+      <li>Sign up at <a href="https://www.upload-post.com" target="_blank" rel="noopener">upload-post.com</a> and choose a plan that includes TikTok.</li>
+      <li>In <b>Manage Users</b>, create a profile and connect your TikTok account to it.</li>
+      <li>In <b>API Keys</b>, create a key, then paste the key and profile name here.</li>
+    </ol>
+    <form method="post" action="/setup/tiktok" class="key-form">
+      <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
+      <label for="key">Upload-Post key</label>
+      <input id="key" name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key…">
+      <label for="profile">Profile name</label>
+      <input id="profile" name="profile" type="text" required autocomplete="off" spellcheck="false" placeholder="clipbot…">
+      <div class="setup-actions"><button class="btn" data-busy="Checking…">Check and Use Upload-Post</button></div>
+    </form>
+  </details>
+  {% endif %}
 </section>
 
 {% elif step == 'done' %}

@@ -75,7 +75,14 @@ class Scheduler:
 
     def _watched(self) -> tuple[float, ...]:
         d = self.pipe.cfg.config_dir
-        files = (d / "settings.yaml", d / "sources.yaml", self.env_file)
+        tt = self.paths.root / "tiktok"
+        files = (
+            d / "settings.yaml",
+            d / "sources.yaml",
+            self.env_file,
+            tt / "consent.json",
+            tt / "accounts" / "clipbot.json",
+        )
         return tuple(p.stat().st_mtime if p.is_file() else 0.0 for p in files)
 
     def reload_config(self) -> bool:

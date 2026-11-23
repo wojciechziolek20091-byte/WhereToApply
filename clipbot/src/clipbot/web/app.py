@@ -432,6 +432,7 @@ def create_app(
             step=step,
             steps=steps,
             in_steps=step in order,
+            login=_login_view() if step == "tiktok" else None,
             accounts=account_status(cfg),
             channels=cfg.sources,
             rights=acc.RIGHTS_CHOICES,
@@ -517,9 +518,38 @@ def create_app(
                 env_path,
                 {"UPLOAD_POST_API_KEY": key.strip(), "UPLOAD_POST_PROFILE": profile.strip()},
             )
+            set_poster(config_dir, "uploadpost")
         except acc.SetupError as e:
             return back("/setup/tiktok" + _from(form), str(e), error=True)
         return back(next_url(form, "tiktok"), f"TikTok connected. {msg}")
+
+    @app.post("/setup/tiktok/login", dependencies=post_deps)
+    async def tiktok_login(request: Request) -> RedirectResponse:
+        from clipbot.post import autotok_poster as at
+
+        form = await request.form()
+        if form.get("consent") != "on":
+            return back(
+                "/setup/tiktok" + _from(form),
+                "Tick the box to confirm you understand the risk first.",
+                error=True,
+            )
+        home = at.autotok_home(DataPaths(config().settings.data_dir).root)
+        at.record_consent(home)
+        set_poster(config_dir, "autotok")
+        at.start_login(home)
+        return RedirectResponse(
+            "/setup/tiktok?waiting=1"
+            + ("&from=settings" if form.get("from") == "settings" else ""),
+            status_code=303,
+        )
+
+    @app.post("/setup/tiktok/disconnect", dependencies=post_deps)
+    def tiktok_disconnect() -> RedirectResponse:
+        from clipbot.post import autotok_poster as at
+
+        at.disconnect(at.autotok_home(DataPaths(config().settings.data_dir).root))
+        return back("/settings", "TikTok disconnected. Clips are made but not posted.")
 
     @app.post("/setup/notify", dependencies=post_deps)
     async def setup_notify(request: Request) -> RedirectResponse:
@@ -555,6 +585,35 @@ def create_app(
     return app
 
 
+def tiktok_label(cfg: AppConfig) -> str:
+    """How clipbot posts to TikTok right now, or '' when it cannot post yet."""
+    from clipbot.post.autotok_poster import autotok_home, connected, consented
+
+    if cfg.settings.publish.poster == "autotok":
+        home = autotok_home(DataPaths(cfg.settings.data_dir).root)
+        return "your TikTok login" if consented(home) and connected(home) else ""
+    key = cfg.secrets.upload_post_api_key
+    if cfg.settings.publish.poster == "uploadpost" and key and key.get_secret_value():
+        return f"Upload-Post profile {cfg.secrets.upload_post_profile}"
+    return ""
+
+
+def set_poster(config_dir: Path, poster: str) -> None:
+    """Switch how clipbot posts, keeping settings.yaml comments."""
+    from ruamel.yaml import YAML
+
+    y = YAML()
+    y.preserve_quotes = True
+    path = config_dir / "settings.yaml"
+    doc = y.load(path.read_text(encoding="utf-8")) or {}
+    doc.setdefault("publish", {})["poster"] = poster
+    buf = io.StringIO()
+    y.dump(doc, buf)
+    tmp = path.with_suffix(".yaml.tmp")
+    tmp.write_text(buf.getvalue(), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def ai_source(cfg: AppConfig) -> str:
     """'own', 'shared' (came with this copy of clipbot) or '' (none)."""
     from clipbot.assets import PACKAGE_ROOT
@@ -565,6 +624,13 @@ def ai_source(cfg: AppConfig) -> str:
         return ""
     shared = acc.read_env(PACKAGE_ROOT / "shared.env").get("OPENROUTER_API_KEY")
     return "shared" if shared and shared == value else "own"
+
+
+def _login_view() -> dict[str, str]:
+    from clipbot.post.autotok_poster import login_state
+
+    st_ = login_state()
+    return {"state": st_.state, "message": st_.message}
 
 
 def _from(form: Any) -> str:
@@ -594,7 +660,8 @@ def account_status(cfg: AppConfig) -> dict[str, Any]:
         "ai": acc.mask(val(s.openrouter_api_key)),
         "ai_source": ai_source(cfg),
         "youtube": acc.mask(val(s.youtube_api_key)),
-        "tiktok": s.upload_post_profile if val(s.upload_post_api_key) else "",
+        "tiktok": tiktok_label(cfg),
+        "tiktok_method": cfg.settings.publish.poster,
         "notify": bool(val(s.notify_url)),
         "channels": sum(1 for c in cfg.sources if c.enabled),
         "ready": is_configured(cfg),

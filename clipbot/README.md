@@ -32,13 +32,17 @@ It only processes content you have rights to: your own videos, Creative Commons
 | A computer that stays on (Windows, macOS or Linux) | | everything |
 | [OpenRouter](https://openrouter.ai) account and key | free (only $0 models are used) | picking clips, safety check |
 | [YouTube Data API](https://console.cloud.google.com) key | free | reading video licence and details |
-| [Upload-Post](https://www.upload-post.com) paid plan, TikTok connected | about $16-24/month | posting to TikTok |
+| Your TikTok login (through autotok) | free | posting to TikTok |
+| or an [Upload-Post](https://www.upload-post.com) plan | about $16-24/month | posting through TikTok's official route instead |
 | [ntfy](https://ntfy.sh) topic or Telegram bot | free, optional | alerts on your phone |
 
-Why Upload-Post: TikTok only lets audited apps post publicly, and it does not audit
-personal tools like this one. Upload-Post's app is audited; you connect your TikTok
-account to it once. Without it, clipbot still makes the clips (`dry_run: true`) and
-you upload them yourself.
+**How posting works.** By default clipbot posts with your own TikTok login through
+[autotok](https://github.com/makiisthenes/TiktokAutoUploader), which uses TikTok's
+website. It is free, but it is not TikTok's official API: **TikTok can limit or ban
+accounts that post this way**, and the setup wizard asks you to confirm you accept
+that before connecting. clipbot keeps posting gentle (at most 8 a day, 3 by default,
+spaced out). For the official route, choose Upload-Post in the TikTok step instead:
+TikTok only lets audited apps post, and Upload-Post's app is audited.
 
 An NVIDIA GPU makes transcription faster but is not required: on a 4-core CPU a
 19-minute video transcribes in about 4 minutes.
@@ -276,6 +280,12 @@ or covering anyone's watermark, adding its own watermark, auto-follow/like/comme
 or processing a source without a rights tag.
 
 ---
+
+## Licence
+
+clipbot is licensed under the GNU Affero General Public License v3.0 (`LICENSE`),
+because it includes autotok, which is AGPL-3.0. If you share clipbot, share its
+source too (the zip already contains it).
 
 ## Development
 

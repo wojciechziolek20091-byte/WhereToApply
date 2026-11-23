@@ -37,7 +37,7 @@ post:
   extra_hashtags: []       # your own tags on every post, e.g. [fyp]
   max_hashtags: 5
 publish:
-  poster: uploadpost       # uploadpost | tiktok_direct (sandbox, private only)
+  poster: autotok          # autotok (free, unofficial) | uploadpost (official, paid)
   privacy: account_default # or PUBLIC_TO_EVERYONE, FOLLOWER_OF_CREATOR, SELF_ONLY, ...
   posts_per_day: 3         # hard ceiling 8
   min_gap_minutes: 120

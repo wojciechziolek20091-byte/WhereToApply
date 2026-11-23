@@ -49,6 +49,19 @@ def make_poster(cfg: AppConfig, paths: DataPaths) -> Poster:
 
         tok = cfg.secrets.tiktok_access_token
         return TikTokDirectPoster(tok.get_secret_value() if tok else "")
+    if s.publish.poster == "autotok":
+        from clipbot.post.autotok_poster import (
+            AutotokPoster,
+            autotok_home,
+            connected,
+            consented,
+        )
+
+        home = autotok_home(paths.root)
+        if consented(home) and connected(home):
+            return AutotokPoster(home)
+        log.warning("practice_mode_no_tiktok")
+        return DryRunPoster(paths.root / "dryrun")
     from clipbot.post.uploadpost import UploadPostPoster
 
     key = cfg.secrets.upload_post_api_key

@@ -69,6 +69,7 @@ _EXACT: dict[str, Action] = {
     "account_reauth_required": Action.PAUSE,
     "unauthorized": Action.PAUSE,
     "plan_required": Action.PAUSE,
+    "browser_missing": Action.PAUSE,
     "monthly_limit": Action.PAUSE,
     "profile_not_found": Action.PAUSE,
     "spam_risk_user_banned_from_posting": Action.PAUSE_7D,

@@ -171,7 +171,9 @@ PRIVACY_LEVELS = (
 
 
 class PublishSettings(_Strict):
-    poster: Literal["uploadpost", "tiktok_direct"] = "uploadpost"
+    # autotok: free, through TikTok's website with your login (unofficial; TikTok may
+    # restrict accounts). uploadpost: official, paid. tiktok_direct: sandbox only.
+    poster: Literal["autotok", "uploadpost", "tiktok_direct"] = "autotok"
     privacy: Literal[PRIVACY_LEVELS] = "account_default"  # type: ignore[valid-type]
     posts_per_day: int = Field(3, ge=1)
     min_gap_minutes: int = Field(120, ge=0)
