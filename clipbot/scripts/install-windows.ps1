@@ -3,6 +3,16 @@ $ErrorActionPreference = "Stop"
 $App = Split-Path -Parent $PSScriptRoot
 Set-Location $App
 
+# Double-clicking inside a zip runs from a temporary folder that Windows deletes.
+if ($App -like "$env:TEMP*" -or $App -match "\.zip") {
+    Write-Host ""
+    Write-Host "  clipbot is still inside the zip file."
+    Write-Host "  1. Close this window."
+    Write-Host "  2. Right-click the clipbot zip file and choose 'Extract All', then 'Extract'."
+    Write-Host "  3. In the folder that opens, double-click 'Install clipbot' again."
+    exit 1
+}
+
 function Find-Uv {
     $cmd = Get-Command uv -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
@@ -30,14 +40,28 @@ Write-Host "  Step 3 of 3: downloading the speech model..."
 & $uv run --frozen --no-dev clipbot prepare
 if ($LASTEXITCODE -ne 0) { throw "The speech model could not be downloaded. Run Install again." }
 
-$desktop = [Environment]::GetFolderPath("Desktop")
+# Shortcuts: on the desktop (OneDrive desktops included) and in the Start menu.
 $shell = New-Object -ComObject WScript.Shell
-$link = $shell.CreateShortcut((Join-Path $desktop "clipbot.lnk"))
-$link.TargetPath = Join-Path $App "Start clipbot.cmd"
-$link.WorkingDirectory = $App
-$link.IconLocation = (Join-Path $App "assets\clipbot.ico")
-$link.Description = "Start clipbot"
-$link.Save()
+$places = @(
+    [Environment]::GetFolderPath("Desktop"),
+    [Environment]::GetFolderPath("Programs")
+)
+foreach ($dir in $places) {
+    if (-not $dir) { continue }
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $link = $shell.CreateShortcut((Join-Path $dir "clipbot.lnk"))
+    $link.TargetPath = Join-Path $App "Start clipbot.cmd"
+    $link.WorkingDirectory = $App
+    $link.IconLocation = (Join-Path $App "assets\clipbot.ico")
+    $link.Description = "Start clipbot"
+    $link.Save()
+}
 
 Write-Host ""
-Write-Host "  Done! Double-click 'clipbot' on your desktop to start."
+Write-Host "  Done! clipbot is installed in:"
+Write-Host "    $App"
+Write-Host "  Start it any time from the 'clipbot' icon on your desktop,"
+Write-Host "  or press the Windows key and type clipbot."
+Write-Host ""
+Write-Host "  Starting clipbot now. Your browser will open in a moment."
+Start-Process -FilePath (Join-Path $App "Start clipbot.cmd") -WorkingDirectory $App

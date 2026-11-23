@@ -53,4 +53,6 @@ case "$(uname)" in
 esac
 
 echo ""
-echo "  Done! Double-click 'clipbot' on your desktop to start."
+echo "  Done! clipbot is installed in:"
+echo "    $APP"
+echo "  Start it any time from the 'clipbot' icon on your desktop."

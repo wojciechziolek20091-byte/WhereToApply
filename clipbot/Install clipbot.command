@@ -9,6 +9,8 @@ echo "  Please keep this window open."
 echo ""
 if bash scripts/install-unix.sh; then
   echo ""
+  echo "  Starting clipbot now. Your browser will open in a moment."
+  exec bash scripts/start-unix.sh
 else
   echo ""
   echo "  Something went wrong. Take a photo of this window and send it"
