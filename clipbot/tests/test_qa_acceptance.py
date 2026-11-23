@@ -217,3 +217,87 @@ def test_live_safety_blocks_offensive_transcript(env) -> None:
         )
         print(expect, "->", res.model, res.value)
         assert res.value.decision == expect
+
+
+# ---------------------------------------------------------------- lenient QA and captions
+
+
+def lenient(p, language: str = "original") -> None:
+    s = p.cfg.settings
+    object.__setattr__(s.safety, "strict_qa", False)
+    object.__setattr__(s.post, "language", language)
+
+
+def test_technical_problems_only_warn_by_default(env) -> None:
+    p, vid, _ = setup(env, spoken(0, 180), [ALLOW])
+    lenient(p)
+    cid = add_clip(p, vid, 10, 40, kind="black")
+    assert p.qa(cid) == "qa_passed"
+    _, why = reason(p, cid)
+    assert why.startswith("passed with warnings: visual: 3.0s black")
+
+
+def test_safety_still_blocks_when_lenient(env) -> None:
+    p, vid, _ = setup(env, spoken(0, 180), [BLOCK])
+    lenient(p)
+    cid = add_clip(p, vid, 10, 40, kind="black")
+    assert p.qa(cid) == "qa_rejected"
+    assert reason(p, cid)[1].startswith("safety: blocked")
+
+
+def test_old_technical_rejections_are_checked_again(env) -> None:
+    p, vid, _ = setup(env, spoken(0, 180), [ALLOW, ALLOW])
+    tech = add_clip(p, vid, 10, 40, kind="black")
+    assert p.qa(tech) == "qa_rejected"  # strict, as before this change
+    unsafe = add_clip(p, vid, 100, 130)
+    p.conn.execute(
+        "UPDATE clips SET state = 'qa_rejected', qa_json = ? WHERE id = ?",
+        (json.dumps({"safety": {"ok": False, "detail": "blocked (hate): x"}}), unsafe),
+    )
+    lenient(p)
+    assert p.revive_soft_rejections() == [tech]
+    assert p.qa(tech) == "qa_passed"
+    assert reason(p, unsafe)[0] == "qa_rejected"
+
+
+POLISH = {
+    "hook": "Miód nigdy się nie psuje",
+    "summary": "Dlaczego miód przetrwa tysiące lat.",
+    "hashtags": ["#Ciekawostki", "nauka", "dla ciebie"],
+}
+
+
+def test_caption_written_in_polish(env) -> None:
+    p, vid, _ = setup(env, spoken(0, 180), [POLISH, ALLOW])
+    lenient(p, "pl")
+    cid = add_clip(p, vid, 10, 40)
+    assert p.qa(cid) == "qa_passed"
+    row = p.conn.execute("SELECT post_text, caption_lang FROM clips").fetchone()
+    assert row["caption_lang"] == "pl"
+    assert row["post_text"].startswith("Miód nigdy się nie psuje\n\nDlaczego miód")
+    assert "#ciekawostki #nauka #dlaciebie" in row["post_text"]
+    # The translation is cached: checking again needs only the safety model.
+    p._router.outcomes = [ALLOW]
+    p.conn.execute("UPDATE clips SET state = 'rendered' WHERE id = ?", (cid,))
+    assert p.qa(cid) == "qa_passed"
+
+
+def test_waiting_clips_get_a_polish_caption(env) -> None:
+    p, vid, _ = setup(env, spoken(0, 180), [POLISH])
+    cid = add_clip(p, vid, 10, 40, state="qa_passed")
+    p.conn.execute("UPDATE clips SET post_text = 'Honey never spoils' WHERE id = ?", (cid,))
+    lenient(p, "pl")
+    assert p.localize_ready() == cid
+    assert p.localize_ready() is None  # done once
+    text = p.conn.execute("SELECT post_text FROM clips").fetchone()[0]
+    assert text.startswith("Miód nigdy")
+
+
+def test_caption_waits_when_no_free_model(env) -> None:
+    from clipbot.select.llm import Attempt, NoFreeModelAvailable
+
+    p, vid, _ = setup(env, spoken(0, 180), [NoFreeModelAvailable("caption", [Attempt("m", "x")])])
+    lenient(p, "pl")
+    cid = add_clip(p, vid, 10, 40)
+    assert p.qa(cid) == "rendered"
+    assert "caption waiting" in reason(p, cid)[1]

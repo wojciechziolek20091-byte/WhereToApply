@@ -173,6 +173,10 @@ MIGRATIONS: list[str] = [
         updated_at  TEXT NOT NULL
     );
     """,
+    # 2: language the stored caption (post_text) is written in
+    """
+    ALTER TABLE clips ADD COLUMN caption_lang TEXT;
+    """,
 ]
 
 

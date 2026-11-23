@@ -160,7 +160,7 @@ def test_safety_prompt_contains_both_texts() -> None:
 
 # ---------------------------------------------------------------- post text
 
-PS = PostSettings(extra_hashtags=["fyp"], max_hashtags=4)
+PS = PostSettings(extra_hashtags=["fyp"], max_hashtags=4, language="en")
 
 
 def test_post_text_cc_by() -> None:
@@ -188,7 +188,7 @@ def test_post_text_own_has_no_source_line_but_mention_works() -> None:
         source=source(rights="own", tiktok_mention="me.creator"),
         channel_title="Me",
         video_url=None,
-        ps=PostSettings(),
+        ps=PostSettings(language="en"),
     )
     assert "Source:" not in text and text.endswith("@me.creator")
 
@@ -202,7 +202,7 @@ def test_post_text_local_file_has_no_url_and_attribution_override() -> None:
         source=s,
         channel_title="X",
         video_url=youtube_url("f0123456789", "local_file"),
-        ps=PostSettings(),
+        ps=PostSettings(language="en"),
     )
     assert text.endswith("Source: Jane Doe Podcast (used with permission)")
 
@@ -215,7 +215,7 @@ def test_post_text_is_capped_without_losing_credit() -> None:
         source=source(rights="cc_by"),
         channel_title="Chan",
         video_url="https://www.youtube.com/watch?v=x",
-        ps=PostSettings(),
+        ps=PostSettings(language="en"),
     )
     assert len(text) <= MAX_CAPTION and text.endswith("(CC BY)")
 
@@ -233,3 +233,38 @@ def test_measure_on_real_file(tmp_path: Path) -> None:
     assert lufs is not None and -40 < lufs < 0
     black, freezes = qa.measure_black_and_frozen(f)
     assert black == 0.0 and freezes == []
+
+
+def test_credit_line_in_polish_and_unicode_hashtags() -> None:
+    text = build_post_text(
+        hook="Miód",
+        summary="S.",
+        model_tags=["żółw", "nauka"],
+        source=source(rights="permission", name="Kanał", permission_ref="email"),
+        channel_title="Kanał",
+        video_url=None,
+        ps=PostSettings(language="pl"),
+    )
+    assert text.endswith("Źródło: Kanał (za zgodą autora)")
+    assert "#żółw #nauka" in text
+    assert qa.gate_transformation("", "permission", text, "Źródło:").detail != "missing attribution"
+
+
+def test_soft_gates_warn_unless_strict() -> None:
+    from clipbot.qa import Gate, QAResult
+
+    gates = {"loudness": Gate(False, "-20 LUFS"), "safety": Gate(True, "ok")}
+    assert QAResult(gates, strict=False).passed
+    assert QAResult(gates, strict=False).warnings == ["loudness: -20 LUFS"]
+    assert not QAResult(gates, strict=True).passed
+    gates["safety"] = Gate(False, "blocked")
+    assert not QAResult(gates, strict=False).passed
+
+
+def test_parse_caption() -> None:
+    from clipbot.post.localize import parse_caption
+
+    c = parse_caption({"hook": " Hej ", "summary": "x", "hashtags": ["#Dla Ciebie", "fyp", "fyp"]})
+    assert c.hook == "Hej" and c.hashtags == ("dlaciebie", "fyp")
+    with pytest.raises(InvalidOutput):
+        parse_caption({"summary": "x", "hashtags": []})

@@ -18,11 +18,12 @@
     <details><summary>Caption</summary><pre class="caption">{{ c.caption }}</pre></details>
     {% endif %}
     {% if c.qa %}
-    {% set failed = c.qa.values()|rejectattr('ok')|list %}
-    <details><summary>Checks <span class="{{ 'bad-text' if failed else 'muted' }}">{% if failed %}{{ failed|length }} failed{% else %}all passed{% endif %}</span></summary>
+    {% set ns = namespace(failed=0, warned=0) %}
+    {% for name, g in c.qa.items() if not g.ok %}{% if name in soft_gates %}{% set ns.warned = ns.warned + 1 %}{% else %}{% set ns.failed = ns.failed + 1 %}{% endif %}{% endfor %}
+    <details><summary>Checks <span class="{{ 'bad-text' if ns.failed else ('warn-text' if ns.warned else 'muted') }}">{% if ns.failed %}{{ ns.failed }} failed{% elif ns.warned %}passed, {{ ns.warned }} warning{{ '' if ns.warned == 1 else 's' }}{% else %}all passed{% endif %}</span></summary>
       <ul class="checks">
         {% for name, g in c.qa.items() %}
-        <li class="{{ 'ok' if g.ok else 'bad' }}"><span class="check-name">{{ name.replace('_', ' ') }}</span> {{ g.detail }}</li>
+        <li class="{{ 'ok' if g.ok else ('warn' if name in soft_gates else 'bad') }}"><span class="check-name">{{ name.replace('_', ' ') }}</span> {{ g.detail }}</li>
         {% endfor %}
       </ul>
     </details>

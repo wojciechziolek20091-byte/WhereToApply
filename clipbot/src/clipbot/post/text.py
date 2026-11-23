@@ -20,6 +20,28 @@ from clipbot.config import PostSettings, Source
 
 MAX_CAPTION = 2200
 
+# The credit line's first word, per caption language (brief 4.7: always present).
+CREDIT_WORD = {
+    "pl": "Źródło:",
+    "de": "Quelle:",
+    "es": "Fuente:",
+    "fr": "Source :",
+    "it": "Fonte:",
+    "uk": "Джерело:",
+}
+PERMISSION_LABEL = {
+    "pl": "za zgodą autora",
+    "de": "mit Erlaubnis",
+    "es": "con permiso",
+    "fr": "avec permission",
+    "it": "con permesso",
+    "uk": "з дозволу автора",
+}
+
+
+def credit_word(language: str) -> str:
+    return CREDIT_WORD.get(language, "Source:")
+
 
 def youtube_url(video_id: str, license_: str | None) -> str | None:
     """Link to the original, or None for a local file (it has no YouTube page)."""
@@ -31,7 +53,7 @@ def youtube_url(video_id: str, license_: str | None) -> str | None:
 def hashtags(model_tags: Sequence[str], ps: PostSettings) -> list[str]:
     out: list[str] = []
     for t in [*ps.extra_hashtags, *model_tags]:
-        t = t.strip().lstrip("#").lower()
+        t = "".join(ch for ch in t.strip().lstrip("#").lower() if ch.isalnum() or ch == "_")
         if t and t not in out:
             out.append(t)
     return out[: ps.max_hashtags]
@@ -44,7 +66,9 @@ def source_line(
         return None
     name = source.attribution or channel_title or source.name
     label = ps.license_labels.get(source.rights or "", "")
-    parts = ["Source:", name]
+    if label == "used with permission":
+        label = PERMISSION_LABEL.get(ps.language, label)
+    parts = [credit_word(ps.language), name]
     if video_url:
         parts.append(video_url)
     if label:

@@ -69,6 +69,12 @@
         {% for p in privacy_levels %}<option value="{{ p }}" {{ 'selected' if p == s.publish.privacy }}>{{ {'account_default': 'Account default', 'PUBLIC_TO_EVERYONE': 'Everyone', 'MUTUAL_FOLLOW_FRIENDS': 'Friends', 'FOLLOWER_OF_CREATOR': 'Followers', 'SELF_ONLY': 'Only me'}[p] }}</option>{% endfor %}
       </select>
     </div>
+    <div class="field"><label for="lang">Caption language</label>
+      <select id="lang" name="language">
+        {% for code, name in languages.items() %}<option value="{{ code }}" {{ 'selected' if code == s.post.language }}>{{ name }}</option>{% endfor %}
+      </select>
+      <p class="muted small">The TikTok caption and hashtags are written in this language. The video itself is not changed.</p>
+    </div>
     <div class="field wide"><label for="tags">Your hashtags</label><input id="tags" type="text" name="extra_hashtags" autocomplete="off" spellcheck="false" placeholder="fyp…" value="{{ s.post.extra_hashtags|join(' ') }}"><p class="muted small">Added first to every caption, separated by spaces.</p></div>
   </div>
 </section>
@@ -82,6 +88,7 @@
     <div class="field"><label for="maxs">Longest clip, seconds</label><input id="maxs" type="number" name="max_seconds" max="600" step="1" inputmode="numeric" autocomplete="off" value="{{ '%g'|format(s.clips.max_seconds) }}"></div>
     <div class="field"><label for="hook">Hook on screen, seconds</label><input id="hook" type="number" name="hook_seconds" min="1" max="10" step="0.5" inputmode="decimal" autocomplete="off" value="{{ '%g'|format(s.captions.hook_seconds) }}"></div>
   </div>
+  <label class="toggle"><input type="checkbox" name="strict_qa" {{ 'checked' if s.safety.strict_qa }}><span><span class="toggle-title">Strict checks</span><span class="muted small">Also hold back clips with long pauses, uneven volume, still frames or missing caption words. Off: those only show a warning and the clip is still posted. The safety review, credit line and duplicate check always apply.</span></span></label>
 </section>
 
 <div class="save-row">

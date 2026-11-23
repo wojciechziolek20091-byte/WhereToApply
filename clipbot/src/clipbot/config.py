@@ -213,7 +213,24 @@ class PublishSettings(_Strict):
         return out
 
 
+# Languages the TikTok caption can be written in. "original" keeps the AI's text
+# in the video's own language.
+CAPTION_LANGUAGES: dict[str, str] = {
+    "pl": "Polish",
+    "en": "English",
+    "de": "German",
+    "es": "Spanish",
+    "fr": "French",
+    "it": "Italian",
+    "uk": "Ukrainian",
+    "original": "Same as the video",
+}
+
+
 class PostSettings(_Strict):
+    # The caption (hook line, summary, hashtags) is written in this language once
+    # the clip is made. The credit line is translated too; names and links are not.
+    language: str = "pl"
     # Your own tags, put first on every post (e.g. ["fyp"]). The AI's topic tags
     # fill the rest, up to max_hashtags.
     extra_hashtags: list[str] = Field(default_factory=list)
@@ -228,10 +245,20 @@ class PostSettings(_Strict):
         out = []
         for t in v:
             t = t.strip().lstrip("#").lower()
-            if not re.fullmatch(r"[a-z0-9_]{1,40}", t):
+            if not re.fullmatch(r"\w{1,40}", t):
                 raise ValueError(f"bad hashtag {t!r}")
             out.append(t)
         return out
+
+    @field_validator("language")
+    @classmethod
+    def _lang(cls, v: str) -> str:
+        v = (v or "original").strip().lower()
+        if v not in CAPTION_LANGUAGES:
+            raise ValueError(
+                f"unknown caption language {v!r}; use one of {list(CAPTION_LANGUAGES)}"
+            )
+        return v
 
 
 class RightsSettings(_Strict):
@@ -259,6 +286,10 @@ class RetentionSettings(_Strict):
 
 class SafetySettings(_Strict):
     min_free_disk_gb: float = Field(5, ge=0)
+    # false (default): technical checks (speech share, loudness, black or frozen
+    # video, caption word count) only warn, so more clips get posted. The content
+    # safety review, credit line, duplicate check and file check always block.
+    strict_qa: bool = False
 
 
 class Settings(_Strict):

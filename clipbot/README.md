@@ -270,12 +270,20 @@ models that insist on thinking last, and skips music and image models.
 - **Credit**: for anything that is not your own, the caption ends with
   `Source: <channel> <link> (CC BY)`. Nothing is drawn over the video except
   captions and the hook: no logos, no watermarks.
-- **QA gates**: file spec, at least 70% speech, loudness -16 to -12 LUFS, no black
-  or stuck frames over 1 s, every word captioned, captions + hook + credit present,
-  not a duplicate, and an AI safety review that blocks hate, harassment, sexual
-  content, graphic violence, dangerous acts, medical or financial advice stated as
-  fact, private people's personal data and sponsor reads. If the safety review
-  cannot run, the clip waits; it is never posted unchecked.
+- **QA gates**: four always block a clip: a playable file of the right size and
+  length, captions + hook + credit present, not a duplicate of another clip, and an
+  AI safety review that blocks hate, harassment, sexual content, graphic violence,
+  dangerous acts, medical or financial advice stated as fact, private people's
+  personal data and sponsor reads. If the safety review cannot run, the clip waits;
+  it is never posted unchecked. Four technical checks (at least 70% speech,
+  loudness -16 to -12 LUFS, no black or stuck frames over 1 s, every word
+  captioned) only show a warning, so the clip still posts; turn on **Strict
+  checks** in Settings (`safety.strict_qa: true`) to have them block too.
+- **Caption language**: when a clip is finished, a free AI writes its TikTok
+  caption (hook line, summary, hashtags) in Polish by default, and the credit line
+  reads `Źródło: <channel> <link> (CC BY)`. Change it under Settings, Caption
+  language (`post.language`: pl, en, de, es, fr, it, uk or original). The video,
+  its subtitles and the on-screen hook stay in the video's own language.
 - **Never twice**: each post has an id saved before the upload; after a crash the
   bot asks Upload-Post about that id instead of uploading again.
 

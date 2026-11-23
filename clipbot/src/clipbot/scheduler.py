@@ -297,6 +297,12 @@ class Scheduler:
         return row["id"] if row else None
 
     def work_one(self, r: TickReport) -> None:
+        for cid in self.pipe.revive_soft_rejections():
+            r.add(f"clip {cid}: checking again")
+        cid = self.pipe.localize_ready()
+        if cid:
+            r.add(f"clip {cid}: caption rewritten in {self.cfg.settings.post.language}")
+            return
         vid = self.next_video()
         if vid:
             r.add(f"video {vid}: {self.pipe.step(vid)}")

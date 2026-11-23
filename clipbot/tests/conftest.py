@@ -16,6 +16,10 @@ SETTINGS = textwrap.dedent(
       posts_per_day: 3
       min_gap_minutes: 120
       windows: ["12:00-14:00", "17:00-21:00"]
+    post:
+      language: original
+    safety:
+      strict_qa: true
     """
 )
 

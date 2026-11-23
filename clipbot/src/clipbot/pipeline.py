@@ -22,7 +22,8 @@ from clipbot.config import AppConfig, Source
 from clipbot.logging import get_logger
 from clipbot.media import ProbeError, probe
 from clipbot.models import DataPaths
-from clipbot.post.text import build_post_text, youtube_url
+from clipbot.post.localize import CAPTION_SCHEMA, Caption, caption_messages, parse_caption
+from clipbot.post.text import build_post_text, credit_word, youtube_url
 from clipbot.render.captions import CaptionLayout, build_ass, clip_words, count_caption_words
 from clipbot.render.encode import EncodeSettings, RenderError, contact_sheet, render_clip
 from clipbot.render.reframe import FaceDetector, plan_clip
@@ -936,12 +937,57 @@ class Pipeline:
             args.append(video_id)
         return [r["id"] for r in self.conn.execute(sql + " ORDER BY score DESC", args)]
 
-    def post_text(self, clip: sqlite3.Row, video: sqlite3.Row) -> str:
+    def caption(self, clip: sqlite3.Row, video: sqlite3.Row) -> Caption | None:
+        """The caption in the chosen language. None when no free model answered
+        (the caller waits and tries again). Cached next to the render."""
+        lang = self.cfg.settings.post.language
+        tags = json.loads(clip["hashtags_json"] or "[]")
+        if lang == "original":
+            return Caption(clip["hook"], clip["summary"], tuple(tags))
+        cache = self.paths.work_dir(video["id"]) / "render" / clip["id"] / f"caption.{lang}.json"
+        if cache.is_file():
+            d = json.loads(cache.read_text(encoding="utf-8"))
+            return Caption(d["hook"], d["summary"], tuple(d["hashtags"]))
+        try:
+            res = self.router.complete_json(
+                purpose="caption",
+                messages=caption_messages(clip["hook"], clip["summary"], tags, lang),
+                validate=parse_caption,
+                schema=CAPTION_SCHEMA,
+                schema_name="caption",
+                max_tokens=1500,
+                min_context=0,
+            )
+        except NoFreeModelAvailable as e:
+            log.warning("caption_waiting", clip_id=clip["id"], error=str(e)[:300])
+            return None
+        cap = res.value
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(
+            json.dumps(
+                {
+                    "hook": cap.hook,
+                    "summary": cap.summary,
+                    "hashtags": list(cap.hashtags),
+                    "model": res.model,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return cap
+
+    def post_text(
+        self, clip: sqlite3.Row, video: sqlite3.Row, caption: Caption | None = None
+    ) -> str:
         source = self.source_by_id(video["source_id"])
+        cap = caption or Caption(
+            clip["hook"], clip["summary"], tuple(json.loads(clip["hashtags_json"] or "[]"))
+        )
         return build_post_text(
-            hook=clip["hook"],
-            summary=clip["summary"],
-            model_tags=json.loads(clip["hashtags_json"] or "[]"),
+            hook=cap.hook,
+            summary=cap.summary,
+            model_tags=list(cap.hashtags),
             source=source,
             channel_title=video["channel_title"] or "",
             video_url=youtube_url(video["id"], video["license"]),
@@ -958,9 +1004,18 @@ class Pipeline:
         ass = ass_path.read_text(encoding="utf-8") if ass_path.is_file() else ""
         tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
         words = clip_words(tr.words, start, end)
-        text = self.post_text(c, v)
+        try:
+            cap = self.caption(c, v)
+        except LLMAuthError as e:
+            db.set_pause(self.conn, f"OpenRouter auth error: {e}")
+            return "rendered"
+        if cap is None:
+            self._wait_for_model(clip_id, "caption waiting for a free AI model")
+            return "rendered"
+        text = self.post_text(c, v, cap)
         render = Path(c["render_path"] or "")
         lim = self.cfg.settings.clips
+        strict = self.cfg.settings.safety.strict_qa
 
         gates: dict[str, qa_mod.Gate] = {}
         info, err = qa_mod.probe_or_none(render)
@@ -976,7 +1031,9 @@ class Pipeline:
             }
             gates["visual"] = qa_mod.gate_visual(black, freezes, static)
         gates["caption_sync"] = qa_mod.gate_caption_sync(ass, len(words))
-        gates["transformation"] = qa_mod.gate_transformation(ass, source.rights, text)
+        gates["transformation"] = qa_mod.gate_transformation(
+            ass, source.rights, text, credit_word(self.cfg.settings.post.language)
+        )
         others = [
             (r["id"], r["start_ms"] / 1000, r["end_ms"] / 1000)
             for r in self.conn.execute(
@@ -987,8 +1044,8 @@ class Pipeline:
         ]
         gates["duplicates"] = qa_mod.gate_duplicates(clip_id, start, end, others)
 
-        # Only spend a model call when everything else passed.
-        if all(g.ok for g in gates.values()):
+        # Only spend a model call when everything that blocks has passed.
+        if all(g.ok for n, g in gates.items() if qa_mod.blocking(n, strict)):
             spoken = " ".join(w.w for w in words)
             try:
                 res = self.router.complete_json(
@@ -1001,18 +1058,7 @@ class Pipeline:
                     min_context=0,
                 )
             except NoFreeModelAvailable as e:
-                retry = self.now() + SELECT_RETRY_DELAY
-                with db.tx(self.conn):
-                    self.conn.execute(
-                        "UPDATE clips SET next_attempt_at = ?, state_reason = ?, "
-                        "updated_at = ? WHERE id = ?",
-                        (
-                            db.iso(retry),
-                            f"safety check waiting: {e}"[:500],
-                            db.iso(self.now()),
-                            clip_id,
-                        ),
-                    )
+                self._wait_for_model(clip_id, f"safety check waiting: {e}")
                 return "rendered"
             except LLMAuthError as e:
                 db.set_pause(self.conn, f"OpenRouter auth error: {e}")
@@ -1040,9 +1086,14 @@ class Pipeline:
         else:
             gates["safety"] = qa_mod.Gate(False, "not checked: an earlier gate failed")
 
-        result = qa_mod.QAResult(gates)
+        result = qa_mod.QAResult(gates, strict=strict)
         to = "qa_passed" if result.passed else "qa_rejected"
-        reason = "all gates passed" if result.passed else result.first_failure
+        if not result.passed:
+            reason = result.first_failure
+        elif result.warnings:
+            reason = "passed with warnings: " + "; ".join(result.warnings)
+        else:
+            reason = "all gates passed"
         with db.tx(self.conn):
             db.transition(
                 self.conn,
@@ -1055,6 +1106,7 @@ class Pipeline:
                 next_attempt_at=None,
                 qa_json=json.dumps(result.to_json()),
                 post_text=text,
+                caption_lang=self.cfg.settings.post.language,
             )
             db.log_event(
                 self.conn,
@@ -1065,6 +1117,74 @@ class Pipeline:
                 level="info" if result.passed else "warning",
             )
         return to
+
+    def _wait_for_model(self, clip_id: str, reason: str) -> None:
+        retry = self.now() + SELECT_RETRY_DELAY
+        with db.tx(self.conn):
+            self.conn.execute(
+                "UPDATE clips SET next_attempt_at = ?, state_reason = ?, updated_at = ? "
+                "WHERE id = ?",
+                (db.iso(retry), reason[:500], db.iso(self.now()), clip_id),
+            )
+
+    def revive_soft_rejections(self) -> list[str]:
+        """Clips held back only by technical checks go back for checking, now that
+        those checks only warn. Their content still gets the safety review."""
+        if self.cfg.settings.safety.strict_qa:
+            return []
+        revived = []
+        for r in self.conn.execute(
+            "SELECT id, qa_json, render_path FROM clips WHERE state = 'qa_rejected'"
+        ).fetchall():
+            gates = json.loads(r["qa_json"] or "{}")
+            failed = [
+                n
+                for n, g in gates.items()
+                if not g.get("ok")
+                and not (n == "safety" and str(g.get("detail", "")).startswith("not checked"))
+            ]
+            if not failed or not all(n in qa_mod.SOFT_GATES for n in failed):
+                continue
+            if not r["render_path"] or not Path(r["render_path"]).is_file():
+                continue
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "clips",
+                    r["id"],
+                    expect="qa_rejected",
+                    to="rendered",
+                    reason="checking again: technical checks now only warn",
+                    now=self.now(),
+                    next_attempt_at=None,
+                )
+            revived.append(r["id"])
+        return revived
+
+    def localize_ready(self) -> str | None:
+        """Rewrite one waiting clip's caption in the chosen language, if it was
+        written in another. Returns the clip id, or None when nothing was done."""
+        lang = self.cfg.settings.post.language
+        c = self.conn.execute(
+            "SELECT * FROM clips WHERE state IN ('qa_passed', 'scheduled', 'awaiting_approval') "
+            "AND (caption_lang IS NULL OR caption_lang != ?) "
+            "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY score DESC LIMIT 1",
+            (lang, db.iso(self.now())),
+        ).fetchone()
+        if c is None:
+            return None
+        v = self._row(c["video_id"])
+        cap = self.caption(c, v)
+        if cap is None:
+            self._wait_for_model(c["id"], "caption waiting for a free AI model")
+            return None
+        with db.tx(self.conn):
+            self.conn.execute(
+                "UPDATE clips SET post_text = ?, caption_lang = ?, updated_at = ? "
+                "WHERE id = ? AND state = ?",
+                (self.post_text(c, v, cap), lang, db.iso(self.now()), c["id"], c["state"]),
+            )
+        return c["id"]
 
 
 def local_video_id(path: Path) -> str:

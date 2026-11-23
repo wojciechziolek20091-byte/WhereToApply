@@ -178,6 +178,7 @@ details summary:hover { color: var(--text); }
 .checks li { position: relative; padding-left: 20px; overflow-wrap: anywhere; }
 .checks li::before { position: absolute; left: 0; top: 0; font-weight: 700; }
 .checks li.ok::before { content: "\2713"; color: var(--accent); }
+.checks li.warn::before { content: "!"; color: var(--warn); font-weight: 700; }
 .checks li.bad::before { content: "\2715"; color: var(--bad); }
 .checks li.warn::before { content: "!"; color: var(--warn); left: 4px; }
 .checks li.skip::before { content: "\2013"; color: var(--muted); }

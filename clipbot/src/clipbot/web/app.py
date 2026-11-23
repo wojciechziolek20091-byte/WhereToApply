@@ -28,8 +28,17 @@ from pydantic import ValidationError
 
 from clipbot import accounts as acc
 from clipbot import db
-from clipbot.config import MAX_CLIPS, PRIVACY_LEVELS, AppConfig, ConfigError, Settings, load_config
+from clipbot.config import (
+    CAPTION_LANGUAGES,
+    MAX_CLIPS,
+    PRIVACY_LEVELS,
+    AppConfig,
+    ConfigError,
+    Settings,
+    load_config,
+)
 from clipbot.models import DataPaths
+from clipbot.qa import SOFT_GATES
 from clipbot.tools import ffmpeg_exe
 from clipbot.web import status as st
 
@@ -135,6 +144,8 @@ def create_app(
                 "ago": st.ago,
                 "msg": request.query_params.get("msg"),
                 "err": request.query_params.get("err"),
+                "soft_gates": frozenset() if cfg.settings.safety.strict_qa else SOFT_GATES,
+                "languages": CAPTION_LANGUAGES,
                 **ctx,
             },
         )
@@ -751,6 +762,8 @@ def save_settings_form(path: Path, form: dict[str, Any]) -> bool:
         ("publish", "privacy"): str(form.get("privacy", "account_default")),
         ("publish", "windows"): flow(windows),
         ("post", "extra_hashtags"): flow(tags),
+        ("post", "language"): str(form.get("language") or "pl"),
+        ("safety", "strict_qa"): form.get("strict_qa") == "on",
         ("clips", "per_video"): num("per_video"),
         ("clips", "min_score"): num("min_score"),
         ("clips", "min_seconds"): num("min_seconds", float),

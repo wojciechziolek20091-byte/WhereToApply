@@ -34,6 +34,7 @@ render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness
 captions: {words_per_line: 3, font_size: 70, hook_font_size: 74, hook_seconds: 2.5,
            bottom_margin_pct: 20, right_margin_pct: 15}
 post:
+  language: pl             # caption language: pl, en, de, es, fr, it, uk, or original
   extra_hashtags: []       # your own tags on every post, e.g. [fyp]
   max_hashtags: 5
 publish:
@@ -43,7 +44,9 @@ publish:
   min_gap_minutes: 120
   windows: ["12:00-14:00", "17:00-21:00"]
 retention: {raw_days: 3, render_days: 14}
-safety: {min_free_disk_gb: 5}
+safety:
+  min_free_disk_gb: 5
+  strict_qa: false         # true: also hold back clips with quiet audio, pauses, still frames
 web:
   enabled: true            # `clipbot run` also opens the dashboard
   host: 127.0.0.1          # 0.0.0.0 to use it from your phone (needs DASHBOARD_PASSWORD)

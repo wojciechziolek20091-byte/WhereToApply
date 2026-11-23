@@ -29,6 +29,9 @@ LOUD_RANGE = (-16.0, -12.0)
 MAX_BLACK_OR_FROZEN = 1.0
 CAPTION_TOLERANCE = 0.02
 DUPLICATE_OVERLAP = 0.30
+# Technical gates: a failure here is a warning unless strict QA is on. They catch
+# imperfect clips, not harmful ones. Everything else always blocks.
+SOFT_GATES = frozenset({"speech", "loudness", "visual", "caption_sync"})
 ACTIVE_STATES = ("qa_passed", "awaiting_approval", "scheduled", "publishing", "published")
 
 
@@ -39,20 +42,33 @@ class Gate:
     data: dict[str, Any] = field(default_factory=dict)
 
 
+def blocking(name: str, strict: bool) -> bool:
+    return strict or name not in SOFT_GATES
+
+
 @dataclass
 class QAResult:
     gates: dict[str, Gate]
+    strict: bool = True
 
     @property
     def passed(self) -> bool:
-        return all(g.ok for g in self.gates.values())
+        return all(g.ok for n, g in self.gates.items() if blocking(n, self.strict))
 
     @property
     def first_failure(self) -> str | None:
         for name, g in self.gates.items():
-            if not g.ok:
+            if not g.ok and blocking(name, self.strict):
                 return f"{name}: {g.detail}"
         return None
+
+    @property
+    def warnings(self) -> list[str]:
+        return [
+            f"{n}: {g.detail}"
+            for n, g in self.gates.items()
+            if not g.ok and not blocking(n, self.strict)
+        ]
 
     def to_json(self) -> dict[str, Any]:
         return {k: asdict(v) for k, v in self.gates.items()}
@@ -327,13 +343,15 @@ def gate_safety(v: SafetyVerdict, model: str) -> Gate:
 # --------------------------------------------------------------------------- 7 & 8
 
 
-def gate_transformation(ass_text: str, rights: str | None, post_text: str) -> Gate:
+def gate_transformation(
+    ass_text: str, rights: str | None, post_text: str, credit_word: str = "Source:"
+) -> Gate:
     missing = []
     if count_caption_words(ass_text) == 0:
         missing.append("captions")
     if not has_hook(ass_text):
         missing.append("hook overlay")
-    if rights != "own" and "Source:" not in post_text:
+    if rights != "own" and credit_word not in post_text:
         missing.append("attribution")
     if missing:
         return Gate(False, "missing " + ", ".join(missing))

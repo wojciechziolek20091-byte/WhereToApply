@@ -266,7 +266,13 @@ def test_settings_save_keeps_comments_and_validates(config_dir: Path) -> None:
     assert s.post.extra_hashtags == ["fyp", "learnontiktok"]
     assert s.review_mode == "hold" and s.dry_run is False and s.clips.min_score == 75
     assert "# my own note" in path.read_text()
+    assert s.post.language == "pl" and s.safety.strict_qa is False
     assert not save_settings_form(path, {**FORM, "review_mode": "hold"})  # no change
+    assert save_settings_form(
+        path, {**FORM, "review_mode": "hold", "language": "en", "strict_qa": "on"}
+    )
+    s = load_settings(path)
+    assert s.post.language == "en" and s.safety.strict_qa is True
 
 
 @pytest.mark.parametrize(
@@ -275,6 +281,7 @@ def test_settings_save_keeps_comments_and_validates(config_dir: Path) -> None:
         ({"posts_per_day": "9"}, "hard ceiling"),
         ({"windows": "14:00-12:00"}, "window"),
         ({"posts_per_day": "lots"}, "must be a number"),
+        ({"language": "klingon"}, "caption language"),
     ],
 )
 def test_invalid_settings_change_nothing(config_dir: Path, patch: dict, msg: str) -> None:
