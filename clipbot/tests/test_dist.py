@@ -22,6 +22,7 @@ def test_dist_zip_has_what_users_need_and_nothing_private(tmp_path: Path) -> Non
         "clipbot/Install clipbot.command",
         "clipbot/START HERE.txt",
         "clipbot/uv.lock",
+        "clipbot/LICENSE",
         "clipbot/assets/clipbot.ico",
         "clipbot/src/clipbot/web/templates/setup.html",
     ):

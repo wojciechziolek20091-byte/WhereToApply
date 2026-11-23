@@ -17,6 +17,7 @@ INCLUDE_FILES = (
     "pyproject.toml",
     "uv.lock",
     "README.md",
+    "LICENSE",
     "START HERE.txt",
     ".env.example",
     "Install clipbot.cmd",
