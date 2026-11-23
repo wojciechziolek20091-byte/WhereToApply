@@ -143,3 +143,24 @@ def test_secrets_are_not_in_repr(tmp_path: Path, config_dir: Path) -> None:
     assert cfg.secrets.openrouter_api_key is not None
     assert "supersecret" not in repr(cfg)
     assert "sk-or-v1-supersecretvalue123" in cfg.secrets.values()
+
+
+def test_timezone_auto_uses_this_computer() -> None:
+    s = Settings.model_validate({"timezone": "auto"})
+    assert s.timezone == "auto" and s.tz is not None and s.timezone_name
+    assert Settings.model_validate({"timezone": "Europe/Warsaw"}).timezone_name == "Europe/Warsaw"
+
+
+def test_timezone_names_work_without_a_system_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows has no IANA database; the bundled tzdata package must cover it."""
+    import zoneinfo
+
+    monkeypatch.setattr(zoneinfo, "TZPATH", ())
+    zoneinfo.reset_tzpath(to=[])
+    try:
+        zoneinfo.ZoneInfo.clear_cache()
+        assert Settings.model_validate({"timezone": "Europe/Warsaw"}).tz.key == "Europe/Warsaw"
+        assert Settings.model_validate({"timezone": "America/New_York"}).timezone_name
+    finally:
+        zoneinfo.reset_tzpath()
+        zoneinfo.ZoneInfo.clear_cache()

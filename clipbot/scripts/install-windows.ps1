@@ -38,7 +38,7 @@ if ($LASTEXITCODE -ne 0) { throw "The download failed. Check the internet connec
 
 Write-Host "  Step 3 of 3: downloading the speech model..."
 & $uv run --frozen --no-dev clipbot prepare
-if ($LASTEXITCODE -ne 0) { throw "The speech model could not be downloaded. Run Install again." }
+if ($LASTEXITCODE -ne 0) { throw "Preparing clipbot failed. The message above says why." }
 
 # Shortcuts: on the desktop (OneDrive desktops included) and in the Start menu.
 $shell = New-Object -ComObject WScript.Shell

@@ -38,6 +38,19 @@ class ConfigError(Exception):
     """Raised when configuration is missing or invalid. The message is user-facing."""
 
 
+def local_zone() -> ZoneInfo:
+    """This computer's time zone, on Windows too (via tzlocal), else UTC."""
+    try:
+        import tzlocal
+
+        name = tzlocal.get_localzone_name()
+        if name:
+            return ZoneInfo(name)
+    except Exception:  # noqa: S110  unusual systems: use UTC rather than refuse to start
+        pass
+    return ZoneInfo("UTC")
+
+
 class _Strict(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -246,7 +259,8 @@ class SafetySettings(_Strict):
 
 
 class Settings(_Strict):
-    timezone: str = "Europe/Warsaw"
+    # "auto" uses this computer's time zone; or an IANA name like Europe/Warsaw.
+    timezone: str = "auto"
     data_dir: Path = Path("data")
     dry_run: bool = True
     review_mode: Literal["auto", "hold"] = "auto"
@@ -267,15 +281,27 @@ class Settings(_Strict):
     @field_validator("timezone")
     @classmethod
     def _tz(cls, v: str) -> str:
+        v = (v or "auto").strip()
+        if v.lower() == "auto":
+            return "auto"
         try:
             ZoneInfo(v)
         except (ZoneInfoNotFoundError, ValueError):
-            raise ValueError(f"unknown timezone {v!r}") from None
+            raise ValueError(
+                f"unknown timezone {v!r}; use a name like Europe/Warsaw, "
+                "or auto for this computer's time zone"
+            ) from None
         return v
 
     @property
     def tz(self) -> ZoneInfo:
+        if self.timezone == "auto":
+            return local_zone()
         return ZoneInfo(self.timezone)
+
+    @property
+    def timezone_name(self) -> str:
+        return str(getattr(self.tz, "key", self.tz))
 
 
 # --------------------------------------------------------------------------- sources

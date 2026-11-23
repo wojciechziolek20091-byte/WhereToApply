@@ -176,7 +176,11 @@ def check_timezone(cfg: AppConfig) -> CheckResult:
 
     now = datetime.now(cfg.settings.tz)
     return CheckResult(
-        "timezone", "ok", f"{cfg.settings.timezone}, local time {now:%Y-%m-%d %H:%M}"
+        "timezone",
+        "ok",
+        f"{cfg.settings.timezone_name}"
+        + (" (this computer's)" if cfg.settings.timezone == "auto" else "")
+        + f", local time {now:%Y-%m-%d %H:%M}",
     )
 
 

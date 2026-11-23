@@ -1,4 +1,4 @@
-timezone: Europe/Warsaw
+timezone: auto            # this computer's time zone, or a name like Europe/Warsaw
 data_dir: data             # relative paths resolve against the working directory
 dry_run: true              # renders and logs, never calls a poster
 review_mode: auto          # auto | hold
