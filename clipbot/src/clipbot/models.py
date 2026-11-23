@@ -42,6 +42,10 @@ class DataPaths:
         return self.root / "renders"
 
     @property
+    def tools(self) -> Path:
+        return self.root / "tools"
+
+    @property
     def models(self) -> Path:
         return self.root / "models"
 

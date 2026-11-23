@@ -234,9 +234,11 @@ REAL_BOT_CHECK = (
 
 def test_ytdlp_classifies_real_bot_check() -> None:
     assert classify(REAL_BOT_CHECK) is AcquireBlocked
+    from clipbot.sources.providers.ytdlp import AcquireForbidden
+
     assert (
         classify("ERROR: unable to download video data: HTTP Error 403: Forbidden")
-        is AcquireBlocked
+        is AcquireForbidden
     )
     assert classify("ERROR: something else") is AcquireError
 
@@ -259,7 +261,7 @@ def test_ytdlp_bot_check_is_not_retried_immediately(tmp_path: Path) -> None:
     assert len(calls) == 1
     cmd = " ".join(calls[0])
     assert "bv*[height<=1080]+ba/b[height<=1080]" in cmd and "--merge-output-format mp4" in cmd
-    assert "--js-runtimes deno" in cmd
+    assert "--js-runtimes deno" in cmd  # deno or deno:<path>
     assert "cookies" not in cmd and "proxy" not in cmd
 
 
@@ -286,3 +288,72 @@ def test_ytdlp_timeout(tmp_path: Path) -> None:
     prov = YtDlpProvider(runner=run, sleep=lambda s: None, timeout_s=5)
     with pytest.raises(AcquireError, match="timed out"):
         prov.acquire("zzzzzzzzzzz", "u", tmp_path / "z.mp4")
+
+
+def test_403_tries_clients_that_need_no_po_token(tmp_path: Path) -> None:
+    calls: list[list[str]] = []
+    forbidden = "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        if "youtube:player_client=android_vr,tv,web_embedded" not in cmd:
+            return Proc(1, forbidden)
+        out = Path(cmd[cmd.index("--output") + 1].replace("%(ext)s", "mp4"))
+        make_mp4(out)
+        return Proc(0)
+
+    prov = YtDlpProvider(runner=run, sleep=lambda s: None)
+    assert prov.acquire("zzzzzzzzzzz", "u", tmp_path / "z.mp4").is_file()
+    assert len(calls) == 2  # default clients once, then the fallback clients
+    assert "--extractor-args" not in calls[0]
+
+
+def test_403_everywhere_becomes_a_normal_retryable_error(tmp_path: Path) -> None:
+    def run(cmd, **kw):
+        return Proc(1, "ERROR: unable to download video data: HTTP Error 403: Forbidden")
+
+    with pytest.raises(AcquireError, match="refused the video file for every client") as ei:
+        YtDlpProvider(runner=run, sleep=lambda s: None).acquire("z" * 11, "u", tmp_path / "z.mp4")
+    assert not isinstance(ei.value, AcquireBlocked)
+
+
+@pytest.mark.parametrize(
+    ("system", "machine", "asset"),
+    [
+        ("Windows", "AMD64", "yt-dlp.exe"),
+        ("Windows", "ARM64", "yt-dlp_arm64.exe"),
+        ("Darwin", "arm64", "yt-dlp_macos"),
+        ("Darwin", "x86_64", "yt-dlp_macos"),
+        ("Linux", "x86_64", "yt-dlp_linux"),
+        ("Linux", "aarch64", "yt-dlp_linux_aarch64"),
+        ("FreeBSD", "amd64", None),
+    ],
+)
+def test_standalone_asset_per_platform(system: str, machine: str, asset: str | None) -> None:
+    from clipbot.sources.providers.ytdlp import asset_name
+
+    assert asset_name(system, machine) == asset
+
+
+def test_standalone_download_is_checksum_verified(tmp_path: Path) -> None:
+    import hashlib
+
+    import httpx
+
+    from clipbot.sources.providers.ytdlp import asset_name, ensure_binary
+
+    good = b"#!/bin/sh\necho 2026.11.22\n"
+
+    def handler(blob: bytes):
+        def h(req: httpx.Request) -> httpx.Response:
+            if req.url.path.endswith("SHA2-256SUMS"):
+                return httpx.Response(
+                    200, text=f"{hashlib.sha256(good).hexdigest()}  {asset_name()}\n"
+                )
+            return httpx.Response(200, content=blob)
+
+        return httpx.Client(transport=httpx.MockTransport(h))
+
+    assert ensure_binary(tmp_path / "bad", http=handler(b"tampered")) is None
+    out = ensure_binary(tmp_path / "ok", http=handler(good))
+    assert out is not None and out.read_bytes() == good

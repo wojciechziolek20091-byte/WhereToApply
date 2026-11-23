@@ -107,12 +107,14 @@ def check_ytdlp_stack(cfg: AppConfig) -> list[CheckResult]:
     else:
         out.append(CheckResult("deno", missing_level, "not on PATH" + note))
 
-    try:
-        import yt_dlp.version  # type: ignore[import-not-found]
+    from clipbot.models import DataPaths
+    from clipbot.sources.providers.ytdlp import ytdlp_version
 
-        out.append(CheckResult("yt-dlp", "ok", yt_dlp.version.__version__))
-    except ImportError:
+    v = ytdlp_version(DataPaths(cfg.settings.data_dir).tools)
+    if v == "not installed":
         out.append(CheckResult("yt-dlp", missing_level, "not installed" + note))
+    else:
+        out.append(CheckResult("yt-dlp", "ok", v))
     return out
 
 

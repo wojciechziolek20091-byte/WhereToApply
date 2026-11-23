@@ -247,6 +247,22 @@ class Scheduler:
             db.log_event(self.conn, "digest", text)
         r.add("digest sent")
 
+    def maybe_update_ytdlp(self, r: TickReport) -> None:
+        """YouTube changes break yt-dlp regularly: update the standalone copy daily."""
+        from clipbot.sources.providers.ytdlp import binary_path, ensure_binary, update_binary
+
+        today = self.local().date().isoformat()
+        if db.kv_get(self.conn, "ytdlp_updated") == today:
+            return
+        with db.tx(self.conn):
+            db.kv_set(self.conn, "ytdlp_updated", today)
+        tools = self.paths.tools
+        if not binary_path(tools).is_file() and not ensure_binary(tools):
+            return
+        version = update_binary(tools)
+        db.log_event(self.conn, "ytdlp_update", f"yt-dlp {version}")
+        r.add(f"yt-dlp {version}")
+
     # ------------------------------------------------------------------ work
 
     def maybe_discover(self, r: TickReport) -> None:
@@ -435,6 +451,7 @@ class Scheduler:
         self.forward_alerts()
         if not missing:
             self.maybe_digest(r)
+            self.maybe_update_ytdlp(r)
         return r
 
 

@@ -319,7 +319,9 @@ class Pipeline:
         if source.acquire == "local_folder":
             assert source.local_folder is not None
             return LocalFolderProvider(source.local_folder)
-        return YtDlpProvider(timeout_s=self.cfg.settings.acquire.timeout_minutes * 60)
+        return YtDlpProvider(
+            timeout_s=self.cfg.settings.acquire.timeout_minutes * 60, tools_dir=self.paths.tools
+        )
 
     def acquire(self, video_id: str) -> str:
         """Download one video. Returns the new state."""

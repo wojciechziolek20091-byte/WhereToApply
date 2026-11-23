@@ -632,6 +632,13 @@ def prepare(
         download_model(model, cache_dir=str(ctx.paths.models))
     typer.echo("Downloading the face finder…")
     face_model(ctx.paths.models)
+    typer.echo("Downloading the YouTube downloader (yt-dlp)…")
+    from clipbot.sources.providers.ytdlp import ensure_binary, update_binary
+
+    if ensure_binary(ctx.paths.tools):
+        typer.echo(f"yt-dlp {update_binary(ctx.paths.tools)}")
+    else:
+        typer.echo("Could not fetch it now; the built-in copy is used instead.")
     typer.echo("Ready.")
 
 
