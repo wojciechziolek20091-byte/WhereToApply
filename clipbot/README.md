@@ -5,11 +5,15 @@ your TikTok account, with nobody in the loop:
 
 1. **Find a video**: paste a YouTube link (`clipbot clip <url>`), give it a file, or
    let it watch your listed channels for new uploads.
-2. **Transcribe** it locally, word by word (free, offline).
-3. **Pick the best moments**: a free AI model reads the transcript and proposes
-   20-60 second moments with a strong hook; code snaps them to whole sentences.
-4. **Render** each as a 1080x1920 clip: face-centred crop (or the full frame over a
-   blurred background for slides), word-by-word captions, and a hook text box.
+2. **Read it**: YouTube's own captions are the transcript (a second or two). Only
+   videos without captions are downloaded in full and transcribed locally.
+3. **Pick the cliffhangers**: one free AI request finds the moments where tension
+   builds toward a reveal, and writes each clip's caption in your language at the
+   same time; code snaps the clips to whole words.
+4. **Render** each as a 1080x1920 clip: only the clip's seconds are fetched from
+   YouTube, then face-centred crop (or the full frame over a blurred background),
+   word-by-word captions and a hook text box. All clips are made at once. From a
+   pasted link to finished clips takes about 45 seconds on a typical 4-core PC.
 5. **Check** each clip with eight automatic QA gates, including an AI safety review.
 6. **Post** it to TikTok through Upload-Post, inside your time windows, with a
    caption that credits the original creator and adds hashtags.
@@ -253,6 +257,13 @@ downloads fail): `uv lock --upgrade-package yt-dlp` then `uv sync`. With Docker,
 networks, especially cloud servers. clipbot retries after 1, 6 and 16 hours, then
 alerts. It never uses cookies or proxies to get around this. Run it from a home
 connection, or have the creator send you the files and use `acquire: local_folder`.
+
+**"Today's free AI requests are used up"**: an OpenRouter key on the free tier may
+make 50 free-model requests a day, shared by everyone using that key. clipbot needs
+about 2 per video (one to pick clips and write captions, one safety review for all
+of its clips). It waits for the daily reset (midnight UTC) and carries on by itself.
+Adding $10 of credit to the OpenRouter account raises the limit to 1000 a day;
+clipbot still only uses free models.
 
 **"no free model gave a valid answer"**: every free OpenRouter model it tried was
 busy or failed. The video or clip waits 30 minutes and tries again on its own, and

@@ -6,11 +6,12 @@ import re
 from collections.abc import Sequence
 from typing import Any
 
+from clipbot.config import CAPTION_LANGUAGES as _LANG_NAMES
 from clipbot.select.llm import InvalidOutput
 from clipbot.select.snap import RISK_FLAGS, Candidate
 
-CHUNK_ABOVE = 25 * 60  # transcripts longer than this are split
-WINDOW = 20 * 60
+CHUNK_ABOVE = 45 * 60  # transcripts longer than this are split (windows run in parallel)
+WINDOW = 30 * 60
 OVERLAP = 2 * 60
 MAX_HOOK_WORDS = 9
 MAX_TITLE = 80
@@ -33,7 +34,6 @@ CLIP_SCHEMA: dict[str, Any] = {
                     "title",
                     "summary",
                     "hashtags",
-                    "standalone",
                     "risk_flags",
                 ],
                 "properties": {
@@ -44,7 +44,6 @@ CLIP_SCHEMA: dict[str, Any] = {
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
                     "hashtags": {"type": "array", "items": {"type": "string"}},
-                    "standalone": {"type": "boolean"},
                     "risk_flags": {
                         "type": "array",
                         "items": {"type": "string", "enum": sorted(RISK_FLAGS)},
@@ -55,34 +54,67 @@ CLIP_SCHEMA: dict[str, Any] = {
     },
 }
 
-SYSTEM = """You are a short-form video editor. You pick moments from a long video's \
-transcript that work as standalone vertical clips for TikTok. You only ever quote what \
-was said: you never invent, reword or merge lines. You answer with JSON only."""
+SYSTEM = """You cut viral TikTok clips out of long videos. You read the transcript \
+once, pick the cliffhanger moments fast and do not overthink. You only use what was \
+said: never invent, reword or merge lines. You answer with JSON only."""
 
-RULES = """Rules for every clip:
-- It must make sense to someone who has not seen the rest of the video.
-- It starts at the beginning of a sentence and ends at the end of a complete thought.
-- Length {min_s:g} to {max_s:g} seconds.
-- The first 3 seconds carry a clear hook: a question, a surprising claim, a conflict \
-or a concrete number.
-- Skip intros, outros, sponsor reads, ads, calls to subscribe and housekeeping.
-- Clips must not overlap each other.
-- start_sec and end_sec are seconds from the start of the video, read from the \
-[mm:ss.s] timestamps of the transcript lines.
+RULES = """Find the {n} strongest cliffhanger moments: stretches where tension builds \
+so a viewer cannot scroll away. A question is raised, a reveal or twist is coming, a \
+conflict escalates, a risk or a surprising number is set up.
+- Each clip is {min_s:g} to {max_s:g} seconds. It starts on the line that opens the \
+tension and ends right at its peak: on the reveal, or just before it.
+- Clips do not overlap. Skip intros and outros. A clip must not contain any part of \
+an ad, sponsor mention, product plug, discount code or "link in the description".
+- Each transcript line starts with its time in seconds, like [125.4]. Copy those \
+numbers: start_sec is the time of the clip's first line, end_sec the time of the line \
+right after its last line. Plain seconds, never minutes or milliseconds.
 
-For each clip return:
-- score: 0-100, how likely a stranger scrolling TikTok stops and watches to the end.
-- hook: at most {hook_words} words, shown on screen at the start. Punchy, no emoji, \
-no hashtags, true to what is said.
-- title: at most {title_len} characters.
-- summary: one sentence of context for the caption.
-- hashtags: 3 to 5 specific topic tags, lower case, no '#'.
-- standalone: false if the clip needs earlier context.
-- risk_flags: any of {flags} that apply, or ["none"]. Mark sponsor_read for any ad or \
-sponsor mention, financial_claim or medical_claim for money or health statements.
+For each clip:
+- score: 0-100, how hard it is to scroll past.
+- hook: at most {hook_words} words shown on screen at the start, in the video's \
+language. Punchy, true to what is said, no emoji or hashtags.
+- title: at most {title_len} characters. summary: one sentence.
+- hashtags: 3 to 5 topic tags, lower case, no '#'.
+- risk_flags: any of {flags} that apply, or ["none"]. Use sponsor_read if any \
+sponsor or product is mentioned.{caption_rules}
 
-Return {{"clips": [...]}} with up to {n} of the best clips, best first. Return \
-{{"clips": []}} if nothing qualifies."""
+Return {{"clips": [...]}}, best first. Return {{"clips": []}} if nothing qualifies."""
+
+CAPTION_RULES = """
+- caption_title: in {language}, at most 100 characters. The first line of the TikTok \
+caption: full of tension and viral buzzwords{examples}. It may tease, but must not \
+claim anything the clip does not show.
+- caption_text: in {language}, one or two punchy sentences that build suspense and do \
+not give away the ending. Buzzwords welcome; may end with a question.
+- caption_hashtags: 4 or 5 tags in {language} that viewers search for, no '#', lower \
+case, no spaces. At least 3 about the topic."""
+
+BUZZWORDS = {
+    "pl": " such as SZOK, Nie uwierzysz, To zmienia wszystko, Mało kto o tym wie, "
+    "Musisz to zobaczyć, Zwrot akcji",
+    "en": " such as SHOCKING, You won't believe, This changes everything, Nobody talks "
+    "about this, Wait for it",
+}
+
+
+def clip_schema(language: str | None = None) -> dict[str, Any]:
+    """The JSON schema for a selection; with a caption language it also asks for
+    the TikTok caption, so no second AI call is needed."""
+    if not language:
+        return CLIP_SCHEMA
+    import copy
+
+    schema = copy.deepcopy(CLIP_SCHEMA)
+    item = schema["properties"]["clips"]["items"]
+    item["properties"].update(
+        {
+            "caption_title": {"type": "string"},
+            "caption_text": {"type": "string"},
+            "caption_hashtags": {"type": "array", "items": {"type": "string"}},
+        }
+    )
+    item["required"] = [*item["required"], "caption_title", "caption_text", "caption_hashtags"]
+    return schema
 
 
 def fmt_ts(sec: float) -> str:
@@ -110,8 +142,10 @@ def windows(duration: float) -> list[tuple[float, float]]:
 
 
 def transcript_lines(segments: Sequence[Any], start: float, end: float) -> str:
+    """One line per segment, prefixed with its start in plain seconds: models copy
+    these reliably, while converting mm:ss made some answer in made-up units."""
     return "\n".join(
-        f"[{fmt_ts(s.start)}] {s.text}" for s in segments if start <= s.start < end and s.text
+        f"[{s.start:.1f}] {s.text}" for s in segments if start <= s.start < end and s.text
     )
 
 
@@ -123,8 +157,17 @@ def build_messages(
     max_s: float,
     n: int,
     window: tuple[float, float] | None = None,
+    language: str | None = None,
 ) -> list[dict[str, str]]:
+    """`language`: a language name (e.g. "Polish") to also get the TikTok caption."""
+    caption_rules = ""
+    if language:
+        code = next((k for k, v in _LANG_NAMES.items() if v == language), "")
+        caption_rules = CAPTION_RULES.format(
+            language=language, examples=BUZZWORDS.get(code, f" in {language}")
+        )
     rules = RULES.format(
+        caption_rules=caption_rules,
         min_s=min_s,
         max_s=max_s,
         hook_words=MAX_HOOK_WORDS,
@@ -180,9 +223,9 @@ def parse_candidate(d: Any) -> Candidate:
     summary = " ".join(str(d.get("summary", "")).split())
     if not summary:
         raise ValueError("empty summary")
-    standalone = d.get("standalone")
+    standalone = d.get("standalone", True)
     if not isinstance(standalone, bool):
-        raise ValueError("standalone is not a boolean")
+        standalone = True
     flags_raw = d.get("risk_flags")
     if not isinstance(flags_raw, list):
         raise ValueError("risk_flags is not a list")
@@ -191,8 +234,33 @@ def parse_candidate(d: Any) -> Candidate:
     if unknown:
         raise ValueError(f"unknown risk flags {sorted(unknown)}")
     return Candidate(
-        start, end, score, hook, title, summary, _clean_tags(d.get("hashtags")), standalone, flags
+        start,
+        end,
+        score,
+        hook,
+        title,
+        summary,
+        _clean_tags(d.get("hashtags")),
+        standalone,
+        flags,
+        _caption(d),
     )
+
+
+def _caption(d: dict[str, Any]) -> tuple[str, str, tuple[str, ...]] | None:
+    """The optional caption fields; a clip without them still counts (the caption
+    is then written by a separate call)."""
+    head = " ".join(str(d.get("caption_title") or "").split())[:150]
+    text = " ".join(str(d.get("caption_text") or "").split())[:600]
+    raw = d.get("caption_hashtags")
+    if not head or not isinstance(raw, list):
+        return None
+    tags: list[str] = []
+    for t in raw:
+        t = "".join(ch for ch in str(t).lstrip("#").lower() if ch.isalnum() or ch == "_")
+        if t and t not in tags:
+            tags.append(t)
+    return head, text, tuple(tags[:6])
 
 
 def parse_selection(data: Any) -> tuple[list[Candidate], list[str]]:

@@ -11,14 +11,16 @@ import json
 import os
 import shutil
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from clipbot import db
 from clipbot import qa as qa_mod
 from clipbot.assets import AssetError, face_model, font_files
-from clipbot.config import AppConfig, Source
+from clipbot.config import CAPTION_LANGUAGES, AppConfig, Source
 from clipbot.logging import get_logger
 from clipbot.media import ProbeError, probe
 from clipbot.models import DataPaths
@@ -27,15 +29,20 @@ from clipbot.post.text import build_post_text, credit_word, youtube_url
 from clipbot.render.captions import CaptionLayout, build_ass, clip_words, count_caption_words
 from clipbot.render.encode import EncodeSettings, RenderError, contact_sheet, render_clip
 from clipbot.render.reframe import FaceDetector, plan_clip
-from clipbot.select.llm import FreeModelRouter, LLMAuthError, NoFreeModelAvailable
+from clipbot.select.llm import (
+    DailyLimitReached,
+    FreeModelRouter,
+    LLMAuthError,
+    NoFreeModelAvailable,
+)
 from clipbot.select.prompt import (
-    CLIP_SCHEMA,
     build_messages,
+    clip_schema,
     parse_selection,
     transcript_lines,
     windows,
 )
-from clipbot.select.snap import SnapRules, merge_window_candidates, plan_clips
+from clipbot.select.snap import SnapRules, fix_time_units, merge_window_candidates, plan_clips
 from clipbot.sources import rss
 from clipbot.sources.providers import (
     AcquireBlocked,
@@ -47,6 +54,7 @@ from clipbot.sources.providers.local import LocalFolderProvider
 from clipbot.sources.providers.ytdlp import YtDlpProvider
 from clipbot.sources.rights import Decision, adhoc_cc_source, check_eligible, check_rights
 from clipbot.sources.youtube_api import VideoMeta, YouTubeAPI, parse_video_id
+from clipbot.sources.youtube_fast import captions_transcript, fetch_info, fetch_section
 from clipbot.transcribe import Transcript, transcript_path
 from clipbot.transcribe import transcribe as run_transcribe
 
@@ -98,6 +106,7 @@ class Pipeline:
         self._router = router
         self._faces: FaceDetector | None = None
         self._transcribe = transcriber
+        self._llm_error: Exception | None = None  # why the last caption call waited
 
     # ------------------------------------------------------------------ helpers
 
@@ -369,10 +378,16 @@ class Pipeline:
         source = self.source_by_id(row["source_id"])
         dest = self.paths.raw_video(video_id)
         url = f"https://www.youtube.com/watch?v={video_id}"
+        provider = self.provider_for(source)
+        if self.cfg.settings.acquire.fast and isinstance(provider, YtDlpProvider):
+            try:
+                done = self._acquire_fast(video_id, row, provider, url)
+            except AcquireError as e:
+                return self._acquire_failed(video_id, row["attempts"], e)
+            if done:
+                return done
         try:
-            path = (
-                dest if dest.is_file() else self.provider_for(source).acquire(video_id, url, dest)
-            )
+            path = dest if dest.is_file() else provider.acquire(video_id, url, dest)
             info = probe(path)
         except NotAvailableYet as e:
             with db.tx(self.conn):
@@ -414,6 +429,77 @@ class Pipeline:
                 data={"provider": source.acquire, **info.__dict__},
             )
         return "acquired"
+
+    def _info_path(self, video_id: str) -> Path:
+        return self.paths.work_dir(video_id) / "info.json"
+
+    def _acquire_fast(
+        self, video_id: str, row: sqlite3.Row, provider: YtDlpProvider, url: str
+    ) -> str | None:
+        """Read the video's details and YouTube's own captions instead of downloading
+        the whole video and transcribing it. The clips' seconds are fetched when they
+        are made. None: no usable captions, so download in full as usual."""
+        info = fetch_info(provider, url)
+        work = self.paths.work_dir(video_id)
+        work.mkdir(parents=True, exist_ok=True)
+        self._info_path(video_id).write_text(json.dumps(info), encoding="utf-8")
+        tr = captions_transcript(info)
+        if tr is None:
+            return None
+        tp = transcript_path(work, tr.model)
+        tr.save(tp)
+        meta = json.loads(row["meta_json"] or "{}")
+        meta["transcript"] = {"model": tr.model, "words": len(tr.words), "language": tr.language}
+        with db.tx(self.conn):
+            db.transition(
+                self.conn,
+                "videos",
+                video_id,
+                expect="acquiring",
+                to="transcribed",
+                reason=f"{len(tr.words)} words from YouTube captions ({tr.language})",
+                now=self.now(),
+                transcript_path=str(tp),
+                meta_json=json.dumps(meta),
+                attempts=0,
+                next_attempt_at=None,
+            )
+            db.log_event(self.conn, "acquire", "youtube captions", video_id=video_id)
+        return "transcribed"
+
+    def clip_source(self, clip: sqlite3.Row, video: sqlite3.Row) -> tuple[Path, float]:
+        """The file to cut this clip from, and the source time it starts at. Videos
+        downloaded in full use the whole file; fast-path videos fetch just the clip's
+        seconds (once), and fall back to a full download if that fails."""
+        if video["raw_path"] and Path(video["raw_path"]).is_file():
+            return Path(video["raw_path"]), 0.0
+        work = self.paths.work_dir(video["id"]) / "render" / clip["id"]
+        sec, meta = work / "source.mp4", work / "source.json"
+        if sec.is_file() and meta.is_file():
+            return sec, float(json.loads(meta.read_text())["offset"])
+        start, end = clip["start_ms"] / 1000, clip["end_ms"] / 1000
+        info_path = self._info_path(video["id"])
+        source = self.source_by_id(video["source_id"])
+        provider = self.provider_for(source)
+        url = f"https://www.youtube.com/watch?v={video['id']}"
+        for fresh in (False, True):  # stream links expire after a few hours
+            try:
+                if fresh or not info_path.is_file():
+                    if not isinstance(provider, YtDlpProvider):
+                        break
+                    info_path.parent.mkdir(parents=True, exist_ok=True)
+                    info_path.write_text(json.dumps(fetch_info(provider, url)), encoding="utf-8")
+                info = json.loads(info_path.read_text(encoding="utf-8"))
+                offset = fetch_section(info, start, end, sec)
+            except AcquireError as e:
+                log.warning("section_failed", clip_id=clip["id"], fresh=fresh, error=str(e)[:300])
+                continue
+            meta.write_text(json.dumps({"offset": offset}))
+            return sec, offset
+        # Last resort: the whole video, as before.
+        dest = self.paths.raw_video(video["id"])
+        path = dest if dest.is_file() else provider.acquire(video["id"], url, dest)
+        return path, 0.0
 
     def _acquire_failed(self, video_id: str, attempts: int, err: Exception) -> str:
         attempts += 1
@@ -617,29 +703,42 @@ class Pipeline:
         wins = windows(tr.duration)
         per_window = []
         total_cost = 0.0
+        lang = self.cfg.settings.post.language
+        lang_name = None if lang == "original" else CAPTION_LANGUAGES[lang]
+        jobs = []
+        for i, (ws, we) in enumerate(wins):
+            lines = transcript_lines(tr.segments, ws, we)
+            if not lines.strip():
+                continue
+            messages = build_messages(
+                lines,
+                topics_hint=source.topics_hint,
+                min_s=clips.min_seconds,
+                max_s=clips.max_seconds,
+                n=max(wanted * 2, 5),
+                window=(ws, we) if len(wins) > 1 else None,
+                language=lang_name,
+            )
+            jobs.append((i, ws, we, messages))
+
+        def ask(messages: list[dict[str, str]]) -> Any:
+            return self.router.complete_json(
+                purpose="select",
+                messages=messages,
+                validate=parse_selection,
+                schema=clip_schema(lang_name),
+                schema_name="clips",
+                max_tokens=6000,
+            )
+
         try:
-            for i, (ws, we) in enumerate(wins):
-                lines = transcript_lines(tr.segments, ws, we)
-                if not lines.strip():
-                    continue
-                messages = build_messages(
-                    lines,
-                    topics_hint=source.topics_hint,
-                    min_s=clips.min_seconds,
-                    max_s=clips.max_seconds,
-                    n=max(wanted * 2, 5),
-                    window=(ws, we) if len(wins) > 1 else None,
-                )
-                res = self.router.complete_json(
-                    purpose="select",
-                    messages=messages,
-                    validate=parse_selection,
-                    schema=CLIP_SCHEMA,
-                    schema_name="clips",
-                    max_tokens=6000,
-                )
+            # Long videos are split into windows; all windows are asked at once.
+            with ThreadPoolExecutor(max_workers=max(1, min(len(jobs), 4))) as ex:
+                futures = [ex.submit(ask, j[3]) for j in jobs]
+                answers = [f.result() for f in futures]
+            for (i, ws, we, messages), res in zip(jobs, answers, strict=True):
                 cands, errors = res.value
-                per_window.append(cands)
+                per_window.append(fix_time_units(cands, tr.duration))
                 total_cost += res.cost_usd
                 call = {
                     "window": [ws, we],
@@ -666,7 +765,7 @@ class Pipeline:
                     | {"attempts": len(res.attempts), "candidates": len(cands)},
                 )
         except NoFreeModelAvailable as e:
-            retry = self.now() + SELECT_RETRY_DELAY
+            retry = self._retry_at(e)
             with db.tx(self.conn):
                 db.transition(
                     self.conn,
@@ -700,6 +799,19 @@ class Pipeline:
 
         merged = merge_window_candidates(per_window)
         plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules(wanted))
+        if lang_name:  # captions written in the same call: no second AI call later
+            for c in plan.kept:
+                if c.candidate.caption:
+                    head, text, tags = c.candidate.caption
+                    cache = self.paths.work_dir(video_id) / "render" / c.clip_id
+                    cache.mkdir(parents=True, exist_ok=True)
+                    (cache / f"caption.{lang}.json").write_text(
+                        json.dumps(
+                            {"hook": head, "summary": text, "hashtags": list(tags)},
+                            ensure_ascii=False,
+                        ),
+                        encoding="utf-8",
+                    )
         (log_dir / "plan.json").write_text(
             json.dumps(
                 {
@@ -830,6 +942,67 @@ class Pipeline:
                 return seen
             seen.append(after)
 
+    BUSY_PREFIX = "busy:"
+
+    def fast_process(self, video_id: str, workers: int | None = None) -> list[str]:
+        """Take one video from link to checked clips in one go, without waiting
+        for scheduler ticks: stages back to back, clips cut, rendered and checked
+        in parallel. Other workers leave the video alone meanwhile (kv busy mark)."""
+        key = self.BUSY_PREFIX + video_id
+        with db.tx(self.conn):
+            db.kv_set(self.conn, key, db.iso(self.now()))
+        try:
+            seen: list[str] = []
+            while (st := self._row(video_id)["state"]) != "selected":
+                after = self.step(video_id)
+                if after is None or after == st:
+                    return seen
+                seen.append(after)
+            ids = [
+                r["id"]
+                for r in self.conn.execute(
+                    "SELECT id FROM clips WHERE video_id = ? AND state = 'selected' "
+                    "ORDER BY score DESC",
+                    (video_id,),
+                )
+            ]
+            # All clips are made at once, then all are checked at once: the clips
+            # exist as early as possible, and the checks' AI calls overlap.
+            n = workers or max(1, min(len(ids), 4))
+            with ThreadPoolExecutor(max_workers=n) as ex:
+                made = list(ex.map(lambda cid: self._in_worker(cid, "render"), ids))
+                seen += [r for r in made if r]
+                ok = [cid for cid, r in zip(ids, made, strict=True) if r == "rendered"]
+                self.review_safety(ok)  # one AI request for all clips' safety reviews
+                seen += [r for r in ex.map(lambda cid: self._in_worker(cid, "qa"), ok) if r]
+            seen += self.process(video_id)  # checks that had to wait, then "done"
+            return seen
+        finally:
+            with db.tx(self.conn):
+                db.kv_set(self.conn, key, None)
+
+    def _in_worker(self, clip_id: str, stage: str) -> str | None:
+        """Run `render` or `qa` for one clip on its own database connection, so
+        several clips can be worked on at once from threads."""
+        conn = db.connect(self.paths.db)
+        try:
+            worker = Pipeline(
+                conn,
+                self.cfg,
+                self.paths,
+                youtube=self._yt,
+                providers=self._providers,
+                clock=self.now,
+                router=self._router,
+                transcriber=self._transcribe,
+            )
+            try:
+                return worker.render(clip_id) if stage == "render" else worker.qa(clip_id)
+            except db.StateConflict:
+                return None  # another worker got there first
+        finally:
+            conn.close()
+
     # ------------------------------------------------------------------ render
 
     def face_detector(self) -> FaceDetector:
@@ -871,21 +1044,28 @@ class Pipeline:
                 self.conn, "clips", clip_id, expect="selected", to="rendering", now=self.now()
             )
         start, end = c["start_ms"] / 1000, c["end_ms"] / 1000
-        src = Path(v["raw_path"])
         work = self.paths.work_dir(v["id"]) / "render" / clip_id
         out = self.paths.render(clip_id)
         sheet = self.paths.contact_sheet(clip_id)
         try:
+            src, offset = self.clip_source(c, v)
             info = probe(src)
-            scenes = plan_clip(src, self.face_detector(), start, end, info.width, info.height)
+            s0, s1 = start - offset, end - offset  # times inside `src`
+            scenes = plan_clip(
+                src,
+                self.face_detector(),
+                s0,
+                s1,
+                info.width,
+                info.height,
+                scenes=self.cfg.settings.render.scene_detect,
+            )
             tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
             words = clip_words(tr.words, start, end)
             ass = build_ass(words, end - start, c["hook"], self.caption_layout())
-            render_clip(
-                src, start, end, scenes, ass, font_files(), out, work, self.encode_settings()
-            )
+            render_clip(src, s0, s1, scenes, ass, font_files(), out, work, self.encode_settings())
             contact_sheet(out, sheet, end - start)
-        except (RenderError, AssetError, ProbeError, OSError) as e:
+        except (RenderError, AssetError, ProbeError, AcquireError, OSError) as e:
             with db.tx(self.conn):
                 db.transition(
                     self.conn,
@@ -960,6 +1140,7 @@ class Pipeline:
             )
         except NoFreeModelAvailable as e:
             log.warning("caption_waiting", clip_id=clip["id"], error=str(e)[:300])
+            self._llm_error = e
             return None
         cap = res.value
         cache.parent.mkdir(parents=True, exist_ok=True)
@@ -1010,7 +1191,7 @@ class Pipeline:
             db.set_pause(self.conn, f"OpenRouter auth error: {e}")
             return "rendered"
         if cap is None:
-            self._wait_for_model(clip_id, "caption waiting for a free AI model")
+            self._wait_for_model(clip_id, "caption waiting for a free AI model", self._llm_error)
             return "rendered"
         text = self.post_text(c, v, cap)
         render = Path(c["render_path"] or "")
@@ -1024,8 +1205,9 @@ class Pipeline:
         if info is not None:
             gates["loudness"] = qa_mod.gate_loudness(qa_mod.measure_lufs(render))
             black, freezes = qa_mod.measure_black_and_frozen(render)
+            src, offset = self.clip_source(c, v)
             static = {
-                f: qa_mod.source_static_share(Path(v["raw_path"]), start + f[0], start + f[1])
+                f: qa_mod.source_static_share(src, start - offset + f[0], start - offset + f[1])
                 for f in freezes
                 if f[1] - f[0] > qa_mod.MAX_BLACK_OR_FROZEN
             }
@@ -1047,8 +1229,9 @@ class Pipeline:
         # Only spend a model call when everything that blocks has passed.
         if all(g.ok for n, g in gates.items() if qa_mod.blocking(n, strict)):
             spoken = " ".join(w.w for w in words)
+            cached = self._cached_safety(c, spoken, text)
             try:
-                res = self.router.complete_json(
+                res = cached or self.router.complete_json(
                     purpose="safety",
                     messages=qa_mod.safety_messages(spoken, text),
                     validate=qa_mod.parse_safety,
@@ -1058,7 +1241,7 @@ class Pipeline:
                     min_context=0,
                 )
             except NoFreeModelAvailable as e:
-                self._wait_for_model(clip_id, f"safety check waiting: {e}")
+                self._wait_for_model(clip_id, f"safety check waiting: {e}", e)
                 return "rendered"
             except LLMAuthError as e:
                 db.set_pause(self.conn, f"OpenRouter auth error: {e}")
@@ -1118,8 +1301,78 @@ class Pipeline:
             )
         return to
 
-    def _wait_for_model(self, clip_id: str, reason: str) -> None:
-        retry = self.now() + SELECT_RETRY_DELAY
+    def _safety_file(self, clip: sqlite3.Row) -> Path:
+        return self.paths.work_dir(clip["video_id"]) / "render" / clip["id"] / "safety.json"
+
+    @staticmethod
+    def _safety_key(spoken: str, text: str) -> str:
+        return hashlib.sha1(f"{spoken}\n{text}".encode()).hexdigest()  # noqa: S324
+
+    def _cached_safety(self, clip: sqlite3.Row, spoken: str, text: str) -> Any:
+        """A verdict from the batch review, if it covered exactly this text."""
+        from clipbot.select.llm import LLMResult
+
+        f = self._safety_file(clip)
+        if not f.is_file():
+            return None
+        d = json.loads(f.read_text(encoding="utf-8"))
+        if d.get("key") != self._safety_key(spoken, text):
+            return None
+        v = qa_mod.SafetyVerdict(**d["verdict"])
+        return LLMResult(v, d["model"], "", 0, 0, 0.0)
+
+    def review_safety(self, clip_ids: list[str]) -> int:
+        """Review several finished clips in one free AI request and keep the
+        verdicts for their checks. Returns how many were reviewed (0 if the AI
+        could not answer: each clip's check then asks on its own)."""
+        items, keys, rows = [], {}, {}
+        for cid in clip_ids:
+            c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (cid,)).fetchone()
+            if c is None:
+                continue
+            v = self._row(c["video_id"])
+            cap = self.caption(c, v)
+            if cap is None:
+                continue
+            tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+            spoken = " ".join(
+                w.w for w in clip_words(tr.words, c["start_ms"] / 1000, c["end_ms"] / 1000)
+            )
+            text = self.post_text(c, v, cap)
+            items.append((cid, spoken, text))
+            keys[cid], rows[cid] = self._safety_key(spoken, text), c
+        if len(items) < 2:
+            return 0
+        try:
+            res = self.router.complete_json(
+                purpose="safety",
+                messages=qa_mod.safety_batch_messages(items),
+                validate=qa_mod.parse_safety_batch([i[0] for i in items]),
+                schema=qa_mod.SAFETY_BATCH_SCHEMA,
+                schema_name="safety",
+                max_tokens=600 + 300 * len(items),
+                min_context=0,
+            )
+        except NoFreeModelAvailable:
+            return 0
+        for cid, verdict in res.value.items():
+            f = self._safety_file(rows[cid])
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(
+                json.dumps({"key": keys[cid], "model": res.model, "verdict": asdict(verdict)}),
+                encoding="utf-8",
+            )
+        return len(res.value)
+
+    def _retry_at(self, e: Exception | None = None) -> datetime:
+        """When to ask the free models again: after the daily reset when the free
+        tier's daily limit is used up, else in 30 minutes."""
+        if isinstance(e, DailyLimitReached) and e.reset_at:
+            return max(datetime.fromtimestamp(e.reset_at, UTC), self.now() + timedelta(minutes=1))
+        return self.now() + SELECT_RETRY_DELAY
+
+    def _wait_for_model(self, clip_id: str, reason: str, e: Exception | None = None) -> None:
+        retry = self._retry_at(e)
         with db.tx(self.conn):
             self.conn.execute(
                 "UPDATE clips SET next_attempt_at = ?, state_reason = ?, updated_at = ? "
@@ -1176,7 +1429,7 @@ class Pipeline:
         v = self._row(c["video_id"])
         cap = self.caption(c, v)
         if cap is None:
-            self._wait_for_model(c["id"], "caption waiting for a free AI model")
+            self._wait_for_model(c["id"], "caption waiting for a free AI model", self._llm_error)
             return None
         with db.tx(self.conn):
             self.conn.execute(

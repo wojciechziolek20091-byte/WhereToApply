@@ -53,6 +53,7 @@ def client(
         env_file,
         clock=lambda: NOW,
         pipeline_factory=lambda c, cfg, p: Pipeline(c, cfg, p, youtube=yt),
+        clip_now=False,
     )
     return TestClient(app, base_url="http://127.0.0.1:8080")
 

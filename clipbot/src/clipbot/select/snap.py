@@ -52,6 +52,9 @@ class Candidate:
     hashtags: tuple[str, ...]
     standalone: bool
     risk_flags: tuple[str, ...]
+    # The TikTok caption written in the same call: (first line, text, hashtags),
+    # in the language asked for. None when no caption language was asked.
+    caption: tuple[str, str, tuple[str, ...]] | None = None
 
 
 @dataclass(frozen=True)
@@ -266,3 +269,16 @@ def plan_clips(
         plan.dropped.append(Dropped(c.candidate, f"beyond per_video={rules.per_video}"))
     plan.kept = kept[: rules.per_video]
     return plan
+
+
+def fix_time_units(cands: Sequence[Candidate], duration: float) -> list[Candidate]:
+    """Some models answer in milliseconds although seconds were asked for. A clip
+    past the end of the video whose times fit once divided by 1000 is converted."""
+    from dataclasses import replace
+
+    out = []
+    for c in cands:
+        if c.end_sec > duration + 5 and c.end_sec / 1000 <= duration + 5:
+            c = replace(c, start_sec=c.start_sec / 1000, end_sec=c.end_sec / 1000)
+        out.append(c)
+    return out

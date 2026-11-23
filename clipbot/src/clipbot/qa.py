@@ -333,6 +333,56 @@ def safety_messages(transcript: str, post_text: str) -> list[dict[str, str]]:
     return [{"role": "system", "content": SAFETY_SYSTEM}, {"role": "user", "content": user}]
 
 
+SAFETY_BATCH_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["verdicts"],
+    "properties": {
+        "verdicts": {
+            "type": "array",
+            "items": {
+                **SAFETY_SCHEMA,
+                "required": ["id", *SAFETY_SCHEMA["required"]],
+                "properties": {"id": {"type": "string"}, **SAFETY_SCHEMA["properties"]},
+            },
+        }
+    },
+}
+
+
+def safety_batch_messages(items: Sequence[tuple[str, str, str]]) -> list[dict[str, str]]:
+    """One review for several clips: (id, transcript, caption) each. Saves free AI
+    requests (the free tier allows 50 a day)."""
+    clips = "\n\n".join(
+        f'Clip {cid}\nTranscript:\n"""\n{spoken}\n"""\nCaption:\n"""\n{caption}\n"""'
+        for cid, spoken, caption in items
+    )
+    user = (
+        f"{SAFETY_RULES}\n\nJudge each clip below on its own. Return "
+        '{"verdicts": [{"id": clip id, "decision": ..., "category": ..., "reason": ...}]} '
+        f"with one verdict per clip.\n\n{clips}"
+    )
+    return [{"role": "system", "content": SAFETY_SYSTEM}, {"role": "user", "content": user}]
+
+
+def parse_safety_batch(ids: Sequence[str]) -> Any:
+    """Validator for a batch answer: every clip id must have a verdict."""
+
+    def parse(data: Any) -> dict[str, SafetyVerdict]:
+        if not isinstance(data, dict) or not isinstance(data.get("verdicts"), list):
+            raise InvalidOutput('expected {"verdicts": [...]}')
+        out = {}
+        for v in data["verdicts"]:
+            if isinstance(v, dict) and str(v.get("id", "")).strip() in ids:
+                out[str(v["id"]).strip()] = parse_safety(v)
+        missing = set(ids) - set(out)
+        if missing:
+            raise InvalidOutput(f"no verdict for {sorted(missing)}")
+        return out
+
+    return parse
+
+
 def gate_safety(v: SafetyVerdict, model: str) -> Gate:
     data = {"category": v.category, "model": model, "reason": v.reason}
     if v.decision == "block":

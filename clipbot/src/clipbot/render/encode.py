@@ -81,13 +81,15 @@ def scene_filter(i: int, sc: ScenePlan, s: EncodeSettings) -> str:
     if sc.mode == "crop":
         return (
             f"{head},crop={sc.crop_w}:ih:{sc.crop_x}:0,"
-            f"scale={s.width}:{s.height}:flags=lanczos,{tail}"
+            f"scale={s.width}:{s.height}:flags=bicubic,{tail}"
         )
     return (
         f"{head},split[bg{i}][fg{i}];"
-        f"[bg{i}]scale={s.width}:{s.height}:force_original_aspect_ratio=increase,"
-        f"crop={s.width}:{s.height},boxblur=24:2,eq=brightness=-0.06[bgb{i}];"
-        f"[fg{i}]scale={s.width}:-2:flags=lanczos[fgs{i}];"
+        # Blur at a quarter of the size, then scale up: looks the same, ~10x cheaper.
+        f"[bg{i}]scale={s.width // 4}:{s.height // 4}:force_original_aspect_ratio=increase,"
+        f"crop={s.width // 4}:{s.height // 4},boxblur=6:2,eq=brightness=-0.06,"
+        f"scale={s.width}:{s.height}:flags=bilinear[bgb{i}];"
+        f"[fg{i}]scale={s.width}:-2:flags=bicubic[fgs{i}];"
         f"[bgb{i}][fgs{i}]overlay=(W-w)/2:(H-h)/2,{tail}"
     )
 

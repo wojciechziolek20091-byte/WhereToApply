@@ -38,6 +38,7 @@ APPROVAL_EXPIRY = timedelta(hours=24)
 DIGEST_HOUR = 20
 QA_WINDOW_VIDEOS = 10
 QA_REJECT_LIMIT = 0.80
+BUSY_FOR = timedelta(minutes=15)  # a fast worker's busy mark counts for this long
 RESUME = "Run `clipbot resume` when it is fixed."
 POSTED = ("publishing", "published")
 
@@ -285,14 +286,19 @@ class Scheduler:
         r.add(f"discovered {len(found)}")
 
     def next_video(self) -> str | None:
+        """The next video to move, skipping ones a fast worker (e.g. the dashboard,
+        right after a link was pasted) is busy with."""
         now = db.iso(self.now)
+        busy_since = db.iso(self.now - BUSY_FOR)
         row = self.conn.execute(
-            "SELECT id FROM videos WHERE state IN ('discovered', 'acquired', 'selected') OR "
+            "SELECT id FROM videos WHERE (state IN ('discovered', 'acquired', 'selected') OR "
             "(state IN ('acquire_failed', 'transcribed') AND "
-            "(next_attempt_at IS NULL OR next_attempt_at <= ?)) "
+            "(next_attempt_at IS NULL OR next_attempt_at <= ?))) "
+            "AND id NOT IN (SELECT substr(key, 6) FROM kv WHERE key LIKE 'busy:%' "
+            "AND updated_at >= ?) "
             "ORDER BY CASE state WHEN 'selected' THEN 0 WHEN 'transcribed' THEN 1 "
             "WHEN 'acquired' THEN 2 ELSE 3 END, created_at LIMIT 1",
-            (now,),
+            (now, busy_since),
         ).fetchone()
         return row["id"] if row else None
 
@@ -305,7 +311,13 @@ class Scheduler:
             return
         vid = self.next_video()
         if vid:
-            r.add(f"video {vid}: {self.pipe.step(vid)}")
+            if self.conn.execute(
+                "SELECT 1 FROM videos WHERE id = ? AND state = 'discovered'", (vid,)
+            ).fetchone():
+                # A new video goes from link to clips in one go.
+                r.add(f"video {vid}: {' > '.join(self.pipe.fast_process(vid)) or 'waiting'}")
+            else:
+                r.add(f"video {vid}: {self.pipe.step(vid)}")
             return
         due = self.pipe.clips_due_for_qa()  # safety checks that waited for a free model
         if due:

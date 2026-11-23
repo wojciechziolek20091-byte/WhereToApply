@@ -265,7 +265,7 @@ def ago(t: datetime | None, now: datetime) -> str:
 
 # --------------------------------------------------------------------------- progress
 
-STAGES = ("Queued", "Downloading", "Transcribing", "Picking clips", "Making clips", "Checking")
+STAGES = ("Queued", "Getting video", "Transcribing", "Picking clips", "Making clips", "Checking")
 _STAGE_OF = {
     "discovered": 0,
     "acquiring": 1,
@@ -283,6 +283,8 @@ _GOOD = ("qa_passed", "scheduled", "publishing", "published", "awaiting_approval
 
 
 def _friendly_wait(state: str, reason: str) -> str:
+    if state == "transcribed" and "used up" in reason:
+        return "Today's free AI requests are used up"
     if state == "transcribed" and "no free model" in reason:
         return "The free AI models are busy"
     if state == "acquire_failed":

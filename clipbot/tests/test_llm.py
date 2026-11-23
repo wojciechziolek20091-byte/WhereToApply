@@ -305,3 +305,26 @@ def test_key_limit_exceeded_bans_model() -> None:
     res = call(r)
     assert res.attempts[0].outcome == "not_free"
     assert "free/a" in r._banned
+
+
+def test_daily_limit_stops_at_once_with_reset_time() -> None:
+    from clipbot.select.llm import DailyLimitReached
+
+    limit = httpx.Response(
+        429,
+        headers={"X-RateLimit-Reset": "1795478400000"},
+        json={"error": {"message": "Rate limit exceeded: free-models-per-day. Add 10 credits"}},
+    )
+    fake = Fake({"free/a": [limit], "free/b": [reply('{"ok": true}')]})
+    with pytest.raises(DailyLimitReached) as e:
+        call(fake.router())
+    assert e.value.reset_at == 1795478400 and len(fake.calls) == 1
+    assert "used up" in str(e.value) and "00:00 UTC" in str(e.value)
+
+
+def test_router_model_does_not_keep_reasoning_mark() -> None:
+    models = [model("openrouter/free", params=("reasoning",))]
+    fake = Fake({"openrouter/free": [MANDATORY, reply('{"ok": true}')]}, models=models)
+    r = fake.router()
+    call(r)
+    assert "openrouter/free" not in r._must_reason

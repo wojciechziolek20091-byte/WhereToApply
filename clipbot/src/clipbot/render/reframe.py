@@ -1,6 +1,8 @@
 """Decide how each scene of a clip becomes 9:16 (brief 4.5).
 
-Per scene, sample frames at 4 fps and look for faces:
+By default the whole clip is one scene and faces are looked for on its keyframes
+only (fast: nothing else is decoded). With scene detection on, each scene is
+sampled at 4 fps instead:
 - a face in at least 60 % of samples, small enough for a 9:16 crop of the full
   height, and not two people far apart -> static crop centred on the median face
 - anything else (slides, screen shares, wide two-shots) -> blur_pad: the whole
@@ -120,6 +122,47 @@ def sample_faces(
     return out
 
 
+def keyframe_faces(
+    video: Path, detector: FaceDetector, start: float, end: float
+) -> list[Box | None]:
+    """Run face detection on the keyframes inside [start, end] only. ffmpeg skips
+    every other frame without decoding it, so this takes well under a second."""
+    import subprocess
+
+    import numpy as np
+
+    from clipbot.media import probe
+    from clipbot.tools import ffmpeg_exe
+
+    info = probe(video)
+    w = min(DETECT_WIDTH, info.width)
+    w -= w % 2
+    h = round(info.height * w / info.width)
+    h -= h % 2
+    p = subprocess.run(
+        [
+            ffmpeg_exe(), "-hide_banner", "-loglevel", "error",
+            "-skip_frame", "nokey", "-ss", f"{start:.3f}", "-t", f"{end - start:.3f}",
+            "-i", str(video), "-an", "-fps_mode", "passthrough",
+            "-vf", f"scale={w}:{h}", "-f", "rawvideo", "-pix_fmt", "bgr24", "-",
+        ],
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )  # fmt: skip
+    size = w * h * 3
+    frames = [
+        np.frombuffer(p.stdout[i : i + size], np.uint8).reshape(h, w, 3)
+        for i in range(0, len(p.stdout) - size + 1, size)
+    ]
+    k = info.width / w
+    out: list[Box | None] = []
+    for f in frames:
+        b = detector.largest(f)
+        out.append(Box(b.x * k, b.y * k, b.w * k, b.h * k) if b else None)
+    return out
+
+
 def crop_width(src_w: int, src_h: int) -> int:
     w = int(src_h * 9 / 16)  # round down: never wider than 9:16
     return min(src_w, w - (w % 2))
@@ -155,7 +198,13 @@ def plan_clip(
     end: float,
     src_w: int,
     src_h: int,
+    scenes: bool = False,
 ) -> list[ScenePlan]:
+    if not scenes:
+        faces = keyframe_faces(video, detector, start, end)
+        if len(faces) < 4:  # very long GOPs: fall back to sampling
+            faces = sample_faces(video, detector, start, end, fps=1.0)
+        return [plan_scene(faces, src_w, src_h, 0.0, end - start)]
     plans = []
     for a, b in detect_scenes(video, start, end):
         faces = sample_faces(video, detector, start + a, start + b)

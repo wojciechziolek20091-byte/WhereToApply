@@ -12,6 +12,7 @@ import io
 import ipaddress
 import os
 import secrets
+import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
@@ -37,10 +38,13 @@ from clipbot.config import (
     Settings,
     load_config,
 )
+from clipbot.logging import get_logger
 from clipbot.models import DataPaths
 from clipbot.qa import SOFT_GATES
 from clipbot.tools import ffmpeg_exe
 from clipbot.web import status as st
+
+log = get_logger(__name__)
 
 HERE = Path(__file__).parent
 USERNAME = "clipbot"
@@ -72,9 +76,12 @@ def create_app(
     env_file: Path | None = None,
     clock: Callable[[], datetime] = db.utcnow,
     pipeline_factory: Callable[..., Any] | None = None,
+    clip_now: bool = True,
 ) -> FastAPI:
     """`pipeline_factory(conn, cfg, paths)` builds the Pipeline used to look up
-    pasted links (tests pass a fake YouTube client through it)."""
+    pasted links (tests pass a fake YouTube client through it). `clip_now`: start
+    clipping a pasted video straight away in the background instead of waiting
+    for the bot's next step."""
     # Keys typed into the setup wizard are saved here.
     env_path = env_file or (config_dir.parent / ".env")
     cfg0 = load_config(config_dir, env_file=env_path)
@@ -362,12 +369,34 @@ def create_app(
             except (LookupError, YouTubeError) as e:
                 return back("/", f"Could not look up the video: {e}", error=True)
         label = f"“{reg.title}” by {reg.channel}" if reg.title else reg.video_id
+        if reg.new and reg.state == "discovered" and clip_now:
+            start_clipping(cfg, reg.video_id)
         if reg.state == "skipped":
             return back("/", f"Refused {label}: {reg.reason}", error=True)
         if not reg.new:
             more = " The new number of clips will be used." if reg.count_updated else ""
             return back("/", f"Already known: {label} ({st.STATE_LABEL.get(reg.state)}).{more}")
         return back("/", f"Accepted {label}. Follow it under Clipping Now.")
+
+    def start_clipping(cfg: AppConfig, video_id: str) -> None:
+        """Run the pasted video from link to clips in a background thread, unless
+        the bot is paused (then it waits for Resume like everything else)."""
+        from clipbot.pipeline import Pipeline
+
+        def run() -> None:
+            paths = DataPaths(cfg.settings.data_dir)
+            conn = db.connect(paths.db)
+            try:
+                if db.get_pause(conn).paused or paths.pause_file.exists():
+                    return
+                pipe = (pipeline_factory or Pipeline)(conn, cfg, paths)
+                pipe.fast_process(video_id)
+            except Exception as e:  # shown in the progress panel via the video's state
+                log.warning("fast_clip_failed", video_id=video_id, error=str(e)[:300])
+            finally:
+                conn.close()
+
+        threading.Thread(target=run, name=f"clip-{video_id}", daemon=True).start()
 
     def clip_action(clip_id: str, expect: set[str], to: str, reason: str) -> None:
         cfg = config()

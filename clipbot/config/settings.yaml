@@ -20,7 +20,9 @@ llm:
   cooldown_minutes: 15     # rest a model after a rate limit or error
 discovery: {poll_minutes: 30, min_duration_sec: 180, max_duration_sec: 14400, backfill_days: 0}
 rights: {allow_unlisted_cc_by: true}   # pasted links from unlisted channels: CC BY only
-acquire: {timeout_minutes: 45}
+acquire:
+  timeout_minutes: 45
+  fast: true               # YouTube captions + only the clips' seconds (~45 s per video)
 clips:
   min_seconds: 20
   max_seconds: 60
@@ -30,7 +32,8 @@ clips:
   post_roll: 0.4
   blocked_risk_flags: [hate, sexual, violence, personal_data, sponsor_read,
                        copyrighted_music, medical_claim, financial_claim]
-render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness_lufs: -14}
+render: {width: 1080, height: 1920, fps: 30, crf: 20, preset: veryfast, loudness_lufs: -14,
+         scene_detect: false}   # true: reframe each camera shot separately (slower)
 captions: {words_per_line: 3, font_size: 70, hook_font_size: 74, hook_seconds: 2.5,
            bottom_margin_pct: 20, right_margin_pct: 15}
 post:

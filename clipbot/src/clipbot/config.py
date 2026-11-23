@@ -135,6 +135,8 @@ class RenderSettings(_Strict):
     crf: int = Field(20, ge=0, le=51)
     preset: str = "veryfast"
     loudness_lufs: float = -14
+    # Split clips at camera cuts and reframe each part. Slower; off by default.
+    scene_detect: bool = False
 
     @model_validator(mode="after")
     def _dims(self) -> RenderSettings:
@@ -269,6 +271,10 @@ class RightsSettings(_Strict):
 
 class AcquireSettings(_Strict):
     timeout_minutes: float = Field(45, gt=0)
+    # true: for YouTube, use its captions and fetch only each clip's seconds (about
+    # 45 s from link to clips). Falls back to a full download when a video has no
+    # captions or a cut fails. false: always download in full and transcribe locally.
+    fast: bool = True
 
 
 class WebSettings(_Strict):

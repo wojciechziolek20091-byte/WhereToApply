@@ -203,10 +203,10 @@ def test_chunk_merge_dedupes_overlap_windows() -> None:
     ("minutes", "expected"),
     [
         (19, [(0, 19)]),
-        (25, [(0, 25)]),
-        (45, [(0, 20), (18, 38), (36, 45)]),
-        (40, [(0, 20), (18, 40)]),  # 4-minute tail folded into the previous window
-        (60, [(0, 20), (18, 38), (36, 56), (54, 60)]),
+        (45, [(0, 45)]),
+        (50, [(0, 30), (28, 50)]),
+        (60, [(0, 30), (28, 60)]),  # 4-minute tail folded into the previous window
+        (90, [(0, 30), (28, 58), (56, 86), (84, 90)]),
     ],
 )
 def test_windows(minutes: int, expected: list[tuple[int, int]]) -> None:
@@ -221,14 +221,17 @@ def test_transcript_lines_and_prompt() -> None:
         Segment(1300.0, 1302.0, "Later."),
     ]
     lines = transcript_lines(segs, 0, 1200)
-    assert lines == "[00:00.0] Hello there.\n[01:05.2] Next bit."
+    assert lines == "[0.0] Hello there.\n[65.2] Next bit."
     assert fmt_ts(3725.0) == "62:05.0"
     msgs = build_messages(
         lines, topics_hint="science facts", min_s=20, max_s=60, n=6, window=(0, 1200)
     )
     user = msgs[1]["content"]
-    assert "20 to 60 seconds" in user and "science facts" in user and "[01:05.2]" in user
-    assert "Skip intros, outros, sponsor reads" in user and "00:00.0 to 20:00.0" in user
+    assert "20 to 60 seconds" in user and "science facts" in user and "[65.2]" in user
+    assert "cliffhanger" in user and "Skip intros and outros" in user and "sponsor mention" in user
+    assert "00:00.0 to 20:00.0" in user and "caption_title" not in user
+    pl = build_messages(lines, topics_hint="", min_s=20, max_s=60, n=6, language="Polish")
+    assert "caption_title: in Polish" in pl[1]["content"] and "SZOK" in pl[1]["content"]
 
 
 # ---------------------------------------------------------------- schema
@@ -280,7 +283,6 @@ def test_malformed_responses_raise(bad: object) -> None:
         ({"hook": "one two three four five six seven eight nine ten"}, "hook must be"),
         ({"risk_flags": ["weird"]}, "unknown risk flags"),
         ({"risk_flags": "none"}, "risk_flags is not a list"),
-        ({"standalone": "true"}, "standalone is not a boolean"),
         ({"score": 140}, "out of range"),
         ({"hashtags": ["a"]}, "fewer than 3"),
         ({"summary": " "}, "empty summary"),
@@ -294,3 +296,23 @@ def test_bad_clips_are_dropped_individually(patch: dict, reason: str) -> None:
 def test_lenient_coercions() -> None:
     (c,), _ = parse_selection({"clips": [{**GOOD, "score": "91.6", "title": "x" * 100}]})
     assert c.score == 92 and len(c.title) == 80 and c.title.endswith("…")
+
+
+def test_caption_fields_ride_along() -> None:
+    from clipbot.select.prompt import clip_schema
+
+    item = clip_schema("Polish")["properties"]["clips"]["items"]
+    assert "caption_title" in item["required"] and "standalone" not in item["required"]
+    d = {**GOOD, "caption_title": "SZOK! Mózg zapomina", "caption_text": "Dlaczego?",
+         "caption_hashtags": ["#Mózg", "nauka", "dla ciebie"]}  # fmt: skip
+    (c,), _ = parse_selection({"clips": [d]})
+    assert c.caption == ("SZOK! Mózg zapomina", "Dlaczego?", ("mózg", "nauka", "dlaciebie"))
+    (c,), _ = parse_selection({"clips": [GOOD]})
+    assert c.caption is None
+
+
+def test_millisecond_answers_are_converted() -> None:
+    from clipbot.select.snap import fix_time_units
+
+    fixed = fix_time_units([cand(54272.0, 59520.0), cand(10.0, 40.0)], 1145.0)
+    assert [(c.start_sec, c.end_sec) for c in fixed] == [(54.272, 59.52), (10.0, 40.0)]

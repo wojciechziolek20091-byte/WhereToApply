@@ -53,6 +53,25 @@ class NoFreeModelAvailable(LLMError):
         super().__init__(f"{purpose}: no free model gave a valid answer ({tried})")
 
 
+class DailyLimitReached(NoFreeModelAvailable):
+    """OpenRouter's free-tier daily request limit is used up. No model will answer
+    until `reset_at` (unix seconds); trying others only wastes time."""
+
+    def __init__(self, purpose: str, attempts: list[Attempt], reset_at: float | None) -> None:
+        super().__init__(purpose, attempts)
+        self.reset_at = reset_at
+        when = time.strftime("%H:%M UTC", time.gmtime(reset_at)) if reset_at else "the daily reset"
+        self.args = (
+            f"{purpose}: no free model gave a valid answer: today's free AI requests are "
+            f"used up (OpenRouter free tier); they come back at {when}",
+        )
+
+
+# Ids that route to a different free model on each call: what one call learns
+# about reasoning does not apply to the next.
+ROUTER_IDS = frozenset({"openrouter/free"})
+
+
 class InvalidOutput(ValueError):
     """Raised by validators when a model's JSON does not fit the expected shape."""
 
@@ -204,6 +223,7 @@ class FreeModelRouter:
         self._cooldowns: dict[str, _Cooldown] = {}
         self._banned: set[str] = set()  # charged money once: never again this process
         self._must_reason: set[str] = set()  # refuse to answer with reasoning off
+        self._daily_reset: float | None = None
 
     # ---- model list
 
@@ -311,6 +331,10 @@ class FreeModelRouter:
             outcome, result = self._try(m, messages, validate, schema, schema_name, max_tokens)
             attempts.append(Attempt(m.id, outcome, round(self._clock() - t0, 2)))
             log.info("llm_attempt", purpose=purpose, model=m.id, outcome=outcome)
+            if outcome == "daily_limit":
+                raise DailyLimitReached(purpose, attempts, self._daily_reset)
+            if m.id in ROUTER_IDS and m.id in retried:
+                self._must_reason.discard(m.id)
             if outcome == "needs_reasoning" and m.id not in retried:
                 retried.add(m.id)
                 queue.append(m)  # once more, after the others, with reasoning on
@@ -352,6 +376,10 @@ class FreeModelRouter:
         if r.status_code == 402:
             self._banned.add(m.id)
             return "not_free", None
+        if r.status_code == 429 and "per-day" in r.text:
+            reset = _price(r.headers.get("x-ratelimit-reset"))
+            self._daily_reset = reset / 1000 if reset else None
+            return "daily_limit", None
         if r.status_code == 429:
             retry = _price(r.headers.get("retry-after"))
             self._cool(m.id, "rate_limited", max(retry or 0, 60) if retry else None)

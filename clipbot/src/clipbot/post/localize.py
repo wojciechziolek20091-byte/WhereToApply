@@ -13,6 +13,7 @@ from typing import Any
 
 from clipbot.config import CAPTION_LANGUAGES
 from clipbot.select.llm import InvalidOutput
+from clipbot.select.prompt import BUZZWORDS
 
 CAPTION_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -41,15 +42,17 @@ def caption_messages(
 ) -> list[dict[str, str]]:
     name = CAPTION_LANGUAGES[language]
     hint = DISCOVERY_TAGS.get(language)
+    buzz = BUZZWORDS.get(language, f" in {name}")
     rules = f"""Write this TikTok caption in {name}, for {name}-speaking viewers.
-- hook: one catchy line, at most 100 characters, that makes people watch. Natural {name}, \
-not a word-for-word translation.
-- summary: one or two sentences on what the clip shows.
+- hook: one line, at most 100 characters, full of tension and viral buzzwords{buzz}. \
+Natural {name}, not a word-for-word translation. It may tease, but must not claim \
+anything the original does not say.
+- summary: one or two punchy sentences that build suspense and do not give away the \
+ending. Buzzwords welcome; may end with a question.
 - hashtags: 4 or 5 tags, without "#", lowercase, no spaces. At least 3 must be about \
 this clip's topic, in {name}, the words {name}-speaking TikTok users would search \
 for.{f" You may add one general tag such as {hint}." if hint else ""}
-Keep names, numbers and facts exactly as given. Do not add claims that are not in the \
-original. If it is already in {name}, just improve it.
+Keep names and numbers exactly as given.
 Answer with JSON only: {{"hook": "...", "summary": "...", "hashtags": ["..."]}}"""
     user = (
         f"{rules}\n\nOriginal hook: {hook}\nOriginal summary: {summary}\n"

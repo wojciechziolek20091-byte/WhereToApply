@@ -146,11 +146,12 @@ def test_bad_key_pauses(env) -> None:
 
 
 def test_long_video_is_chunked(env) -> None:
-    long_words = speech(sentences=400)  # 400 * 5 s = 33 minutes
-    router = FakeRouter([{"clips": [clip(100.4, 133.5)]}, {"clips": [clip(1300.4, 1333.5)]}])
+    long_words = speech(sentences=600)  # 600 * 5 s = 50 minutes
+    router = FakeRouter([{"clips": [clip(100.4, 133.5)]}, {"clips": [clip(2300.4, 2333.5)]}])
     to_transcribed(env, router, fake_transcript(long_words))
-    assert len(router.calls) == 2
-    assert "00:00.0 to 20:00.0" in router.calls[0][1]["content"]
+    assert len(router.calls) == 2  # both windows asked at the same time
+    prompts = " ".join(c[1]["content"] for c in router.calls)
+    assert "from 00:00.0 to 30:00.0" in prompts and "from 28:00.0 to " in prompts
     assert env[2].execute("SELECT COUNT(*) FROM clips").fetchone()[0] == 2
 
 

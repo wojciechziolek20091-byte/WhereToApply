@@ -223,8 +223,8 @@ def _run_stages(ctx: Ctx, conn, pipe, video_id: str) -> int:
         typer.echo("the bot is running and will process it shortly")
         return 0
     try:
-        typer.echo("working (transcription can take a while on CPU)...")
-        pipe.process(video_id)
+        typer.echo("working (about 45 s with YouTube captions; longer without)...")
+        pipe.fast_process(video_id)
     finally:
         lock.release()
     row = conn.execute(
