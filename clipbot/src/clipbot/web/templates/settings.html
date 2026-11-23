@@ -6,7 +6,7 @@
 <section class="panel" aria-labelledby="acc-h">
   <h2 id="acc-h">Accounts</h2>
   <ul class="accounts">
-    <li><span><b>AI</b><br><span class="muted small">{{ 'Connected' if accounts.ai else 'Not connected' }}</span></span><a class="btn" href="/setup/ai?from=settings">{{ 'Change' if accounts.ai else 'Connect' }}</a></li>
+    <li><span><b>AI</b><br><span class="muted small">{% if accounts.ai_source == 'shared' %}Provided with this copy of clipbot{% elif accounts.ai %}Connected with your own key{% else %}Not connected{% endif %}</span></span><a class="btn" href="/setup/ai?from=settings">{% if accounts.ai_source == 'shared' %}Use My Own Key{% elif accounts.ai %}Change{% else %}Connect{% endif %}</a></li>
     <li><span><b>YouTube</b><br><span class="muted small">{{ 'Connected' if accounts.youtube else 'Not connected' }}</span></span><a class="btn" href="/setup/youtube?from=settings">{{ 'Change' if accounts.youtube else 'Connect' }}</a></li>
     <li><span><b>TikTok</b><br><span class="muted small">{{ 'Connected as profile ' ~ accounts.tiktok if accounts.tiktok else 'Not connected: clips are made but not posted' }}</span></span><a class="btn" href="/setup/tiktok?from=settings">{{ 'Change' if accounts.tiktok else 'Connect' }}</a></li>
   </ul>
@@ -39,6 +39,16 @@
   <details class="add-channel" {{ 'open' if not channels }}><summary>Add a channel</summary>
   {% set from_settings = True %}{% include "_channel_form.html" %}
   </details>
+</section>
+
+<section class="panel" aria-labelledby="share-h">
+  <h2 id="share-h">Share clipbot</h2>
+  <p class="muted small">Make a zip to send to someone. It contains clipbot only: none of your YouTube or TikTok keys, channels or clips.</p>
+  <form method="post" action="/share" class="share-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label class="toggle"><input type="checkbox" name="include_ai_key" checked {{ 'disabled' if not accounts.ai }}><span><span class="toggle-title">Include my AI key</span><span class="muted small">They skip the AI step. Everyone shares your key's free daily limit, and anyone with the file can read the key. It can never cost money while its credit limit is 0.</span></span></label>
+    <div><button class="btn primary" data-busy="Making…">Make a Copy to Share</button></div>
+  </form>
 </section>
 
 <form method="post" action="/settings" class="settings" data-dirty-guard>

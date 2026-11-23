@@ -236,6 +236,7 @@ label.choice input { width: 18px; height: 18px; min-height: 0; margin: 0; accent
 .summary li.ok::before { content: "\2713"; color: var(--accent); }
 .summary li.bad::before { content: "\2715"; color: var(--bad); }
 .summary li.skip::before { content: "\2013"; color: var(--muted); }
+.share-form { display: grid; gap: 8px; margin-top: 8px; }
 .notify-form { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
 
 @media (max-width: 720px) {

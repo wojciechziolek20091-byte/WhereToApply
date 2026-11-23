@@ -382,7 +382,18 @@ def create_app(
 
     # ------------------------------------------------------------------ setup
 
-    steps = [("ai", "AI"), ("youtube", "YouTube"), ("channels", "Channels"), ("tiktok", "TikTok")]
+    all_steps = [
+        ("ai", "AI"),
+        ("youtube", "YouTube"),
+        ("channels", "Channels"),
+        ("tiktok", "TikTok"),
+    ]
+
+    def steps_for(cfg: AppConfig) -> list[tuple[str, str]]:
+        """No AI step when this copy of clipbot came with a shared AI key."""
+        if ai_source(cfg) == "shared":
+            return [s for s in all_steps if s[0] != "ai"]
+        return all_steps
 
     def youtube_client(cfg: AppConfig) -> Any:
         if pipeline_factory is not None:  # tests
@@ -396,21 +407,31 @@ def create_app(
     @app.get("/setup", response_class=HTMLResponse, dependencies=deps)
     def setup_start(request: Request) -> HTMLResponse:
         cfg = config()
+        steps = steps_for(cfg)
         return page(
-            request, "setup.html", cfg, step="welcome", steps=steps, accounts=account_status(cfg)
+            request,
+            "setup.html",
+            cfg,
+            step="welcome",
+            steps=steps,
+            first_step=steps[0][0],
+            accounts=account_status(cfg),
         )
 
     @app.get("/setup/{step}", response_class=HTMLResponse, dependencies=deps)
     def setup_step(request: Request, step: str) -> HTMLResponse:
-        if step not in {k for k, _ in steps} | {"done"}:
+        if step not in {k for k, _ in all_steps} | {"done"}:
             raise HTTPException(404)
         cfg = config()
+        steps = steps_for(cfg)
+        order = [k for k, _ in steps]
         return page(
             request,
             "setup.html",
             cfg,
             step=step,
             steps=steps,
+            in_steps=step in order,
             accounts=account_status(cfg),
             channels=cfg.sources,
             rights=acc.RIGHTS_CHOICES,
@@ -420,7 +441,9 @@ def create_app(
     def next_url(request_form: Any, current: str) -> str:
         if request_form.get("from") == "settings":
             return "/settings"
-        order = [k for k, _ in steps] + ["done"]
+        order = [k for k, _ in steps_for(config())] + ["done"]
+        if current not in order:
+            return f"/setup/{order[0]}"
         return f"/setup/{order[order.index(current) + 1]}"
 
     @app.post("/setup/ai", dependencies=post_deps)
@@ -507,7 +530,41 @@ def create_app(
         acc.write_env(env_path, {"NOTIFY_URL": url or None})
         return back("/settings", "Phone alerts saved." if url else "Phone alerts turned off.")
 
+    @app.post("/share", dependencies=post_deps)
+    async def make_share_copy(request: Request) -> RedirectResponse:
+        from clipbot.assets import PACKAGE_ROOT
+        from clipbot.share import app_version, build_zip, downloads_dir
+
+        form = await request.form()
+        cfg = config()
+        key = cfg.secrets.openrouter_api_key
+        include_key = form.get("include_ai_key") == "on"
+        if include_key and (key is None or not key.get_secret_value()):
+            return back("/settings", "Connect the AI first, then make the copy.", error=True)
+        out = downloads_dir() / f"clipbot-{app_version(PACKAGE_ROOT)}-share.zip"
+        try:
+            build_zip(PACKAGE_ROOT, out, key.get_secret_value() if include_key and key else None)
+        except (OSError, ValueError) as e:
+            return back("/settings", f"Could not make the copy: {e}", error=True)
+        return back(
+            "/settings",
+            f"Saved {out.name} in {out.parent}. Send that file; "
+            "it contains no other keys, channels or clips.",
+        )
+
     return app
+
+
+def ai_source(cfg: AppConfig) -> str:
+    """'own', 'shared' (came with this copy of clipbot) or '' (none)."""
+    from clipbot.assets import PACKAGE_ROOT
+
+    key = cfg.secrets.openrouter_api_key
+    value = key.get_secret_value() if key else ""
+    if not value:
+        return ""
+    shared = acc.read_env(PACKAGE_ROOT / "shared.env").get("OPENROUTER_API_KEY")
+    return "shared" if shared and shared == value else "own"
 
 
 def _from(form: Any) -> str:
@@ -535,6 +592,7 @@ def account_status(cfg: AppConfig) -> dict[str, Any]:
 
     return {
         "ai": acc.mask(val(s.openrouter_api_key)),
+        "ai_source": ai_source(cfg),
         "youtube": acc.mask(val(s.youtube_api_key)),
         "tiktok": s.upload_post_profile if val(s.upload_post_api_key) else "",
         "notify": bool(val(s.notify_url)),

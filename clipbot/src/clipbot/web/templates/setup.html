@@ -2,7 +2,7 @@
 {% block title %}Set Up{% endblock %}
 {% block content %}
 {% set order = steps|map(attribute=0)|list %}
-{% if step not in ('welcome', 'done') and not returning %}
+{% if step not in ('welcome', 'done') and not returning and in_steps %}
 <ol class="stepper" aria-label="Setup progress">
   {% for key, label in steps %}
   <li class="{{ 'now' if key == step else ('past' if order.index(key) < order.index(step) else '') }}" {% if key == step %}aria-current="step"{% endif %}>
@@ -18,19 +18,24 @@
   <p class="lead">clipbot turns long YouTube videos into short TikTok clips with captions, and can post them for you.</p>
   <p>Setup takes about 10 minutes. You will need:</p>
   <ul class="needs">
+    {% if accounts.ai_source == 'shared' %}
+    <li><b>The AI is already set up</b> for you.</li>
+    {% else %}
     <li><b>An OpenRouter account</b> for the free AI that picks the best moments.</li>
+    {% endif %}
     <li><b>A Google account</b> to get a free YouTube key.</li>
     <li><b>Optional: an Upload-Post plan</b> if you want clips posted to TikTok automatically.</li>
   </ul>
   <p class="muted small">Nothing is posted until you say so. Everything stays on this computer.</p>
-  <div class="setup-actions"><a class="btn primary" href="/setup/ai">Start Setup</a></div>
+  <div class="setup-actions"><a class="btn primary" href="/setup/{{ first_step }}">Start Setup</a></div>
 </section>
 
 {% elif step == 'ai' %}
 <section class="panel setup">
   <h1>Connect the AI</h1>
   <p class="lead">A free AI reads each video's transcript and picks the moments worth clipping.</p>
-  {% if accounts.ai %}<p class="have">A key is already saved ({{ accounts.ai }}). Paste a new one only to replace it.</p>{% endif %}
+  {% if accounts.ai_source == 'shared' %}<p class="have">clipbot came with an AI key from whoever shared it. Add your own only if clips often wait for the AI.</p>
+  {% elif accounts.ai %}<p class="have">A key is already saved ({{ accounts.ai }}). Paste a new one only to replace it.</p>{% endif %}
   <ol class="guide">
     <li>Open <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a> and sign in. Signing in with Google works.</li>
     <li>Open <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Keys</a> and press <b>Create Key</b>.</li>

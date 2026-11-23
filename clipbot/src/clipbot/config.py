@@ -481,5 +481,11 @@ def load_config(config_dir: Path, env_file: Path | None = Path(".env")) -> AppCo
     if override:  # containers keep their data in a mounted volume
         settings = settings.model_copy(update={"data_dir": Path(override)})
     sources = load_sources(config_dir / "sources.yaml")
-    secrets = Secrets(_env_file=env_file)  # type: ignore[call-arg]
+    # A key shared with this copy of clipbot (shared.env in the app folder) is
+    # used unless the user's own .env sets one; later files win.
+    from clipbot.assets import PACKAGE_ROOT
+
+    shared = PACKAGE_ROOT / "shared.env"
+    files = [f for f in (shared if shared.is_file() else None, env_file) if f is not None]
+    secrets = Secrets(_env_file=tuple(files) or None)  # type: ignore[call-arg]
     return AppConfig(settings=settings, sources=sources, secrets=secrets, config_dir=config_dir)
