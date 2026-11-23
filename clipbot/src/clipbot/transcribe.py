@@ -71,14 +71,48 @@ def cuda_available() -> bool:
         return False
 
 
-def resolve_device(ws: WhisperSettings) -> tuple[str, str, str]:
+GPU_UNUSABLE = ".gpu_unusable"  # marker: this machine's GPU failed once, use the CPU
+
+
+def gpu_marked_unusable(models_dir: Path | None) -> bool:
+    return bool(models_dir) and (models_dir / GPU_UNUSABLE).is_file()
+
+
+def mark_gpu_unusable(models_dir: Path | None, why: str) -> None:
+    if models_dir:
+        models_dir.mkdir(parents=True, exist_ok=True)
+        (models_dir / GPU_UNUSABLE).write_text(why[:2000], encoding="utf-8")
+
+
+def resolve_device(ws: WhisperSettings, models_dir: Path | None = None) -> tuple[str, str, str]:
     """(device, model, compute_type) for this machine."""
     device = ws.device
     if device == "auto":
-        device = "cuda" if cuda_available() else "cpu"
+        usable = cuda_available() and not gpu_marked_unusable(models_dir)
+        device = "cuda" if usable else "cpu"
     if device == "cuda":
         return device, ws.model, ws.gpu_compute_type
     return device, ws.cpu_model or ws.model, ws.compute_type
+
+
+def gpu_works(ws: WhisperSettings, models_dir: Path | None) -> tuple[bool, str]:
+    """Run one second of silence through the GPU model. Having an NVIDIA card is not
+    enough: CUDA libraries (cuBLAS, cuDNN) must be installed too."""
+    import numpy as np
+    from faster_whisper import WhisperModel
+
+    try:
+        m = WhisperModel(
+            ws.model,
+            device="cuda",
+            compute_type=ws.gpu_compute_type,
+            download_root=str(models_dir) if models_dir else None,
+        )
+        segs, _ = m.transcribe(np.zeros(16000, dtype=np.float32), vad_filter=False)
+        list(segs)
+    except Exception as e:  # missing DLLs surface as RuntimeError/OSError
+        return False, f"{type(e).__name__}: {e}"
+    return True, "ok"
 
 
 def transcript_path(work_dir: Path, model: str) -> Path:
@@ -92,15 +126,61 @@ def transcribe(
     language_hint: str | None = None,
     models_dir: Path | None = None,
 ) -> Transcript:
-    device, model_name, compute_type = resolve_device(ws)
+    device, model_name, compute_type = resolve_device(ws, models_dir)
     out = transcript_path(work_dir, model_name)
     if out.is_file():
         log.info("transcript_cached", path=str(out))
         return Transcript.from_json(out.read_text(encoding="utf-8"))
 
+    t0 = time.monotonic()
+    try:
+        segments, info = _run(
+            media, ws, device, model_name, compute_type, language_hint, models_dir, t0
+        )
+    except Exception as e:
+        if device != "cuda" or ws.device == "cuda":
+            raise
+        # The GPU is present but unusable (usually missing CUDA libraries).
+        log.warning("gpu_unusable_falling_back_to_cpu", error=str(e)[:500])
+        mark_gpu_unusable(models_dir, f"{type(e).__name__}: {e}")
+        device, model_name, compute_type = resolve_device(ws, models_dir)
+        out = transcript_path(work_dir, model_name)
+        segments, info = _run(
+            media, ws, device, model_name, compute_type, language_hint, models_dir, t0
+        )
+    tr = Transcript(
+        model=model_name,
+        language=info.language,
+        language_prob=round(info.language_probability, 3),
+        duration=round(info.duration, 3),
+        segments=segments,
+        device=device,
+        seconds_taken=round(time.monotonic() - t0, 1),
+    )
+    tr.save(out)
+    log.info(
+        "transcribed",
+        model=model_name,
+        device=device,
+        seconds=tr.seconds_taken,
+        audio_seconds=tr.duration,
+        words=len(tr.words),
+    )
+    return tr
+
+
+def _run(
+    media: Path,
+    ws: WhisperSettings,
+    device: str,
+    model_name: str,
+    compute_type: str,
+    language_hint: str | None,
+    models_dir: Path | None,
+    t0: float,
+):
     from faster_whisper import WhisperModel
 
-    t0 = time.monotonic()
     model = WhisperModel(
         model_name,
         device=device,
@@ -133,25 +213,7 @@ def transcribe(
         if time.monotonic() - last_log > 30:
             last_log = time.monotonic()
             log.info("transcribe_progress", at_sec=round(s.end), of_sec=round(info.duration))
-    tr = Transcript(
-        model=model_name,
-        language=info.language,
-        language_prob=round(info.language_probability, 3),
-        duration=round(info.duration, 3),
-        segments=segments,
-        device=device,
-        seconds_taken=round(time.monotonic() - t0, 1),
-    )
-    tr.save(out)
-    log.info(
-        "transcribed",
-        model=model_name,
-        device=device,
-        seconds=tr.seconds_taken,
-        audio_seconds=tr.duration,
-        words=len(tr.words),
-    )
-    return tr
+    return segments, info
 
 
 def as_dict(tr: Transcript) -> dict[str, Any]:

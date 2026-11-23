@@ -22,6 +22,65 @@ app = typer.Typer(
     help="Cut rights-cleared YouTube videos into vertical clips and post them.",
 )
 
+
+def enter_home(app_dir: Path | None = None) -> Path | None:
+    """If CLIPBOT_HOME is set (the desktop launchers set it), keep settings, keys
+    and downloads there instead of in the app folder, so installing a new version
+    keeps them. The first time, the app folder's config, .env and data move over."""
+    import contextlib
+    import shutil
+
+    home_s = os.environ.get("CLIPBOT_HOME")
+    if not home_s:
+        return None
+    home = Path(home_s).expanduser()
+    app_dir = app_dir or Path.cwd()
+    if home.resolve() == app_dir.resolve():
+        return home
+    if not home.exists():
+        app_dir = _previous_install(app_dir) or app_dir
+    (home / "config").mkdir(parents=True, exist_ok=True)
+    for name in ("settings.yaml", "sources.yaml"):
+        dst, src = home / "config" / name, app_dir / "config" / name
+        if not dst.exists() and src.is_file():
+            shutil.copy2(src, dst)
+    if not (home / ".env").exists() and (app_dir / ".env").is_file():
+        shutil.copy2(app_dir / ".env", home / ".env")
+    if not (home / "data").exists() and (app_dir / "data").is_dir():
+        # If it is in use, clipbot starts fresh and downloads the models again.
+        with contextlib.suppress(OSError):
+            shutil.move(str(app_dir / "data"), str(home / "data"))
+    os.chdir(home)
+    return home
+
+
+def _previous_install(app_dir: Path) -> Path | None:
+    """An earlier clipbot unzipped next to this one (e.g. Downloads/clipbot-0.1.2/
+    clipbot when this is clipbot-0.1.3/clipbot) that still holds the user's keys
+    or downloads. Lets an update keep them without any copying by hand."""
+    if (app_dir / ".env").is_file() or (app_dir / "data").is_dir():
+        return None
+    candidates = [
+        p
+        for pattern in ("clipbot*/clipbot", "clipbot*")
+        for p in app_dir.parent.parent.glob(pattern)
+    ]
+    candidates += list(app_dir.parent.glob("clipbot*"))
+    found = [
+        p
+        for p in set(candidates)
+        if p.is_dir()
+        and p.resolve() != app_dir.resolve()
+        and ((p / ".env").is_file() or (p / "data").is_dir())
+    ]
+    return max(found, key=lambda p: p.stat().st_mtime) if found else None
+
+
+@app.callback()
+def _main() -> None:
+    enter_home()
+
+
 ConfigDirOpt = Annotated[
     Path,
     typer.Option(
@@ -543,15 +602,34 @@ def prepare(
     from faster_whisper.utils import download_model
 
     from clipbot.assets import face_model
-    from clipbot.transcribe import resolve_device
+    from clipbot.transcribe import gpu_works, mark_gpu_unusable, resolve_device
 
     ctx = _load(config_dir, env_file)
     ctx.paths.ensure()
     clog.configure(log_dir=ctx.paths.logs, secrets=ctx.cfg.secrets.values(), console=False)
-    device, model, _ = resolve_device(ctx.cfg.settings.whisper)
-    where = "graphics card" if device == "cuda" else "processor"
-    typer.echo(f"Downloading the speech model ({model}, for your {where})…")
-    download_model(model, cache_dir=str(ctx.paths.models))
+    ws = ctx.cfg.settings.whisper
+    device, model, _ = resolve_device(ws, ctx.paths.models)
+    if device == "cuda":
+        typer.echo(
+            f"Downloading the speech model for your graphics card ({model}, "
+            "about 1.6 GB, this can take a while)…"
+        )
+        download_model(model, cache_dir=str(ctx.paths.models))
+        typer.echo("Testing your graphics card…")
+        ok, why = gpu_works(ws, ctx.paths.models)
+        if ok:
+            typer.echo("Your graphics card works with clipbot.")
+        else:
+            mark_gpu_unusable(ctx.paths.models, why)
+            typer.echo(
+                "Your graphics card cannot be used (NVIDIA CUDA libraries are "
+                "missing), so clipbot will use the processor instead. That is "
+                "slower but works fine."
+            )
+            device, model, _ = resolve_device(ws, ctx.paths.models)
+    if device != "cuda":
+        typer.echo(f"Downloading the speech model ({model}, about 500 MB)…")
+        download_model(model, cache_dir=str(ctx.paths.models))
     typer.echo("Downloading the face finder…")
     face_model(ctx.paths.models)
     typer.echo("Ready.")

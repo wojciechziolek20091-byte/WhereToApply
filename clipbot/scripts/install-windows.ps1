@@ -2,6 +2,8 @@
 $ErrorActionPreference = "Stop"
 $App = Split-Path -Parent $PSScriptRoot
 Set-Location $App
+# Settings, keys and downloads live here, so new versions keep them.
+$env:CLIPBOT_HOME = Join-Path $env:LOCALAPPDATA "clipbot"
 
 # Double-clicking inside a zip runs from a temporary folder that Windows deletes.
 if ($App -like "$env:TEMP*" -or $App -match "\.zip") {
@@ -36,7 +38,7 @@ Write-Host "  Step 2 of 3: downloading clipbot's parts (around 1 GB, only the fi
 & $uv sync --frozen --no-dev
 if ($LASTEXITCODE -ne 0) { throw "The download failed. Check the internet connection and run Install again." }
 
-Write-Host "  Step 3 of 3: downloading the speech model..."
+Write-Host "  Step 3 of 3: downloading the speech model and testing your computer..."
 & $uv run --frozen --no-dev clipbot prepare
 if ($LASTEXITCODE -ne 0) { throw "Preparing clipbot failed. The message above says why." }
 
@@ -60,6 +62,8 @@ foreach ($dir in $places) {
 Write-Host ""
 Write-Host "  Done! clipbot is installed in:"
 Write-Host "    $App"
+Write-Host "  Your settings and downloads are kept in:"
+Write-Host "    $env:CLIPBOT_HOME"
 Write-Host "  Start it any time from the 'clipbot' icon on your desktop,"
 Write-Host "  or press the Windows key and type clipbot."
 Write-Host ""

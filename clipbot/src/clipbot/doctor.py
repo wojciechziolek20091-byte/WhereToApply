@@ -121,9 +121,12 @@ def check_transcription(cfg: AppConfig) -> CheckResult:
         import faster_whisper
     except ImportError:
         return CheckResult("transcription", "fail", "faster-whisper not installed")
+    from clipbot.models import DataPaths
     from clipbot.transcribe import resolve_device
 
-    device, model, compute = resolve_device(cfg.settings.whisper)
+    device, model, compute = resolve_device(
+        cfg.settings.whisper, DataPaths(cfg.settings.data_dir).models
+    )
     note = "NVIDIA GPU found" if device == "cuda" else "no NVIDIA GPU, CPU mode"
     return CheckResult(
         "transcription",

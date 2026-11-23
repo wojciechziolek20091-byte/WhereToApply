@@ -11,6 +11,7 @@ if not exist "%~dp0pyproject.toml" (
   pause
   exit /b 1
 )
+set "CLIPBOT_HOME=%LOCALAPPDATA%\clipbot"
 set "UV=uv"
 where uv >nul 2>nul || set "UV=%USERPROFILE%\.local\bin\uv.exe"
 "%UV%" run --frozen --no-dev clipbot start

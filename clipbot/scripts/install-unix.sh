@@ -3,6 +3,12 @@
 set -euo pipefail
 APP="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$APP"
+# Settings, keys and downloads live here, so new versions keep them.
+if [ "$(uname)" = "Darwin" ]; then
+  export CLIPBOT_HOME="${CLIPBOT_HOME:-$HOME/Library/Application Support/clipbot}"
+else
+  export CLIPBOT_HOME="${CLIPBOT_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/clipbot}"
+fi
 
 find_uv() {
   if command -v uv >/dev/null 2>&1; then command -v uv; return; fi
@@ -55,4 +61,6 @@ esac
 echo ""
 echo "  Done! clipbot is installed in:"
 echo "    $APP"
+echo "  Your settings and downloads are kept in:"
+echo "    $CLIPBOT_HOME"
 echo "  Start it any time from the 'clipbot' icon on your desktop."
