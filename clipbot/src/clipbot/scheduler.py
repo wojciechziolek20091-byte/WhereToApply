@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from clipbot import db
-from clipbot.config import POSTS_PER_DAY_CEILING
+from clipbot.config import POSTS_PER_DAY_CEILING, AppConfig
 from clipbot.logging import get_logger
 from clipbot.notify import Notifier
 from clipbot.pipeline import Pipeline
@@ -56,8 +56,38 @@ class Scheduler:
         self.pub = publisher
         self.notifier = notifier
         self.conn = pipe.conn
-        self.cfg = pipe.cfg
         self.paths = pipe.paths
+        self._settings_mtime = self._mtime()
+
+    @property
+    def cfg(self) -> AppConfig:
+        return self.pipe.cfg
+
+    def _mtime(self) -> float:
+        p = self.pipe.cfg.config_dir / "settings.yaml"
+        return p.stat().st_mtime if p.is_file() else 0.0
+
+    def reload_settings(self) -> bool:
+        """Pick up settings.yaml edits (e.g. from the dashboard) without a restart.
+        An invalid file is reported and the running settings are kept."""
+        from clipbot.config import ConfigError, load_settings
+
+        m = self._mtime()
+        if m == self._settings_mtime:
+            return False
+        self._settings_mtime = m
+        try:
+            new = load_settings(self.cfg.config_dir / "settings.yaml")
+        except ConfigError as e:
+            self.pipe.alert("settings_invalid", f"settings.yaml was not reloaded: {e}")
+            return False
+        if new.data_dir != self.cfg.settings.data_dir:
+            new = new.model_copy(update={"data_dir": self.cfg.settings.data_dir})
+        cfg = self.cfg.model_copy(update={"settings": new})
+        self.pipe.cfg = cfg
+        self.pub.cfg = cfg
+        log.info("settings_reloaded")
+        return True
 
     @property
     def now(self) -> datetime:
@@ -344,6 +374,10 @@ class Scheduler:
 
     def tick(self) -> TickReport:
         r = TickReport([])
+        if self.reload_settings():
+            r.add("settings reloaded")
+        with db.tx(self.conn):
+            db.kv_set(self.conn, "last_tick_at", db.iso(self.now))
         self.check_rails(r)
         self.poll_publishing(r)
         paused, why = self.paused()

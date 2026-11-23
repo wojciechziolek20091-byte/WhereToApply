@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Videos - clipbot{% endblock %}
+{% block content %}
+<h2>Videos</h2>
+{% if items %}
+<div class="card table-wrap">
+<table>
+  <thead><tr><th>Video</th><th>Status</th><th>Clips</th><th>Updated</th></tr></thead>
+  <tbody>
+  {% for v in items %}
+  <tr>
+    <td><div class="title">{{ v.title or v.id }}</div><div class="muted small">{{ v.channel_title or '' }}{% if v.license == 'creativeCommon' %} &middot; CC BY{% elif v.license == 'local_file' %} &middot; local file{% endif %}</div></td>
+    <td><span class="pill st-{{ v.state }}">{{ v.label }}</span><div class="muted small">{{ v.state_reason or '' }}</div></td>
+    <td>{{ v.clips }}{% if v.posted %} ({{ v.posted }} posted){% endif %}</td>
+    <td class="muted small">{{ ago(v.updated, now) }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}<p class="card muted">No videos yet.</p>{% endif %}
+{% endblock %}

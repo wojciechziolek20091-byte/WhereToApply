@@ -158,6 +158,40 @@ In dry run, what would have been posted is in `data/dryrun/`.
 
 ---
 
+## The dashboard
+
+`clipbot run` also opens a dashboard in your browser at **http://127.0.0.1:8080**
+(`clipbot web` opens just the dashboard). From there you can:
+
+- see whether the bot is running, and pause or resume it
+- paste a YouTube link to clip
+- watch every clip before it posts, with its caption and QA results, and approve,
+  reject or remove it
+- follow each video's progress and the recent activity
+- change the main settings (dry run, ask before posting, posts per day, windows,
+  hashtags, clip length); the running bot picks changes up within a minute
+- run the health checks
+
+**From your phone:** set a password and open the dashboard to your home network:
+
+```
+# .env
+DASHBOARD_PASSWORD=choose-a-long-password
+```
+
+```yaml
+# config/settings.yaml
+web:
+  host: 0.0.0.0
+```
+
+Restart, and `clipbot run` prints the address to open on your phone, like
+`http://192.168.1.20:8080` (log in with user `clipbot` and your password). It
+refuses to listen on your network without a password. Outside your home network it
+is not reachable; that is deliberate.
+
+---
+
 ## Going live
 
 1. Run a week with `dry_run: true`. Look at the clips and contact sheets, read the
@@ -179,7 +213,7 @@ like this advise a few weeks of ordinary use before connecting any posting tool.
 
 | Task | Command |
 |---|---|
-| What is it doing? | `clipbot status` |
+| What is it doing? | the dashboard, or `clipbot status` |
 | Today's summary | `clipbot digest` (also sent daily at 20:00) |
 | Stop everything now | `clipbot pause --reason "why"`, or create a file named `PAUSE` in the data folder |
 | Start again | `clipbot resume` (and delete the `PAUSE` file if you made one) |

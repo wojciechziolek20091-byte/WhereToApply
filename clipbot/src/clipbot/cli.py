@@ -331,9 +331,56 @@ def run(
     try:
         if ctx.cfg.settings.dry_run:
             typer.echo("dry_run is on: clips are rendered and checked but never posted")
+        if ctx.cfg.settings.web.enabled:
+            _start_dashboard(ctx, config_dir, env_file)
         run_forever(_scheduler(ctx, conn))
     finally:
         lock.release()
+
+
+def _start_dashboard(ctx: Ctx, config_dir: Path, env_file: Path) -> None:
+    from clipbot.web.app import UnsafeBind, check_bind, create_app, serve_in_thread, urls_for
+
+    w = ctx.cfg.settings.web
+    pw = ctx.cfg.secrets.dashboard_password
+    try:
+        check_bind(w.host, pw.get_secret_value() if pw else None)
+    except UnsafeBind as e:
+        typer.echo(f"dashboard not started: {e}", err=True)
+        return
+    app_ = create_app(config_dir, env_file if env_file.exists() else None)
+    serve_in_thread(app_, w.host, w.port)
+    typer.echo("dashboard: " + "  ".join(urls_for(w.host, w.port)))
+
+
+@app.command()
+def web(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+    host: Annotated[str | None, typer.Option(help="Override web.host.")] = None,
+    port: Annotated[int | None, typer.Option(help="Override web.port.")] = None,
+) -> None:
+    """Open only the dashboard (`clipbot run` already includes it)."""
+    import uvicorn
+
+    from clipbot.web.app import UnsafeBind, check_bind, create_app, urls_for
+
+    ctx = _load(config_dir, env_file)
+    w = ctx.cfg.settings.web
+    h, p = host or w.host, port or w.port
+    pw = ctx.cfg.secrets.dashboard_password
+    try:
+        check_bind(h, pw.get_secret_value() if pw else None)
+    except UnsafeBind as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(2) from None
+    typer.echo("dashboard: " + "  ".join(urls_for(h, p)) + "   (Ctrl+C to stop)")
+    uvicorn.run(
+        create_app(config_dir, env_file if env_file.exists() else None),
+        host=h,
+        port=p,
+        log_level="warning",
+    )
 
 
 @app.command()

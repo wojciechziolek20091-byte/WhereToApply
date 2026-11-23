@@ -1,0 +1,472 @@
+"""The clipbot dashboard: a small web app over the same database the bot uses.
+
+Heavy work never runs here. Pasting a link only registers the video; the running
+bot downloads, transcribes, renders and posts it. Safe by default:
+- it listens on 127.0.0.1 (this computer only) unless you choose otherwise, and
+  refuses any other address without DASHBOARD_PASSWORD
+- every form carries a per-process token and must come from the dashboard itself,
+  so another website cannot press its buttons through your browser
+"""
+
+import io
+import ipaddress
+import os
+import secrets
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Annotated, Any
+from urllib.parse import quote, urlparse
+
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import ValidationError
+
+from clipbot import db
+from clipbot.config import PRIVACY_LEVELS, AppConfig, ConfigError, Settings, load_config
+from clipbot.models import DataPaths
+from clipbot.web import status as st
+
+HERE = Path(__file__).parent
+USERNAME = "clipbot"
+
+
+class UnsafeBind(RuntimeError):
+    pass
+
+
+def is_loopback(host: str) -> bool:
+    if host in ("localhost", ""):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def check_bind(host: str, password: str | None) -> None:
+    if not is_loopback(host) and not password:
+        raise UnsafeBind(
+            f"the dashboard would be open to your whole network on {host} without a "
+            "password. Set DASHBOARD_PASSWORD in .env, or use web.host: 127.0.0.1"
+        )
+
+
+def create_app(
+    config_dir: Path,
+    env_file: Path | None = None,
+    clock: Callable[[], datetime] = db.utcnow,
+    pipeline_factory: Callable[..., Any] | None = None,
+) -> FastAPI:
+    """`pipeline_factory(conn, cfg, paths)` builds the Pipeline used to look up
+    pasted links (tests pass a fake YouTube client through it)."""
+    cfg0 = load_config(config_dir, env_file=env_file)
+    pw = cfg0.secrets.dashboard_password
+    password = pw.get_secret_value() if pw else None
+    csrf = secrets.token_urlsafe(24)
+    templates = Jinja2Templates(directory=str(HERE / "templates"))
+    templates.env.globals.update(csrf=csrf, tabs=st.CLIP_TABS, privacy_levels=PRIVACY_LEVELS)
+    templates.env.filters["mmss"] = lambda s: f"{int(s // 60):02d}:{s % 60:04.1f}"
+
+    app = FastAPI(title="clipbot", docs_url=None, redoc_url=None, openapi_url=None)
+    app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+    basic = HTTPBasic(auto_error=False)
+
+    def config() -> AppConfig:
+        """Re-read each request so settings edits show at once."""
+        try:
+            return load_config(config_dir, env_file=env_file)
+        except ConfigError:
+            return cfg0
+
+    def auth(creds: Annotated[HTTPBasicCredentials | None, Depends(basic)]) -> None:
+        if password is None:
+            return
+        ok = creds is not None and secrets.compare_digest(
+            creds.password.encode(), password.encode()
+        )
+        if not ok:
+            raise HTTPException(
+                401, "password required", headers={"WWW-Authenticate": 'Basic realm="clipbot"'}
+            )
+
+    def same_origin(request: Request) -> None:
+        origin = request.headers.get("origin") or request.headers.get("referer")
+        if origin and urlparse(origin).netloc != request.headers.get("host"):
+            raise HTTPException(403, "request did not come from the dashboard")
+
+    async def check_csrf(request: Request) -> None:
+        same_origin(request)
+        form = await request.form()
+        if not secrets.compare_digest(str(form.get("csrf", "")), csrf):
+            raise HTTPException(403, "this page has expired; reload it and try again")
+
+    @contextmanager
+    def database(cfg: AppConfig) -> Iterator[Any]:
+        paths = DataPaths(cfg.settings.data_dir)
+        paths.ensure()
+        conn = db.connect(paths.db)
+        try:
+            yield conn, paths
+        finally:
+            conn.close()
+
+    def back(path: str, msg: str = "", error: bool = False) -> RedirectResponse:
+        sep = "&" if "?" in path else "?"
+        q = f"{sep}{'err' if error else 'msg'}={quote(msg)}" if msg else ""
+        return RedirectResponse(f"{path}{q}", status_code=303)
+
+    def page(request: Request, name: str, cfg: AppConfig, **ctx: Any) -> HTMLResponse:
+        return templates.TemplateResponse(
+            request,
+            name,
+            {
+                "cfg": cfg,
+                "s": cfg.settings,
+                "now": clock(),
+                "ago": st.ago,
+                "msg": request.query_params.get("msg"),
+                "err": request.query_params.get("err"),
+                **ctx,
+            },
+        )
+
+    deps = [Depends(auth)]
+    post_deps = [Depends(auth), Depends(check_csrf)]
+
+    # ------------------------------------------------------------------ pages
+
+    @app.get("/", response_class=HTMLResponse, dependencies=deps)
+    def home(request: Request) -> HTMLResponse:
+        cfg = config()
+        now = clock()
+        with database(cfg) as (conn, paths):
+            bot = st.bot_state(conn, paths, now)
+            nxt, why = st.next_post_time(conn, cfg.settings, now)
+            since = db.iso(now - timedelta(hours=24))
+            posted_24h = conn.execute(
+                f"SELECT COUNT(*) FROM clips WHERE state IN {st.POSTED} AND submitted_at >= ?",
+                (since,),
+            ).fetchone()[0]
+            return page(
+                request,
+                "home.html",
+                cfg,
+                bot=bot,
+                next_post=nxt,
+                next_why=why,
+                posted_24h=posted_24h,
+                clips=st.counts(conn, "clips"),
+                videos=st.counts(conn, "videos"),
+                events=st.recent_events(conn),
+                review=st.clip_views(conn, ("awaiting_approval",), 6),
+                ready=st.clip_views(conn, ("qa_passed", "scheduled"), 3),
+            )
+
+    @app.get("/clips", response_class=HTMLResponse, dependencies=deps)
+    def clips(request: Request, tab: str = "ready") -> HTMLResponse:
+        cfg = config()
+        if tab not in st.CLIP_TABS:
+            tab = "ready"
+        with database(cfg) as (conn, _):
+            counts = st.counts(conn, "clips")
+            tab_counts = {k: sum(counts.get(s, 0) for s in v[1]) for k, v in st.CLIP_TABS.items()}
+            return page(
+                request,
+                "clips.html",
+                cfg,
+                tab=tab,
+                tab_counts=tab_counts,
+                items=st.clip_views(conn, st.CLIP_TABS[tab][1]),
+            )
+
+    @app.get("/videos", response_class=HTMLResponse, dependencies=deps)
+    def videos(request: Request) -> HTMLResponse:
+        cfg = config()
+        with database(cfg) as (conn, _):
+            return page(request, "videos.html", cfg, items=st.video_rows(conn))
+
+    @app.get("/settings", response_class=HTMLResponse, dependencies=deps)
+    def settings_page(request: Request) -> HTMLResponse:
+        return page(request, "settings.html", config())
+
+    @app.get("/health", response_class=HTMLResponse, dependencies=deps)
+    def health(request: Request, online: bool = False) -> HTMLResponse:
+        from clipbot import doctor
+
+        cfg = config()
+        results = doctor.run_checks(cfg, DataPaths(cfg.settings.data_dir), online=online)
+        return page(request, "health.html", cfg, results=results, online=online)
+
+    @app.get("/api/status", dependencies=deps)
+    def api_status() -> JSONResponse:
+        cfg = config()
+        now = clock()
+        with database(cfg) as (conn, paths):
+            bot = st.bot_state(conn, paths, now)
+            return JSONResponse(
+                {
+                    "running": bot["running"],
+                    "paused": bot["paused"],
+                    "pause_reason": bot["pause_reason"],
+                    "dry_run": cfg.settings.dry_run,
+                    "clips": st.counts(conn, "clips"),
+                    "videos": st.counts(conn, "videos"),
+                }
+            )
+
+    # ------------------------------------------------------------------ media
+
+    def clip_file(clip_id: str, column: str) -> Path:
+        cfg = config()
+        with database(cfg) as (conn, paths):
+            row = conn.execute(f"SELECT {column} FROM clips WHERE id = ?", (clip_id,)).fetchone()
+        if row is None or not row[0]:
+            raise HTTPException(404)
+        p = Path(row[0]).resolve()
+        if paths.renders.resolve() not in p.parents or not p.is_file():
+            raise HTTPException(404)
+        return p
+
+    @app.get("/clips/{clip_id}/video", dependencies=deps)
+    def clip_video(clip_id: str) -> FileResponse:
+        return FileResponse(clip_file(clip_id, "render_path"), media_type="video/mp4")
+
+    @app.get("/clips/{clip_id}/sheet", dependencies=deps)
+    def clip_sheet(clip_id: str) -> FileResponse:
+        return FileResponse(clip_file(clip_id, "contact_sheet_path"), media_type="image/jpeg")
+
+    # ------------------------------------------------------------------ actions
+
+    @app.post("/pause", dependencies=post_deps)
+    def do_pause(
+        reason: Annotated[str, Form()] = "paused from the dashboard",
+        hours: Annotated[str, Form()] = "",
+    ) -> RedirectResponse:
+        cfg = config()
+        until = clock() + timedelta(hours=float(hours)) if hours.strip() else None
+        with database(cfg) as (conn, _):
+            db.set_pause(conn, reason.strip() or "paused from the dashboard", until)
+            db.log_event(conn, "pause", f"paused: {reason}", data={"by": "dashboard"})
+        return back("/", "Paused. Nothing is processed or posted until you resume.")
+
+    @app.post("/resume", dependencies=post_deps)
+    def do_resume() -> RedirectResponse:
+        cfg = config()
+        with database(cfg) as (conn, paths):
+            db.clear_pause(conn)
+            db.log_event(conn, "resume", "resumed", data={"by": "dashboard"})
+            if paths.pause_file.exists():
+                return back(
+                    "/",
+                    f"Resumed, but the PAUSE file ({paths.pause_file}) still "
+                    "keeps the bot paused. Delete it to really resume.",
+                    error=True,
+                )
+        return back("/", "Resumed.")
+
+    @app.post("/clip", dependencies=post_deps)
+    def do_clip(url: Annotated[str, Form()]) -> RedirectResponse:
+        from clipbot.pipeline import Pipeline
+        from clipbot.sources.youtube_api import BadVideoURL, YouTubeError
+
+        cfg = config()
+        with database(cfg) as (conn, paths):
+            db.sync_sources(conn, cfg.sources)
+            make = pipeline_factory or Pipeline
+            pipe = make(conn, cfg, paths)
+            try:
+                reg = pipe.ingest_url(url.strip())
+            except BadVideoURL:
+                return back("/", "That is not a YouTube video link.", error=True)
+            except (LookupError, YouTubeError) as e:
+                return back("/", f"Could not look up the video: {e}", error=True)
+        label = f"“{reg.title}” by {reg.channel}" if reg.title else reg.video_id
+        if reg.state == "skipped":
+            return back("/", f"Refused {label}: {reg.reason}", error=True)
+        if not reg.new:
+            return back("/", f"Already known: {label} ({st.STATE_LABEL.get(reg.state)}).")
+        return back("/", f"Accepted {label}. The bot will download and clip it next.")
+
+    def clip_action(clip_id: str, expect: set[str], to: str, reason: str) -> None:
+        cfg = config()
+        with database(cfg) as (conn, _), db.tx(conn):
+            try:
+                db.transition(
+                    conn, "clips", clip_id, expect=expect, to=to, reason=reason, now=clock()
+                )
+            except db.StateConflict:
+                raise HTTPException(
+                    409, "this clip has already moved on; reload the page"
+                ) from None
+            db.log_event(conn, "review", reason, clip_id=clip_id, data={"by": "dashboard"})
+
+    @app.post("/clips/{clip_id}/approve", dependencies=post_deps)
+    def approve(clip_id: str, request: Request) -> RedirectResponse:
+        clip_action(clip_id, {"awaiting_approval"}, "scheduled", "approved")
+        return back(
+            _return_to(request, "/clips?tab=review"), "Approved. It posts in the next open window."
+        )
+
+    @app.post("/clips/{clip_id}/reject", dependencies=post_deps)
+    def reject(clip_id: str, request: Request) -> RedirectResponse:
+        clip_action(
+            clip_id, {"awaiting_approval", "qa_passed", "scheduled"}, "rejected", "removed by you"
+        )
+        return back(_return_to(request, "/clips"), "Removed. It will not be posted.")
+
+    @app.post("/settings", dependencies=post_deps)
+    async def save_settings(request: Request) -> RedirectResponse:
+        form = await request.form()
+        try:
+            changed = save_settings_form(config_dir / "settings.yaml", dict(form))
+        except SettingsFormError as e:
+            return back("/settings", str(e), error=True)
+        if not changed:
+            return back("/settings", "Nothing changed.")
+        return back("/settings", "Saved. The running bot picks this up within a minute.")
+
+    return app
+
+
+def _return_to(request: Request, default: str) -> str:
+    ref = request.headers.get("referer") or ""
+    u = urlparse(ref)
+    if u.path.startswith("/") and u.netloc == request.headers.get("host"):
+        return u.path + (
+            f"?{u.query}" if u.query and "msg=" not in u.query and "err=" not in u.query else ""
+        )
+    return default
+
+
+# --------------------------------------------------------------------------- settings
+
+
+class SettingsFormError(ValueError):
+    pass
+
+
+def _set(doc: Any, path: list[str], value: Any) -> bool:
+    node = doc
+    for k in path[:-1]:
+        if k not in node or node[k] is None:
+            node[k] = {}
+        node = node[k]
+    if node.get(path[-1]) == value:
+        return False
+    node[path[-1]] = value
+    return True
+
+
+def save_settings_form(path: Path, form: dict[str, Any]) -> bool:
+    """Apply the dashboard's settings form to settings.yaml, keeping its comments.
+    Validates the result before writing; an invalid form changes nothing."""
+    from ruamel.yaml import YAML
+    from ruamel.yaml.comments import CommentedSeq
+
+    yaml = YAML()
+    yaml.preserve_quotes = True
+    doc = yaml.load(path.read_text(encoding="utf-8")) or {}
+
+    def num(name: str, kind: type = int) -> Any:
+        raw = str(form.get(name, "")).strip()
+        try:
+            return kind(raw)
+        except ValueError:
+            raise SettingsFormError(f"{name.replace('_', ' ')} must be a number") from None
+
+    def flow(items: list[Any]) -> CommentedSeq:
+        seq = CommentedSeq(items)
+        seq.fa.set_flow_style()
+        return seq
+
+    windows = [
+        w.strip() for w in str(form.get("windows", "")).replace(";", ",").split(",") if w.strip()
+    ]
+    tags = [
+        t.strip().lstrip("#")
+        for t in str(form.get("extra_hashtags", "")).replace(",", " ").split()
+        if t.strip()
+    ]
+    changes = {
+        ("dry_run",): form.get("dry_run") == "on",
+        ("review_mode",): "hold" if form.get("review_mode") == "hold" else "auto",
+        ("publish", "posts_per_day"): num("posts_per_day"),
+        ("publish", "min_gap_minutes"): num("min_gap_minutes"),
+        ("publish", "privacy"): str(form.get("privacy", "account_default")),
+        ("publish", "windows"): flow(windows),
+        ("post", "extra_hashtags"): flow(tags),
+        ("clips", "per_video"): num("per_video"),
+        ("clips", "min_score"): num("min_score"),
+        ("clips", "min_seconds"): num("min_seconds", float),
+        ("clips", "max_seconds"): num("max_seconds", float),
+        ("captions", "hook_seconds"): num("hook_seconds", float),
+    }
+    changed = False
+    for keys, value in changes.items():
+        changed |= _set(doc, list(keys), value)
+    if not changed:
+        return False
+
+    buf = io.StringIO()
+    yaml.dump(doc, buf)
+    text = buf.getvalue()
+    import yaml as pyyaml
+
+    try:
+        Settings.model_validate(pyyaml.safe_load(text))
+    except ValidationError as e:
+        first = e.errors()[0]
+        where = ".".join(str(p) for p in first["loc"])
+        raise SettingsFormError(f"{where}: {first['msg'].removeprefix('Value error, ')}") from None
+    tmp = path.with_suffix(".yaml.tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+    return True
+
+
+# --------------------------------------------------------------------------- serving
+
+
+def lan_addresses() -> list[str]:
+    import socket
+
+    out = []
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("192.0.2.1", 80))  # no packet is sent; picks the outgoing interface
+        out.append(s.getsockname()[0])
+        s.close()
+    except OSError:
+        pass
+    return out
+
+
+def urls_for(host: str, port: int) -> list[str]:
+    if is_loopback(host):
+        return [f"http://127.0.0.1:{port}"]
+    if host in ("0.0.0.0", "::"):  # noqa: S104
+        return [f"http://127.0.0.1:{port}"] + [f"http://{a}:{port}" for a in lan_addresses()]
+    return [f"http://{host}:{port}"]
+
+
+def serve_in_thread(app: FastAPI, host: str, port: int) -> Any:
+    """Run the dashboard next to the bot loop (which keeps the main thread)."""
+    import threading
+
+    import uvicorn
+
+    class _Server(uvicorn.Server):
+        def install_signal_handlers(self) -> None:  # the bot loop owns the signals
+            pass
+
+    server = _Server(
+        uvicorn.Config(app, host=host, port=port, log_level="warning", access_log=False)
+    )
+    t = threading.Thread(target=server.run, name="dashboard", daemon=True)
+    t.start()
+    return server

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}clipbot{% endblock %}</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='8' y='3' width='16' height='26' rx='4' fill='%23e8475b'/><path d='M14 11l6 5-6 5z' fill='white'/></svg>">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/" aria-label="clipbot home"><span class="logo"></span><span class="name">clipbot</span></a>
+  <nav>
+    {% set here = request.url.path %}
+    <a href="/" class="{{ 'on' if here == '/' }}">Home</a>
+    <a href="/clips" class="{{ 'on' if here.startswith('/clips') }}">Clips</a>
+    <a href="/videos" class="{{ 'on' if here == '/videos' }}">Videos</a>
+    <a href="/settings" class="{{ 'on' if here == '/settings' }}">Settings</a>
+    <a href="/health" class="{{ 'on' if here == '/health' }}">Health</a>
+  </nav>
+</header>
+<main>
+  {% if s.dry_run %}
+  <div class="banner info">Dry run is on: clips are made and checked but never posted to TikTok. Turn it off in <a href="/settings">Settings</a> when you are ready.</div>
+  {% endif %}
+  {% if msg %}<div class="banner ok" role="status">{{ msg }}</div>{% endif %}
+  {% if err %}<div class="banner bad" role="alert">{{ err }}</div>{% endif %}
+  {% block content %}{% endblock %}
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>

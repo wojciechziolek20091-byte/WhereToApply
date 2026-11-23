@@ -228,6 +228,14 @@ class AcquireSettings(_Strict):
     timeout_minutes: float = Field(45, gt=0)
 
 
+class WebSettings(_Strict):
+    enabled: bool = True  # `clipbot run` also serves the dashboard
+    # 127.0.0.1: only this computer. 0.0.0.0: also phones and laptops on your
+    # network, which requires DASHBOARD_PASSWORD in .env.
+    host: str = "127.0.0.1"
+    port: int = Field(8080, ge=1, le=65535)
+
+
 class RetentionSettings(_Strict):
     raw_days: int = Field(3, ge=0)
     render_days: int = Field(14, ge=0)
@@ -254,6 +262,7 @@ class Settings(_Strict):
     acquire: AcquireSettings = AcquireSettings()
     retention: RetentionSettings = RetentionSettings()
     safety: SafetySettings = SafetySettings()
+    web: WebSettings = WebSettings()
 
     @field_validator("timezone")
     @classmethod
@@ -365,6 +374,7 @@ class Secrets(BaseSettings):
     upload_post_profile: str | None = None
     tiktok_access_token: SecretStr | None = None  # sandbox testing only
     notify_url: SecretStr | None = None
+    dashboard_password: SecretStr | None = None
 
     def values(self) -> list[str]:
         """All secret values, for the log redactor."""
@@ -375,6 +385,7 @@ class Secrets(BaseSettings):
             "upload_post_api_key",
             "notify_url",
             "tiktok_access_token",
+            "dashboard_password",
         ):
             v = getattr(self, name)
             if v is not None and v.get_secret_value():

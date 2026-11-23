@@ -44,3 +44,7 @@ publish:
   windows: ["12:00-14:00", "17:00-21:00"]
 retention: {raw_days: 3, render_days: 14}
 safety: {min_free_disk_gb: 5}
+web:
+  enabled: true            # `clipbot run` also opens the dashboard
+  host: 127.0.0.1          # 0.0.0.0 to use it from your phone (needs DASHBOARD_PASSWORD)
+  port: 8080

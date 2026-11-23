@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Clips - clipbot{% endblock %}
+{% block content %}
+<nav class="tabs">
+  {% for key, (label, _) in tabs.items() %}
+  <a href="/clips?tab={{ key }}" class="{{ 'on' if key == tab }}">{{ label }} <span class="count">{{ tab_counts[key] }}</span></a>
+  {% endfor %}
+</nav>
+{% if items %}
+<div class="clips">{% for c in items %}{% include "_clip.html" %}{% endfor %}</div>
+{% else %}
+<p class="card muted">No clips here yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Settings - clipbot{% endblock %}
+{% block content %}
+<form method="post" action="/settings" class="settings">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+
+<section class="card">
+  <h2>Posting</h2>
+  <label class="check"><input type="checkbox" name="dry_run" {{ 'checked' if s.dry_run }}> <span><b>Dry run</b><br><span class="muted small">Make and check clips, but never post them.</span></span></label>
+  <label class="check"><input type="checkbox" name="review_mode" value="hold" {{ 'checked' if s.review_mode == 'hold' }}> <span><b>Ask me before each post</b><br><span class="muted small">Clips wait for your approval here or on your phone. Unanswered clips expire after 24 hours.</span></span></label>
+  <div class="fields">
+    <label>Posts per day <input type="number" name="posts_per_day" min="1" max="8" value="{{ s.publish.posts_per_day }}"><span class="muted small">at most 8</span></label>
+    <label>Minimum gap (minutes) <input type="number" name="min_gap_minutes" min="0" value="{{ s.publish.min_gap_minutes }}"></label>
+    <label>Posting windows <input type="text" name="windows" value="{% for w in s.publish.windows %}{{ w.start.strftime('%H:%M') }}-{{ w.end.strftime('%H:%M') }}{{ ', ' if not loop.last }}{% endfor %}"><span class="muted small">{{ s.timezone }} time, e.g. 12:00-14:00, 17:00-21:00</span></label>
+    <label>Who can see posts
+      <select name="privacy">
+        {% for p in privacy_levels %}<option value="{{ p }}" {{ 'selected' if p == s.publish.privacy }}>{{ {'account_default': "Account default", 'PUBLIC_TO_EVERYONE': 'Everyone', 'MUTUAL_FOLLOW_FRIENDS': 'Friends', 'FOLLOWER_OF_CREATOR': 'Followers', 'SELF_ONLY': 'Only me'}[p] }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Your hashtags <input type="text" name="extra_hashtags" value="{{ s.post.extra_hashtags|join(' ') }}" placeholder="fyp"><span class="muted small">added first to every caption</span></label>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Clips</h2>
+  <div class="fields">
+    <label>Clips per video <input type="number" name="per_video" min="1" value="{{ s.clips.per_video }}"></label>
+    <label>Minimum AI score <input type="number" name="min_score" min="0" max="100" value="{{ s.clips.min_score }}"></label>
+    <label>Shortest clip (s) <input type="number" name="min_seconds" min="3" step="1" value="{{ '%g'|format(s.clips.min_seconds) }}"></label>
+    <label>Longest clip (s) <input type="number" name="max_seconds" max="600" step="1" value="{{ '%g'|format(s.clips.max_seconds) }}"></label>
+    <label>Hook box on screen (s) <input type="number" name="hook_seconds" min="1" max="10" step="0.5" value="{{ '%g'|format(s.captions.hook_seconds) }}"></label>
+  </div>
+</section>
+
+<div class="row"><button class="primary">Save settings</button><span class="muted small">Saved to config/settings.yaml (its comments are kept). Everything else, like sources and caption style, is edited in the files.</span></div>
+</form>
+{% endblock %}

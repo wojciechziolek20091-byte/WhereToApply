@@ -1,0 +1,43 @@
+{# One clip card. Expects `c` (ClipView). #}
+<article class="clip">
+  <div class="player">
+    {% if c.has_video %}
+    <video controls preload="metadata" playsinline src="/clips/{{ c.id }}/video#t=0.1"></video>
+    {% else %}
+    <div class="noplayer">{{ c.label }}</div>
+    {% endif %}
+  </div>
+  <div class="body">
+    <div class="row between">
+      <span class="pill st-{{ c.state }}">{{ c.label }}</span>
+      <span class="muted small" title="score from the AI: how likely a viewer watches to the end">score {{ c.score }}</span>
+    </div>
+    <h3>{{ c.hook }}</h3>
+    <p class="muted small">{{ c.video_title }} &middot; {{ c.start|mmss }}&ndash;{{ c.end|mmss }} ({{ '%.0f'|format(c.length) }} s)</p>
+    {% if c.caption %}
+    <details><summary>Caption</summary><pre class="caption">{{ c.caption }}</pre></details>
+    {% endif %}
+    {% if c.qa %}
+    <details><summary>Checks
+      {% set failed = c.qa.values()|rejectattr('ok')|list %}
+      {% if failed %}<span class="bad-text">({{ failed|length }} failed)</span>{% else %}<span class="ok-text">(all passed)</span>{% endif %}
+    </summary>
+      <ul class="checks">
+        {% for name, g in c.qa.items() %}
+        <li class="{{ 'ok' if g.ok else 'bad' }}"><b>{{ name.replace('_', ' ') }}</b> {{ g.detail }}</li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+    {% if c.reason and c.state not in ('qa_passed', 'published') %}<p class="small reason">{{ c.reason }}</p>{% endif %}
+    {% if c.post_url %}<p><a href="{{ c.post_url }}" target="_blank" rel="noopener">Open on TikTok &rarr;</a></p>{% endif %}
+    <div class="actions">
+      {% if c.state == 'awaiting_approval' %}
+      <form method="post" action="/clips/{{ c.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">Approve</button></form>
+      {% endif %}
+      {% if c.state in ('awaiting_approval', 'qa_passed', 'scheduled') %}
+      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Remove this clip? It will never be posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="ghost">{{ 'Reject' if c.state == 'awaiting_approval' else "Don't post" }}</button></form>
+      {% endif %}
+    </div>
+  </div>
+</article>
