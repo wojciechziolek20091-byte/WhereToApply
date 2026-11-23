@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from clipbot.render.reframe import ScenePlan
+from clipbot.tools import ffmpeg_exe
 
 
 class RenderError(RuntimeError):
@@ -51,7 +52,7 @@ def measure_loudness(src: Path, start: float, dur: float, s: EncodeSettings) -> 
     """loudnorm pass 1 over the clip's audio only."""
     err = _run(
         [
-            "ffmpeg",
+            ffmpeg_exe(),
             "-hide_banner",
             "-nostats",
             "-ss",
@@ -133,7 +134,7 @@ def render_clip(
     out.parent.mkdir(parents=True, exist_ok=True)
     _run(
         [
-            "ffmpeg",
+            ffmpeg_exe(),
             "-hide_banner",
             "-nostats",
             "-y",
@@ -186,7 +187,7 @@ def contact_sheet(video: Path, out: Path, duration: float, frames: int = 6) -> P
     rate = frames / max(duration, 0.1)
     _run(
         [
-            "ffmpeg",
+            ffmpeg_exe(),
             "-hide_banner",
             "-nostats",
             "-y",

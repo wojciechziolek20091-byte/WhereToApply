@@ -26,9 +26,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import ValidationError
 
+from clipbot import accounts as acc
 from clipbot import db
 from clipbot.config import PRIVACY_LEVELS, AppConfig, ConfigError, Settings, load_config
 from clipbot.models import DataPaths
+from clipbot.tools import ffmpeg_exe
 from clipbot.web import status as st
 
 HERE = Path(__file__).parent
@@ -64,7 +66,9 @@ def create_app(
 ) -> FastAPI:
     """`pipeline_factory(conn, cfg, paths)` builds the Pipeline used to look up
     pasted links (tests pass a fake YouTube client through it)."""
-    cfg0 = load_config(config_dir, env_file=env_file)
+    # Keys typed into the setup wizard are saved here.
+    env_path = env_file or (config_dir.parent / ".env")
+    cfg0 = load_config(config_dir, env_file=env_path)
     pw = cfg0.secrets.dashboard_password
     password = pw.get_secret_value() if pw else None
     csrf = secrets.token_urlsafe(24)
@@ -79,7 +83,7 @@ def create_app(
     def config() -> AppConfig:
         """Re-read each request so settings edits show at once."""
         try:
-            return load_config(config_dir, env_file=env_file)
+            return load_config(config_dir, env_file=env_path)
         except ConfigError:
             return cfg0
 
@@ -141,8 +145,10 @@ def create_app(
     # ------------------------------------------------------------------ pages
 
     @app.get("/", response_class=HTMLResponse, dependencies=deps)
-    def home(request: Request) -> HTMLResponse:
+    def home(request: Request) -> Any:
         cfg = config()
+        if not is_configured(cfg):
+            return RedirectResponse("/setup", status_code=303)
         now = clock()
         with database(cfg) as (conn, paths):
             bot = st.bot_state(conn, paths, now)
@@ -192,7 +198,15 @@ def create_app(
 
     @app.get("/settings", response_class=HTMLResponse, dependencies=deps)
     def settings_page(request: Request) -> HTMLResponse:
-        return page(request, "settings.html", config())
+        cfg = config()
+        return page(
+            request,
+            "settings.html",
+            cfg,
+            accounts=account_status(cfg),
+            channels=cfg.sources,
+            rights=acc.RIGHTS_CHOICES,
+        )
 
     @app.get("/health", response_class=HTMLResponse, dependencies=deps)
     def health(request: Request, online: bool = False) -> HTMLResponse:
@@ -246,7 +260,7 @@ def create_app(
         if not poster.is_file():
             subprocess.run(
                 [
-                    "ffmpeg",
+                    ffmpeg_exe(),
                     "-hide_banner",
                     "-loglevel",
                     "error",
@@ -366,7 +380,167 @@ def create_app(
             return back("/settings", "Nothing changed.")
         return back("/settings", "Saved. The running bot picks this up within a minute.")
 
+    # ------------------------------------------------------------------ setup
+
+    steps = [("ai", "AI"), ("youtube", "YouTube"), ("channels", "Channels"), ("tiktok", "TikTok")]
+
+    def youtube_client(cfg: AppConfig) -> Any:
+        if pipeline_factory is not None:  # tests
+            with database(cfg) as (conn, paths):
+                return pipeline_factory(conn, cfg, paths).yt
+        from clipbot.sources.youtube_api import YouTubeAPI
+
+        key = cfg.secrets.youtube_api_key
+        return YouTubeAPI(key.get_secret_value() if key else "")
+
+    @app.get("/setup", response_class=HTMLResponse, dependencies=deps)
+    def setup_start(request: Request) -> HTMLResponse:
+        cfg = config()
+        return page(
+            request, "setup.html", cfg, step="welcome", steps=steps, accounts=account_status(cfg)
+        )
+
+    @app.get("/setup/{step}", response_class=HTMLResponse, dependencies=deps)
+    def setup_step(request: Request, step: str) -> HTMLResponse:
+        if step not in {k for k, _ in steps} | {"done"}:
+            raise HTTPException(404)
+        cfg = config()
+        return page(
+            request,
+            "setup.html",
+            cfg,
+            step=step,
+            steps=steps,
+            accounts=account_status(cfg),
+            channels=cfg.sources,
+            rights=acc.RIGHTS_CHOICES,
+            returning=request.query_params.get("from") == "settings",
+        )
+
+    def next_url(request_form: Any, current: str) -> str:
+        if request_form.get("from") == "settings":
+            return "/settings"
+        order = [k for k, _ in steps] + ["done"]
+        return f"/setup/{order[order.index(current) + 1]}"
+
+    @app.post("/setup/ai", dependencies=post_deps)
+    async def setup_ai(request: Request) -> RedirectResponse:
+        form = await request.form()
+        try:
+            msg = acc.check_openrouter(str(form.get("key", "")))
+            acc.write_env(env_path, {"OPENROUTER_API_KEY": str(form["key"]).strip()})
+        except acc.SetupError as e:
+            return back("/setup/ai" + _from(form), str(e), error=True)
+        return back(next_url(form, "ai"), f"AI key saved. {msg}")
+
+    @app.post("/setup/youtube", dependencies=post_deps)
+    async def setup_youtube(request: Request) -> RedirectResponse:
+        form = await request.form()
+        try:
+            msg = acc.check_youtube(str(form.get("key", "")))
+            acc.write_env(env_path, {"YOUTUBE_API_KEY": str(form["key"]).strip()})
+        except acc.SetupError as e:
+            return back("/setup/youtube" + _from(form), str(e), error=True)
+        return back(next_url(form, "youtube"), f"YouTube key saved. {msg}")
+
+    @app.post("/channels/add", dependencies=post_deps)
+    async def channel_add(request: Request) -> RedirectResponse:
+        form = await request.form()
+        where = "/settings" if form.get("from") == "settings" else "/setup/channels"
+        cfg = config()
+        if cfg.secrets.youtube_api_key is None:
+            return back("/setup/youtube", "Add your YouTube key first.", error=True)
+        try:
+            ref = acc.resolve_channel(str(form.get("link", "")), youtube_client(cfg))
+            acc.add_channel(
+                config_dir / "sources.yaml",
+                ref,
+                str(form.get("rights", "")),
+                str(form.get("permission_ref", "")),
+                str(form.get("about", "")),
+            )
+        except acc.SetupError as e:
+            return back(where, str(e), error=True)
+        return back(where, f"Added {ref.name}. New videos from it will be clipped.")
+
+    @app.post("/channels/{source_id}/toggle", dependencies=post_deps)
+    async def channel_toggle(source_id: str, request: Request) -> RedirectResponse:
+        form = await request.form()
+        try:
+            acc.set_channel_enabled(
+                config_dir / "sources.yaml", source_id, form.get("enabled") == "1"
+            )
+        except acc.SetupError as e:
+            return back("/settings", str(e), error=True)
+        return back("/settings", "Channel updated.")
+
+    @app.post("/channels/{source_id}/remove", dependencies=post_deps)
+    async def channel_remove(source_id: str, request: Request) -> RedirectResponse:
+        form = await request.form()
+        where = "/settings" if form.get("from") == "settings" else "/setup/channels"
+        try:
+            acc.remove_channel(config_dir / "sources.yaml", source_id)
+        except acc.SetupError as e:
+            return back(where, str(e), error=True)
+        return back(where, "Channel removed.")
+
+    @app.post("/setup/tiktok", dependencies=post_deps)
+    async def setup_tiktok(request: Request) -> RedirectResponse:
+        form = await request.form()
+        key, profile = str(form.get("key", "")), str(form.get("profile", ""))
+        try:
+            msg = acc.check_uploadpost(key, profile)
+            acc.write_env(
+                env_path,
+                {"UPLOAD_POST_API_KEY": key.strip(), "UPLOAD_POST_PROFILE": profile.strip()},
+            )
+        except acc.SetupError as e:
+            return back("/setup/tiktok" + _from(form), str(e), error=True)
+        return back(next_url(form, "tiktok"), f"TikTok connected. {msg}")
+
+    @app.post("/setup/notify", dependencies=post_deps)
+    async def setup_notify(request: Request) -> RedirectResponse:
+        form = await request.form()
+        url = str(form.get("url", "")).strip()
+        if url and not url.startswith("https://"):
+            return back("/settings", "The alert address must start with https://", error=True)
+        acc.write_env(env_path, {"NOTIFY_URL": url or None})
+        return back("/settings", "Phone alerts saved." if url else "Phone alerts turned off.")
+
     return app
+
+
+def _from(form: Any) -> str:
+    return "?from=settings" if form.get("from") == "settings" else ""
+
+
+def is_configured(cfg: AppConfig) -> bool:
+    """The two keys clipbot cannot work without."""
+    s = cfg.secrets
+    return bool(
+        s.openrouter_api_key
+        and s.openrouter_api_key.get_secret_value()
+        and s.youtube_api_key
+        and s.youtube_api_key.get_secret_value()
+    )
+
+
+def account_status(cfg: AppConfig) -> dict[str, Any]:
+    s = cfg.secrets
+
+    def val(v: Any) -> str | None:
+        if v is None:
+            return None
+        return v.get_secret_value() if hasattr(v, "get_secret_value") else str(v)
+
+    return {
+        "ai": acc.mask(val(s.openrouter_api_key)),
+        "youtube": acc.mask(val(s.youtube_api_key)),
+        "tiktok": s.upload_post_profile if val(s.upload_post_api_key) else "",
+        "notify": bool(val(s.notify_url)),
+        "channels": sum(1 for c in cfg.sources if c.enabled),
+        "ready": is_configured(cfg),
+    }
 
 
 def _return_to(request: Request, default: str) -> str:

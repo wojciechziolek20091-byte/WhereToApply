@@ -1,9 +1,7 @@
-"""ffprobe helpers."""
+"""Reading video files."""
 
 from __future__ import annotations
 
-import json
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,63 +25,35 @@ class MediaInfo:
         return self.acodec is not None
 
 
-def _fps(rate: str | None) -> float:
-    if not rate or rate in ("0/0", "0"):
-        return 0.0
-    if "/" in rate:
-        n, d = rate.split("/", 1)
-        return float(n) / float(d) if float(d) else 0.0
-    return float(rate)
+def probe(path: Path) -> MediaInfo:
+    """Read a video's streams with PyAV (bundled; no ffprobe needed)."""
+    import av
 
-
-def probe(path: Path, timeout: float = 60) -> MediaInfo:
     if not path.is_file():
         raise ProbeError(f"{path} does not exist")
     try:
-        p = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-print_format",
-                "json",
-                "-show_format",
-                "-show_streams",
-                str(path),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
-        raise ProbeError(f"ffprobe failed: {e}") from None
-    if p.returncode != 0:
-        raise ProbeError(f"ffprobe rejected {path.name}: {p.stderr.strip()[:300]}")
-    data = json.loads(p.stdout or "{}")
-    streams = data.get("streams") or []
-    v = next(
-        (
-            s
-            for s in streams
-            if s.get("codec_type") == "video"
-            and not (s.get("disposition") or {}).get("attached_pic")
-        ),
-        None,
-    )
-    a = next((s for s in streams if s.get("codec_type") == "audio"), None)
-    if v is None:
-        raise ProbeError(f"{path.name} has no video stream")
-    fmt = data.get("format") or {}
-    duration = float(fmt.get("duration") or v.get("duration") or 0)
-    if duration <= 0:
+        with av.open(str(path)) as c:
+            v = next((st for st in c.streams.video), None)
+            a = next((st for st in c.streams.audio), None)
+            if v is None:
+                raise ProbeError(f"{path.name} has no video stream")
+            duration = float(c.duration) / 1_000_000 if c.duration else 0.0
+            if duration <= 0 and v.duration and v.time_base:
+                duration = float(v.duration * v.time_base)
+            rate = v.average_rate or v.guessed_rate or v.base_rate
+            info = MediaInfo(
+                duration=duration,
+                width=int(v.codec_context.width or 0),
+                height=int(v.codec_context.height or 0),
+                fps=float(rate) if rate else 0.0,
+                vcodec=str(v.codec_context.name),
+                acodec=str(a.codec_context.name) if a is not None else None,
+                size_bytes=path.stat().st_size,
+            )
+    except ProbeError:
+        raise
+    except Exception as e:  # av.error.* and anything a damaged file throws
+        raise ProbeError(f"cannot read {path.name}: {e}") from None
+    if info.duration <= 0:
         raise ProbeError(f"{path.name} has no duration")
-    return MediaInfo(
-        duration=duration,
-        width=int(v.get("width") or 0),
-        height=int(v.get("height") or 0),
-        fps=_fps(v.get("avg_frame_rate") or v.get("r_frame_rate")),
-        vcodec=str(v.get("codec_name")),
-        acodec=a.get("codec_name") if a else None,
-        size_bytes=int(fmt.get("size") or path.stat().st_size),
-    )
+    return info

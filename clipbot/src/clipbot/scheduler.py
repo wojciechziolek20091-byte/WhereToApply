@@ -51,43 +51,80 @@ class TickReport:
 
 
 class Scheduler:
-    def __init__(self, pipe: Pipeline, publisher: Publisher, notifier: Notifier) -> None:
+    def __init__(
+        self,
+        pipe: Pipeline,
+        publisher: Publisher,
+        notifier: Notifier,
+        env_file: Path | None = None,
+        fixed_poster: bool = True,
+    ) -> None:
         self.pipe = pipe
         self.pub = publisher
         self.notifier = notifier
         self.conn = pipe.conn
         self.paths = pipe.paths
-        self._settings_mtime = self._mtime()
+        self.env_file = env_file or (pipe.cfg.config_dir.parent / ".env")
+        # Tests hand in fake posters and notifiers; keep those on reload.
+        self._fixed_poster = fixed_poster
+        self._settings_mtime = self._watched()
 
     @property
     def cfg(self) -> AppConfig:
         return self.pipe.cfg
 
-    def _mtime(self) -> float:
-        p = self.pipe.cfg.config_dir / "settings.yaml"
-        return p.stat().st_mtime if p.is_file() else 0.0
+    def _watched(self) -> tuple[float, ...]:
+        d = self.pipe.cfg.config_dir
+        files = (d / "settings.yaml", d / "sources.yaml", self.env_file)
+        return tuple(p.stat().st_mtime if p.is_file() else 0.0 for p in files)
 
-    def reload_settings(self) -> bool:
-        """Pick up settings.yaml edits (e.g. from the dashboard) without a restart.
-        An invalid file is reported and the running settings are kept."""
-        from clipbot.config import ConfigError, load_settings
+    def reload_config(self) -> bool:
+        """Pick up edits from the dashboard (settings, channels, keys) without a
+        restart. An invalid file is reported and the running config is kept."""
+        from clipbot.config import ConfigError, load_config
+        from clipbot.notify import make_notifier
+        from clipbot.publish import make_poster
 
-        m = self._mtime()
+        m = self._watched()
         if m == self._settings_mtime:
             return False
         self._settings_mtime = m
         try:
-            new = load_settings(self.cfg.config_dir / "settings.yaml")
+            cfg = load_config(self.cfg.config_dir, env_file=self.env_file)
         except ConfigError as e:
-            self.pipe.alert("settings_invalid", f"settings.yaml was not reloaded: {e}")
+            self.pipe.alert("settings_invalid", f"Your settings were not reloaded: {e}")
             return False
-        if new.data_dir != self.cfg.settings.data_dir:
-            new = new.model_copy(update={"data_dir": self.cfg.settings.data_dir})
-        cfg = self.cfg.model_copy(update={"settings": new})
+        if cfg.settings.data_dir != self.cfg.settings.data_dir:
+            cfg = cfg.model_copy(
+                update={
+                    "settings": cfg.settings.model_copy(
+                        update={"data_dir": self.cfg.settings.data_dir}
+                    )
+                }
+            )
         self.pipe.cfg = cfg
         self.pub.cfg = cfg
-        log.info("settings_reloaded")
+        self.pipe._yt = None  # rebuilt with the new keys on next use
+        self.pipe._router = None
+        if not self._fixed_poster:
+            self.pub.poster = make_poster(cfg, self.paths)
+            url = cfg.secrets.notify_url
+            self.notifier = make_notifier(url.get_secret_value() if url else None)
+        db.sync_sources(self.conn, cfg.sources)
+        log.info("config_reloaded")
         return True
+
+    def reload_settings(self) -> bool:  # kept for callers of the old name
+        return self.reload_config()
+
+    def needs_setup(self) -> str | None:
+        s = self.cfg.secrets
+        missing = [
+            name
+            for name, v in (("AI", s.openrouter_api_key), ("YouTube", s.youtube_api_key))
+            if v is None or not v.get_secret_value()
+        ]
+        return " and ".join(missing) if missing else None
 
     @property
     def now(self) -> datetime:
@@ -374,14 +411,17 @@ class Scheduler:
 
     def tick(self) -> TickReport:
         r = TickReport([])
-        if self.reload_settings():
+        if self.reload_config():
             r.add("settings reloaded")
         with db.tx(self.conn):
             db.kv_set(self.conn, "last_tick_at", db.iso(self.now))
         self.check_rails(r)
         self.poll_publishing(r)
         paused, why = self.paused()
-        if not paused:
+        missing = self.needs_setup()
+        if missing and not paused:
+            r.add(f"waiting for setup: add the {missing} key in the dashboard")
+        elif not paused:
             try:
                 self.maybe_discover(r)
                 self.work_one(r)
@@ -393,7 +433,8 @@ class Scheduler:
         else:
             r.add(f"paused: {why}")
         self.forward_alerts()
-        self.maybe_digest(r)
+        if not missing:
+            self.maybe_digest(r)
         return r
 
 

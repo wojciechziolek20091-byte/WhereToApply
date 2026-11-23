@@ -1,6 +1,6 @@
 """Automated QA gates (brief 4.6). Every gate must pass before a clip can post.
 
-Measurements come from the rendered file itself (ffprobe, ebur128, blackdetect,
+Measurements come from the rendered file itself (stream info, ebur128, blackdetect,
 freezedetect) and from the clip's transcript. The safety gate asks a free model
 and fails closed: if no model answers, the clip waits; it is never waved through.
 """
@@ -19,6 +19,7 @@ from clipbot.media import MediaInfo, ProbeError, probe
 from clipbot.models import Word
 from clipbot.render.captions import count_caption_words, has_hook
 from clipbot.select.llm import InvalidOutput
+from clipbot.tools import ffmpeg_exe
 
 MAX_SIZE = 500 * 1024 * 1024
 MIN_SPEECH = 0.70
@@ -126,7 +127,7 @@ def gate_speech(words: Sequence[Word], duration: float) -> Gate:
 
 def _ffmpeg_stderr(args: list[str], timeout: float = 600) -> str:
     p = subprocess.run(
-        ["ffmpeg", "-hide_banner", "-nostats", *args, "-f", "null", "-"],
+        [ffmpeg_exe(), "-hide_banner", "-nostats", *args, "-f", "null", "-"],
         capture_output=True,
         text=True,
         timeout=timeout,

@@ -290,7 +290,7 @@ def discover(
     typer.echo(f"{len(found)} new video(s)")
 
 
-def _scheduler(ctx: Ctx, conn):
+def _scheduler(ctx: Ctx, conn, env_file: Path | None = None):
     from clipbot.notify import make_notifier
     from clipbot.publish import Publisher, make_poster
     from clipbot.scheduler import Scheduler
@@ -306,7 +306,13 @@ def _scheduler(ctx: Ctx, conn):
         clock=pipe.now,
         source_by_id=pipe.source_by_id,
     )
-    return Scheduler(pipe, pub, make_notifier(url.get_secret_value() if url else None))
+    return Scheduler(
+        pipe,
+        pub,
+        make_notifier(url.get_secret_value() if url else None),
+        env_file=env_file,
+        fixed_poster=False,
+    )
 
 
 @app.command()
@@ -333,7 +339,7 @@ def run(
             typer.echo("dry_run is on: clips are rendered and checked but never posted")
         if ctx.cfg.settings.web.enabled:
             _start_dashboard(ctx, config_dir, env_file)
-        run_forever(_scheduler(ctx, conn))
+        run_forever(_scheduler(ctx, conn, env_file))
     finally:
         lock.release()
 
@@ -447,6 +453,108 @@ def digest(
     ctx = _load(config_dir, env_file)
     conn = _open_db(ctx)
     typer.echo(_scheduler(ctx, conn).digest_text())
+
+
+def _free_port(host: str, start: int, tries: int = 20) -> int:
+    import socket
+
+    for port in range(start, start + tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind((host if host not in ("", "localhost") else "127.0.0.1", port))
+            except OSError:
+                continue
+            return port
+    raise OSError(f"no free port between {start} and {start + tries - 1}")
+
+
+def _wait_until_up(url: str, seconds: float = 15) -> bool:
+    import time
+
+    import httpx
+
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        try:
+            if httpx.get(url, timeout=1).status_code < 500:
+                return True
+        except httpx.HTTPError:
+            time.sleep(0.2)
+    return False
+
+
+@app.command()
+def start(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+    browser: Annotated[bool, typer.Option(help="Open the dashboard in the browser.")] = True,
+) -> None:
+    """Start clipbot and open its dashboard. This is what the desktop icon runs."""
+    import webbrowser
+
+    from clipbot.scheduler import run_forever
+    from clipbot.web.app import UnsafeBind, check_bind, create_app, serve_in_thread
+
+    ctx = _load(config_dir, env_file)
+    clog.configure(log_dir=ctx.paths.logs, secrets=ctx.cfg.secrets.values(), console=False)
+    conn = _open_db(ctx)
+    lock = _try_lock(ctx)
+    if lock is None:
+        port = db.kv_get(conn, "dashboard_port") or str(ctx.cfg.settings.web.port)
+        url = f"http://127.0.0.1:{port}"
+        typer.echo(f"clipbot is already running. Opening {url}")
+        if browser:
+            webbrowser.open(url)
+        return
+    try:
+        w = ctx.cfg.settings.web
+        pw = ctx.cfg.secrets.dashboard_password
+        try:
+            check_bind(w.host, pw.get_secret_value() if pw else None)
+            host = w.host
+        except UnsafeBind:
+            host = "127.0.0.1"  # never open to the network without a password
+        port = _free_port(host, w.port)
+        serve_in_thread(create_app(config_dir, env_file), host, port)
+        url = f"http://127.0.0.1:{port}"
+        _wait_until_up(url + "/static/style.css")
+        with db.tx(conn):
+            db.kv_set(conn, "dashboard_port", str(port))
+        typer.echo("")
+        typer.echo("  clipbot is running.")
+        typer.echo(f"  Your dashboard: {url}")
+        typer.echo("")
+        typer.echo("  Keep this window open. Close it to stop clipbot.")
+        typer.echo("")
+        if browser:
+            webbrowser.open(url)
+        run_forever(_scheduler(ctx, conn, env_file))
+    finally:
+        lock.release()
+
+
+@app.command()
+def prepare(
+    config_dir: ConfigDirOpt = Path("config"),
+    env_file: EnvFileOpt = Path(".env"),
+) -> None:
+    """Download the speech and face models now, so the first clip is quick."""
+    from faster_whisper.utils import download_model
+
+    from clipbot.assets import face_model
+    from clipbot.transcribe import resolve_device
+
+    ctx = _load(config_dir, env_file)
+    ctx.paths.ensure()
+    clog.configure(log_dir=ctx.paths.logs, secrets=ctx.cfg.secrets.values(), console=False)
+    device, model, _ = resolve_device(ctx.cfg.settings.whisper)
+    where = "graphics card" if device == "cuda" else "processor"
+    typer.echo(f"Downloading the speech model ({model}, for your {where})…")
+    download_model(model, cache_dir=str(ctx.paths.models))
+    typer.echo("Downloading the face finder…")
+    face_model(ctx.paths.models)
+    typer.echo("Ready.")
 
 
 def main() -> None:  # pragma: no cover

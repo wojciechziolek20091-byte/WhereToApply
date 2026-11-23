@@ -2,12 +2,51 @@
 {% block title %}Settings{% endblock %}
 {% block content %}
 <h1>Settings</h1>
+
+<section class="panel" aria-labelledby="acc-h">
+  <h2 id="acc-h">Accounts</h2>
+  <ul class="accounts">
+    <li><span><b>AI</b><br><span class="muted small">{{ 'Connected' if accounts.ai else 'Not connected' }}</span></span><a class="btn" href="/setup/ai?from=settings">{{ 'Change' if accounts.ai else 'Connect' }}</a></li>
+    <li><span><b>YouTube</b><br><span class="muted small">{{ 'Connected' if accounts.youtube else 'Not connected' }}</span></span><a class="btn" href="/setup/youtube?from=settings">{{ 'Change' if accounts.youtube else 'Connect' }}</a></li>
+    <li><span><b>TikTok</b><br><span class="muted small">{{ 'Connected as profile ' ~ accounts.tiktok if accounts.tiktok else 'Not connected: clips are made but not posted' }}</span></span><a class="btn" href="/setup/tiktok?from=settings">{{ 'Change' if accounts.tiktok else 'Connect' }}</a></li>
+  </ul>
+  <form method="post" action="/setup/notify" class="notify-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="notify">Phone alerts <span class="muted">(optional)</span></label>
+    <div class="link-row">
+      <input id="notify" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://ntfy.sh/your-secret-name…" value="">
+      <button class="btn" data-busy="Saving…">{{ 'Replace' if accounts.notify else 'Save' }}</button>
+    </div>
+    <p class="muted small">Install the free ntfy app, subscribe to a long secret name, and paste https://ntfy.sh/that-name here. {% if accounts.notify %}Alerts are on.{% endif %}</p>
+  </form>
+</section>
+
+<section class="panel" aria-labelledby="ch-h">
+  <h2 id="ch-h">Channels</h2>
+  {% if channels %}
+  <ul class="channel-list">
+    {% for c in channels %}
+    <li>
+      <span><b>{{ c.name }}</b><br><span class="muted small">{{ rights.get(c.rights, 'No rights set') }}{% if not c.enabled %} · paused{% endif %}</span></span>
+      <span class="row-actions">
+        <form method="post" action="/channels/{{ c.id }}/toggle"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="enabled" value="{{ '0' if c.enabled else '1' }}"><button class="btn" data-busy="Saving…">{{ 'Pause' if c.enabled else 'Watch' }}</button></form>
+        <form method="post" action="/channels/{{ c.id }}/remove" data-confirm="Remove {{ c.name }}?"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="from" value="settings"><button class="btn" data-busy="Removing…">Remove</button></form>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">No channels yet. Add one below, or paste single video links on the Overview page.</p>{% endif %}
+  <details class="add-channel" {{ 'open' if not channels }}><summary>Add a channel</summary>
+  {% set from_settings = True %}{% include "_channel_form.html" %}
+  </details>
+</section>
+
 <form method="post" action="/settings" class="settings" data-dirty-guard>
 <input type="hidden" name="csrf" value="{{ csrf }}">
 
 <section class="panel" aria-labelledby="posting-h">
   <h2 id="posting-h">Posting</h2>
-  <label class="toggle"><input type="checkbox" name="dry_run" {{ 'checked' if s.dry_run }}><span><span class="toggle-title">Dry run</span><span class="muted small">Make and check clips, but never post them.</span></span></label>
+  <label class="toggle"><input type="checkbox" name="dry_run" {{ 'checked' if s.dry_run }}><span><span class="toggle-title">Practice mode</span><span class="muted small">Make and check clips, but never post them.{% if not accounts.tiktok %} Stays on until TikTok is connected.{% endif %}</span></span></label>
   <label class="toggle"><input type="checkbox" name="review_mode" value="hold" {{ 'checked' if s.review_mode == 'hold' }}><span><span class="toggle-title">Ask before each post</span><span class="muted small">Clips wait for your approval. Unanswered clips expire after 24 hours.</span></span></label>
   <div class="fields">
     <div class="field"><label for="ppd">Posts per day</label><input id="ppd" type="number" name="posts_per_day" min="1" max="8" inputmode="numeric" autocomplete="off" value="{{ s.publish.posts_per_day }}"><p class="muted small">At most 8.</p></div>

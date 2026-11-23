@@ -7,6 +7,7 @@ from typing import Any
 
 from clipbot.config import Source
 from clipbot.sources.youtube_api import VideoMeta
+from clipbot.tools import ffmpeg_exe
 
 CHANNEL = "UCabcdefghijklmnopqrstuv"
 OTHER_CHANNEL = "UCzzzzzzzzzzzzzzzzzzzzzz"
@@ -47,7 +48,7 @@ def make_mp4(path: Path, seconds: float = 2.0) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_exe(),
             "-hide_banner",
             "-loglevel",
             "error",

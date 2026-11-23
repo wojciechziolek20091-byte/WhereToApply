@@ -80,10 +80,12 @@ def configure(
     level: str = "INFO",
     secrets: Iterable[str] = (),
     json_stdout: bool = True,
+    console: bool = True,
 ) -> None:
+    """`console=False` keeps the terminal quiet (logs go to the file only)."""
     _redactor.add(secrets)
 
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)] if console else []
     if log_dir is not None:
         log_dir.mkdir(parents=True, exist_ok=True)
         handlers.append(

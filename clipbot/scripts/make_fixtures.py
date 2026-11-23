@@ -19,6 +19,7 @@ import subprocess
 import sys
 import wave
 from pathlib import Path
+from clipbot.tools import ffmpeg_exe
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "data" / "fixtures"
@@ -56,7 +57,7 @@ def synth(script: Path, wav_path: Path, length_scale: float, pause_s: float) -> 
 
 def to_mp4(wav_path: Path, mp4: Path, color: str = "0x1e2a3a") -> None:
     subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        [ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
          "-f", "lavfi", "-i", f"color=c={color}:size=1280x720:rate=30",
          "-i", str(wav_path),
          "-map", "0:v", "-map", "1:a", "-shortest",
@@ -74,7 +75,7 @@ def talkinghead() -> Path:
     Image.fromarray(data.astronaut()).resize((820, 820)).save(face)
     out = OUT / "talkinghead.mp4"
     subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        [ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
          "-f", "lavfi", "-i", "color=c=0x2b3440:size=1920x1080:rate=30",
          "-loop", "1", "-i", str(face),
          "-ss", "120", "-t", "210", "-i", str(OUT / "talk.mp4"),
@@ -115,7 +116,7 @@ def slides() -> Path:
                    + f"file '{paths[-1].name}'\n")
     out = OUT / "slides.mp4"
     subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+        [ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
          "-f", "concat", "-safe", "0", "-i", str(lst),
          "-ss", "330", "-t", "210", "-i", str(OUT / "talk.mp4"),
          "-map", "0:v", "-map", "1:a", "-t", "210", "-r", "30",

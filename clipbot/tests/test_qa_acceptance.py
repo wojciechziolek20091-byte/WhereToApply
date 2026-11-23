@@ -17,6 +17,7 @@ import pytest
 from clipbot import db
 from clipbot.models import Word
 from clipbot.render.captions import CaptionLayout, build_ass, clip_words
+from clipbot.tools import ffmpeg_exe
 from tests.factories import make_mp4
 from tests.test_ingest import make
 from tests.test_pipeline_select import FakeRouter, FakeTranscriber, fake_transcript
@@ -36,7 +37,7 @@ def spoken(start: float, end: float, text: str = "") -> list[Word]:
 
 
 def ffmpeg(*args: str) -> None:
-    subprocess.run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", *args], check=True)
+    subprocess.run([ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y", *args], check=True)
 
 
 def vertical(

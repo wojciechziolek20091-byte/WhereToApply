@@ -12,6 +12,7 @@ from clipbot.sources.providers import AcquireBlocked, AcquireError, NotAvailable
 from clipbot.sources.providers.local import LocalFolderProvider
 from clipbot.sources.providers.ytdlp import YtDlpProvider, classify
 from clipbot.sources.rss import FeedEntry
+from clipbot.tools import ffmpeg_exe
 from tests.factories import CHANNEL, OTHER_CHANNEL, make_mp4, meta
 
 T0 = datetime(2026, 11, 19, 12, 0, tzinfo=UTC)
@@ -210,7 +211,7 @@ def test_local_folder_remuxes_mkv(tmp_path: Path) -> None:
     folder.mkdir()
     subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_exe(),
             "-loglevel",
             "error",
             "-i",

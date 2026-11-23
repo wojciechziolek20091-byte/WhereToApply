@@ -1,0 +1,40 @@
+clipbot: turns long YouTube videos into TikTok clips
+=====================================================
+
+INSTALL (once)
+
+  Windows:  double-click "Install clipbot.cmd"
+            If Windows says "Windows protected your PC", click
+            "More info", then "Run anyway".
+
+  Mac:      right-click "Install clipbot.command" and choose Open,
+            then click Open again. (A normal double-click is blocked
+            the first time because clipbot is not from the App Store.)
+
+  Wait until the window says "Done". It downloads about 1 GB the first
+  time, so it can take a while on slow internet.
+
+
+START
+
+  Double-click "clipbot" on your desktop.
+  Your web browser opens the clipbot page by itself.
+  The first time, it walks you through setup (about 10 minutes).
+
+  Keep the black window open while clipbot works.
+  Close it to stop clipbot.
+
+
+USE
+
+  Paste a YouTube link on the Overview page and press "Clip Video".
+  Your clips appear under "Clips". Play them, approve them, done.
+
+  clipbot starts in practice mode: it makes clips but does not post.
+  Turn practice mode off in Settings when you like the clips.
+
+
+SOMETHING WRONG?
+
+  Take a photo of the black window and send it to whoever gave you
+  clipbot. Your keys stay on this computer; never send the ".env" file.

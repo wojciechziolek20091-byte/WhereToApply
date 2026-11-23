@@ -1,0 +1,19 @@
+<form method="post" action="/channels/add" class="channel-form">
+  <input type="hidden" name="csrf" value="{{ csrf }}">{% if from_settings %}<input type="hidden" name="from" value="settings">{% endif %}
+  <label for="link">Channel link</label>
+  <input id="link" name="link" type="text" inputmode="url" required autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/@channelname…">
+  <fieldset class="rights">
+    <legend>Whose videos are these?</legend>
+    {% for value, label in rights.items() %}
+    <label class="choice"><input type="radio" name="rights" value="{{ value }}" required {{ 'checked' if value == 'own' }}><span>{{ label }}</span></label>
+    {% endfor %}
+    <p class="muted small">clipbot only uses videos you are allowed to reuse. With Creative Commons, it checks each video's licence and credits the creator.</p>
+  </fieldset>
+  <div class="permission-box">
+    <label for="perm">Your proof of permission</label>
+    <input id="perm" name="permission_ref" type="text" autocomplete="off" placeholder="Email from the creator, 2 Nov 2026…">
+  </div>
+  <label for="about">What is the channel about? <span class="muted">(optional)</span></label>
+  <input id="about" name="about" type="text" autocomplete="off" placeholder="Cooking tips for students…">
+  <div><button class="btn primary" data-busy="Adding…">Add Channel</button></div>
+</form>

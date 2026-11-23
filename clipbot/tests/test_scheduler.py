@@ -42,6 +42,16 @@ class AutoPublishPoster(FakePoster):
 
 def build(env, poster=None, cfg=None, clock=None):
     cfg = cfg or env[0]
+    if not cfg.secrets.openrouter_api_key:  # a configured bot; setup gating is tested apart
+        from clipbot.config import Secrets
+
+        cfg = cfg.model_copy(
+            update={
+                "secrets": Secrets(
+                    _env_file=None, openrouter_api_key="test", youtube_api_key="test"
+                )
+            }
+        )
     clock = clock or [DAY1]
     pipe = Pipeline(
         env[2],
@@ -367,3 +377,29 @@ def test_cli_tick_runs(config_dir: Path, tmp_path: Path) -> None:
     assert r.exit_code == 0, r.output
     r = CliRunner().invoke(app, ["digest", "-c", str(config_dir), "--env-file", env_file])
     assert r.exit_code == 0 and "Posted in the last 24 h: 0" in r.output
+
+
+def test_waits_for_setup_without_keys(env) -> None:
+    seed_clips(env, 2)
+    cfg, paths, conn = env
+    clock = [DAY1.replace(hour=12)]
+    pipe = Pipeline(
+        conn,
+        cfg,
+        paths,
+        youtube=FakeYT(meta("x")),
+        feed_fetcher=lambda ch: [],
+        clock=lambda: clock[0],
+    )
+    poster = AutoPublishPoster()
+    pub = Publisher(
+        conn,
+        cfg,
+        poster,
+        youtube=lambda: FakeYT(meta("aaaaaaaaaaa")),
+        alert=pipe.alert,
+        clock=lambda: clock[0],
+    )
+    rep = Scheduler(pipe, pub, FakeNotifier()).tick()
+    assert any("waiting for setup: add the AI and YouTube key" in a for a in rep.actions)
+    assert poster.submits == []

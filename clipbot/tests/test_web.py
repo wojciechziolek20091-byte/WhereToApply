@@ -4,6 +4,7 @@ import base64
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import ClassVar
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -22,8 +23,31 @@ WARSAW = ZoneInfo("Europe/Warsaw")
 NOW = datetime(2026, 11, 23, 12, 30, tzinfo=WARSAW)
 
 
-def client(config_dir: Path, env_file: Path | None = None, metas=()) -> TestClient:
-    yt = FakeYT(list(metas))
+class ChannelYT(FakeYT):
+    """FakeYT plus channel lookups."""
+
+    channels: ClassVar[dict[str, str]] = {
+        "UCabcdefghijklmnopqrstuv": "Mine",
+        "UCzzzzzzzzzzzzzzzzzzzzzz": "Science Hour",
+    }
+    handles: ClassVar[dict[str, str]] = {"sciencehour": "UCzzzzzzzzzzzzzzzzzzzzzz"}
+
+    def channel(self, *, channel_id=None, handle=None):
+        cid = channel_id or self.handles.get((handle or "").lower())
+        return (cid, self.channels[cid]) if cid in self.channels else None
+
+
+def client(
+    config_dir: Path,
+    env_file: Path | None = None,
+    metas=(),
+    configured: bool = True,
+) -> TestClient:
+    if configured and env_file is None:
+        env_file = config_dir.parent / ".env"
+        if not env_file.exists():
+            env_file.write_text("OPENROUTER_API_KEY=sk-or-v1-test\nYOUTUBE_API_KEY=AIzaTest\n")
+    yt = ChannelYT(list(metas))
     app = create_app(
         config_dir,
         env_file,
@@ -90,7 +114,7 @@ def test_every_page_renders(config_dir: Path) -> None:
     home = c.get("/")
     assert home.status_code == 200
     assert "Not running" in home.text and "Clip a Video" in home.text
-    assert "Dry run:" in home.text and "Waiting for Your Approval" in home.text
+    assert "Practice mode:" in home.text and "Waiting for Your Approval" in home.text
     assert 'name="theme-color" content="#0c100e"' in home.text and "Skip to content" in home.text
     for path in ["/clips", "/videos", "/settings", "/health"] + [
         f"/clips?tab={t}" for t in ("ready", "review", "posted", "working", "rejected")
@@ -198,7 +222,7 @@ def test_files_outside_renders_are_not_served(config_dir: Path, tmp_path: Path) 
 
 def test_password_required_when_set(config_dir: Path, tmp_path: Path) -> None:
     env = tmp_path / "pw.env"
-    env.write_text("DASHBOARD_PASSWORD=correct-horse\n")
+    env.write_text("DASHBOARD_PASSWORD=correct-horse\nOPENROUTER_API_KEY=k1\nYOUTUBE_API_KEY=k2\n")
     c = client(config_dir, env)
     r = c.get("/")
     assert r.status_code == 401 and "Basic" in r.headers["www-authenticate"]
@@ -357,3 +381,118 @@ def test_activity_is_plain_english() -> None:
         "Video skipped",
         "too short (60s < 180s)",
     )
+
+
+# ---------------------------------------------------------------- setup wizard
+
+
+def test_unconfigured_bot_goes_to_setup(config_dir: Path) -> None:
+    c = client(config_dir, configured=False)
+    r = c.get("/", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/setup"
+    page = c.get("/setup").text
+    assert "Welcome to clipbot" in page and "Start Setup" in page
+    for step in ("ai", "youtube", "channels", "tiktok", "done"):
+        assert c.get(f"/setup/{step}").status_code == 200, step
+    assert c.get("/setup/nonsense").status_code == 404
+
+
+def test_setup_saves_checked_keys(config_dir: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from clipbot import accounts
+
+    monkeypatch.setattr(accounts, "check_openrouter", lambda k: "Key works.")
+    monkeypatch.setattr(accounts, "check_youtube", lambda k: "Key works.")
+    c = client(config_dir, configured=False)
+    env = config_dir.parent / ".env"
+    r = c.post(
+        "/setup/ai",
+        data={"csrf": token(c, "/setup/ai"), "key": " sk-or-v1-abc "},
+        follow_redirects=False,
+    )
+    assert r.headers["location"].startswith("/setup/youtube")
+    c.post("/setup/youtube", data={"csrf": token(c, "/setup/ai"), "key": "AIzaXYZ"})
+    text = env.read_text()
+    assert "OPENROUTER_API_KEY=sk-or-v1-abc" in text and "YOUTUBE_API_KEY=AIzaXYZ" in text
+    assert c.get("/", follow_redirects=False).status_code == 200  # set up now
+
+
+def test_setup_rejects_bad_key_with_the_fix(
+    config_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from clipbot import accounts
+
+    def bad(k: str) -> str:
+        raise accounts.SetupError("OpenRouter did not accept this key. Copy it again.")
+
+    monkeypatch.setattr(accounts, "check_openrouter", bad)
+    c = client(config_dir, configured=False)
+    r = c.post(
+        "/setup/ai", data={"csrf": token(c, "/setup/ai"), "key": "nope"}, follow_redirects=True
+    )
+    assert "did not accept this key" in r.text
+    assert not (config_dir.parent / ".env").exists()
+
+
+def test_add_pause_and_remove_channel(config_dir: Path) -> None:
+    c = client(config_dir)
+    t = token(c, "/settings")
+    r = c.post(
+        "/channels/add",
+        data={
+            "csrf": t,
+            "link": "https://www.youtube.com/@ScienceHour",
+            "rights": "cc_by",
+            "from": "settings",
+        },
+        follow_redirects=True,
+    )
+    assert "Added Science Hour" in r.text
+    cfg = load_config(config_dir, env_file=None)
+    added = next(s for s in cfg.sources if s.name == "Science Hour")
+    assert added.rights == "cc_by" and added.enabled and added.acquire == "ytdlp"
+    r = c.post(
+        "/channels/add",
+        data={
+            "csrf": t,
+            "link": "https://youtube.com/@sciencehour",
+            "rights": "own",
+            "from": "settings",
+        },
+        follow_redirects=True,
+    )
+    assert "already in your channels" in r.text
+    c.post(f"/channels/{added.id}/toggle", data={"csrf": t, "enabled": "0"})
+    assert not load_config(config_dir, env_file=None).source(added.id).enabled
+    c.post(f"/channels/{added.id}/remove", data={"csrf": t, "from": "settings"})
+    assert all(s.id != added.id for s in load_config(config_dir, env_file=None).sources)
+
+
+def test_permission_needs_proof(config_dir: Path) -> None:
+    c = client(config_dir)
+    r = c.post(
+        "/channels/add",
+        data={
+            "csrf": token(c),
+            "rights": "permission",
+            "link": "https://www.youtube.com/@ScienceHour",
+        },
+        follow_redirects=True,
+    )
+    assert "Describe the permission you have" in r.text
+    r = c.post(
+        "/channels/add",
+        data={
+            "csrf": token(c),
+            "rights": "permission",
+            "permission_ref": "email 2 Nov",
+            "link": "https://www.youtube.com/channel/UCzzzzzzzzzzzzzzzzzzzzzz",
+        },
+        follow_redirects=True,
+    )
+    assert "Added Science Hour" in r.text
+
+
+def test_settings_shows_accounts_and_channels(config_dir: Path) -> None:
+    page = client(config_dir).get("/settings").text
+    assert "Accounts" in page and "Channels" in page and "Practice mode" in page
+    assert "Not connected: clips are made but not posted" in page

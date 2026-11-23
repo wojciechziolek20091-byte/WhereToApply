@@ -159,6 +159,22 @@ class YouTubeAPI:
     def video(self, video_id: str) -> VideoMeta | None:
         return self.videos([video_id]).get(video_id)
 
+    def channel(
+        self, *, channel_id: str | None = None, handle: str | None = None
+    ) -> tuple[str, str] | None:
+        """(channel id, channel name) by id or @handle. 1 quota unit."""
+        params = {"part": "snippet"}
+        if channel_id:
+            params["id"] = channel_id
+        elif handle:
+            params["forHandle"] = "@" + handle.lstrip("@")
+        else:
+            raise ValueError("channel_id or handle is required")
+        items = self._get("/channels", params).get("items") or []
+        if not items:
+            return None
+        return items[0]["id"], (items[0].get("snippet") or {}).get("title", "")
+
     def channel_id_for_handle(self, handle: str) -> str | None:
         data = self._get("/channels", {"part": "id", "forHandle": "@" + handle.lstrip("@")})
         items = data.get("items") or []

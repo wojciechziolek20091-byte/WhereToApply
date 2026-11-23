@@ -19,6 +19,7 @@ from pathlib import Path
 
 from clipbot.logging import get_logger
 from clipbot.sources.providers import AcquireBlocked, AcquireError
+from clipbot.tools import ffmpeg_exe
 
 log = get_logger(__name__)
 
@@ -54,7 +55,7 @@ def remux_to_mp4(src: Path, dest: Path, timeout: float = 1800) -> None:
     tmp = dest.with_suffix(".part.mp4")
     p = subprocess.run(
         [
-            "ffmpeg",
+            ffmpeg_exe(),
             "-hide_banner",
             "-loglevel",
             "error",
@@ -113,6 +114,8 @@ class YtDlpProvider:
             "3",
             "--js-runtimes",
             "deno",
+            "--ffmpeg-location",
+            ffmpeg_exe(),
             *self._pot_args(),
             "--output",
             out_template,

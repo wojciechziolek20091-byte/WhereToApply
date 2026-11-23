@@ -37,7 +37,8 @@ MAX_CONSECUTIVE_FAILURES = 3
 
 
 def make_poster(cfg: AppConfig, paths: DataPaths) -> Poster:
-    """dry_run always wins: with it on, nothing ever reaches TikTok."""
+    """dry_run always wins: with it on, nothing ever reaches TikTok. Without a
+    TikTok connection it also stays in practice mode."""
     from clipbot.post.dryrun import DryRunPoster
 
     s = cfg.settings
@@ -51,9 +52,11 @@ def make_poster(cfg: AppConfig, paths: DataPaths) -> Poster:
     from clipbot.post.uploadpost import UploadPostPoster
 
     key = cfg.secrets.upload_post_api_key
-    return UploadPostPoster(
-        key.get_secret_value() if key else "", cfg.secrets.upload_post_profile or ""
-    )
+    if key is None or not key.get_secret_value() or not cfg.secrets.upload_post_profile:
+        # Practice mode stays on until TikTok is connected: never crash, never post.
+        log.warning("practice_mode_no_tiktok")
+        return DryRunPoster(paths.root / "dryrun")
+    return UploadPostPoster(key.get_secret_value(), cfg.secrets.upload_post_profile)
 
 
 class Publisher:

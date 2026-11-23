@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Set Up{% endblock %}
+{% block content %}
+{% set order = steps|map(attribute=0)|list %}
+{% if step not in ('welcome', 'done') and not returning %}
+<ol class="stepper" aria-label="Setup progress">
+  {% for key, label in steps %}
+  <li class="{{ 'now' if key == step else ('past' if order.index(key) < order.index(step) else '') }}" {% if key == step %}aria-current="step"{% endif %}>
+    <span class="step-num num">{{ loop.index }}</span>{{ label }}
+  </li>
+  {% endfor %}
+</ol>
+{% endif %}
+
+{% if step == 'welcome' %}
+<section class="panel setup">
+  <h1>Welcome to clipbot</h1>
+  <p class="lead">clipbot turns long YouTube videos into short TikTok clips with captions, and can post them for you.</p>
+  <p>Setup takes about 10 minutes. You will need:</p>
+  <ul class="needs">
+    <li><b>An OpenRouter account</b> for the free AI that picks the best moments.</li>
+    <li><b>A Google account</b> to get a free YouTube key.</li>
+    <li><b>Optional: an Upload-Post plan</b> if you want clips posted to TikTok automatically.</li>
+  </ul>
+  <p class="muted small">Nothing is posted until you say so. Everything stays on this computer.</p>
+  <div class="setup-actions"><a class="btn primary" href="/setup/ai">Start Setup</a></div>
+</section>
+
+{% elif step == 'ai' %}
+<section class="panel setup">
+  <h1>Connect the AI</h1>
+  <p class="lead">A free AI reads each video's transcript and picks the moments worth clipping.</p>
+  {% if accounts.ai %}<p class="have">A key is already saved ({{ accounts.ai }}). Paste a new one only to replace it.</p>{% endif %}
+  <ol class="guide">
+    <li>Open <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a> and sign in. Signing in with Google works.</li>
+    <li>Open <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Keys</a> and press <b>Create Key</b>.</li>
+    <li>Name it <b>clipbot</b> and set the credit limit to <b>0</b>. That way it can only use free AI and never costs money.</li>
+    <li>Copy the key and paste it here.</li>
+  </ol>
+  <form method="post" action="/setup/ai" class="key-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
+    <label for="key">OpenRouter key</label>
+    <input id="key" name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="sk-or-v1-…">
+    <div class="setup-actions">
+      <button class="btn primary" data-busy="Checking…">Check and Save</button>
+      {% if accounts.ai and not returning %}<a class="btn" href="/setup/youtube">Keep Saved Key</a>{% endif %}
+    </div>
+  </form>
+</section>
+
+{% elif step == 'youtube' %}
+<section class="panel setup">
+  <h1>Connect YouTube</h1>
+  <p class="lead">A free YouTube key lets clipbot check who owns a video and whether it may be reused.</p>
+  {% if accounts.youtube %}<p class="have">A key is already saved ({{ accounts.youtube }}). Paste a new one only to replace it.</p>{% endif %}
+  <ol class="guide">
+    <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a>, sign in, and create a project called <b>clipbot</b>.</li>
+    <li>Open the <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3</a> page and press <b>Enable</b>.</li>
+    <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a>, press <b>Create credentials</b>, then <b>API key</b>.</li>
+    <li>Copy the key and paste it here. It is free; you will not be charged.</li>
+  </ol>
+  <form method="post" action="/setup/youtube" class="key-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
+    <label for="key">YouTube key</label>
+    <input id="key" name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="AIza…">
+    <div class="setup-actions">
+      <button class="btn primary" data-busy="Checking…">Check and Save</button>
+      {% if accounts.youtube and not returning %}<a class="btn" href="/setup/channels">Keep Saved Key</a>{% endif %}
+    </div>
+  </form>
+</section>
+
+{% elif step == 'channels' %}
+<section class="panel setup">
+  <h1>Add Your Channels</h1>
+  <p class="lead">clipbot watches these channels and clips their new videos. You can also skip this and paste single video links later.</p>
+  {% if channels %}
+  <ul class="channel-list">
+    {% for c in channels %}
+    <li>
+      <span><b>{{ c.name }}</b><br><span class="muted small">{{ rights.get(c.rights, 'No rights set') }}{% if not c.enabled %} · paused{% endif %}</span></span>
+      <form method="post" action="/channels/{{ c.id }}/remove" data-confirm="Remove {{ c.name }}?"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Removing…">Remove</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% include "_channel_form.html" %}
+  <div class="setup-actions split">
+    <a class="btn {{ 'primary' if channels else '' }}" href="/setup/tiktok">{{ 'Continue' if channels else 'Skip for Now' }}</a>
+  </div>
+</section>
+
+{% elif step == 'tiktok' %}
+<section class="panel setup">
+  <h1>Connect TikTok</h1>
+  <p class="lead">To post automatically, clipbot uses Upload-Post, a paid service that TikTok allows to post for you. Skip this to try clipbot first: clips are still made, and you can upload them yourself.</p>
+  {% if accounts.tiktok %}<p class="have">Connected through the Upload-Post profile <b>{{ accounts.tiktok }}</b>.</p>{% endif %}
+  <ol class="guide">
+    <li>Sign up at <a href="https://www.upload-post.com" target="_blank" rel="noopener">upload-post.com</a> and choose a plan that includes TikTok.</li>
+    <li>In <b>Manage Users</b>, create a profile (for example <b>clipbot</b>) and connect your TikTok account to it.</li>
+    <li>In <b>API Keys</b>, create a key.</li>
+    <li>Paste the key and the profile name here.</li>
+  </ol>
+  <form method="post" action="/setup/tiktok" class="key-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
+    <label for="key">Upload-Post key</label>
+    <input id="key" name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key…">
+    <label for="profile">Profile name</label>
+    <input id="profile" name="profile" type="text" required autocomplete="off" spellcheck="false" placeholder="clipbot…" value="{{ accounts.tiktok or '' }}">
+    <div class="setup-actions">
+      <button class="btn primary" data-busy="Checking…">Check and Connect</button>
+      {% if not returning %}<a class="btn" href="/setup/done">Skip for Now</a>{% endif %}
+    </div>
+  </form>
+</section>
+
+{% elif step == 'done' %}
+<section class="panel setup">
+  <h1>You're Set Up</h1>
+  <ul class="summary">
+    <li class="{{ 'ok' if accounts.ai else 'bad' }}">AI {{ 'connected' if accounts.ai else 'not connected' }}</li>
+    <li class="{{ 'ok' if accounts.youtube else 'bad' }}">YouTube {{ 'connected' if accounts.youtube else 'not connected' }}</li>
+    <li class="{{ 'ok' if accounts.channels else 'skip' }}">{{ accounts.channels }} channel{{ '' if accounts.channels == 1 else 's' }} watched</li>
+    <li class="{{ 'ok' if accounts.tiktok else 'skip' }}">TikTok {{ 'connected' if accounts.tiktok else 'not connected yet' }}</li>
+  </ul>
+  <p class="lead">clipbot starts in <b>practice mode</b>: it makes clips and checks them, but does not post. Watch a few clips first. When you like them, turn practice mode off in Settings.</p>
+  {% if not accounts.ready %}<p class="notice bad">The AI and YouTube keys are both needed before clipbot can work. <a href="/setup/{{ 'ai' if not accounts.ai else 'youtube' }}">Add the missing key</a></p>{% endif %}
+  <div class="setup-actions"><a class="btn primary" href="/">Go to Overview</a></div>
+</section>
+{% endif %}
+{% endblock %}

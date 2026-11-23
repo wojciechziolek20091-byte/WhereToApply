@@ -57,46 +57,38 @@ def parse_ffmpeg_version(text: str) -> tuple[int, int] | None:
 
 
 def check_ffmpeg() -> list[CheckResult]:
-    out: list[CheckResult] = []
-    path = shutil.which("ffmpeg")
-    if not path:
-        return [CheckResult("ffmpeg", "fail", "not on PATH")]
-    _, text = _run(["ffmpeg", "-hide_banner", "-version"])
+    from clipbot.tools import ffmpeg_exe
+
+    exe = ffmpeg_exe()
+    code, text = _run([exe, "-hide_banner", "-version"])
+    if code != 0:
+        return [CheckResult("ffmpeg", "fail", f"cannot run {exe}")]
     ver = parse_ffmpeg_version(text)
-    first = text.splitlines()[0] if text else "?"
+    out: list[CheckResult] = []
     if ver is None:
-        out.append(CheckResult("ffmpeg", "warn", f"could not parse version: {first}"))
+        out.append(CheckResult("ffmpeg", "warn", "could not read its version"))
     elif ver[0] < FFMPEG_MIN_MAJOR:
         out.append(
-            CheckResult(
-                "ffmpeg", "fail", f"{ver[0]}.{ver[1]} found, {FFMPEG_MIN_MAJOR}+ required ({path})"
-            )
+            CheckResult("ffmpeg", "fail", f"{ver[0]}.{ver[1]} found, {FFMPEG_MIN_MAJOR}+ required")
         )
     else:
-        out.append(CheckResult("ffmpeg", "ok", f"{ver[0]}.{ver[1]} ({path})"))
-
-    out.append(
-        CheckResult(
-            "ffprobe",
-            "ok" if shutil.which("ffprobe") else "fail",
-            shutil.which("ffprobe") or "not on PATH",
+        bundled = "imageio_ffmpeg" in exe
+        out.append(
+            CheckResult(
+                "ffmpeg", "ok", f"{ver[0]}.{ver[1]}" + (" (bundled)" if bundled else f" ({exe})")
+            )
         )
-    )
-
-    _, enc = _run(["ffmpeg", "-hide_banner", "-encoders"])
-    for name in ("libx264", "aac"):
-        has = re.search(rf"^\s*\S+\s+{name}\s", enc, re.M) is not None
-        out.append(CheckResult(f"ffmpeg encoder {name}", "ok" if has else "fail"))
-
-    _, filt = _run(["ffmpeg", "-hide_banner", "-filters"])
-    missing = [f for f in FFMPEG_FILTERS if not re.search(rf"^\s*\S+\s+{f}\s", filt, re.M)]
+    _, enc = _run([exe, "-hide_banner", "-encoders"])
+    _, filt = _run([exe, "-hide_banner", "-filters"])
+    missing = [n for n in ("libx264", "aac") if not re.search(rf"^\s*\S+\s+{n}\s", enc, re.M)]
+    missing += [f for f in FFMPEG_FILTERS if not re.search(rf"^\s*\S+\s+{f}\s", filt, re.M)]
     out.append(
         CheckResult(
-            "ffmpeg filters",
+            "ffmpeg features",
             "fail" if missing else "ok",
             f"missing: {', '.join(missing)}"
             if missing
-            else f"{len(FFMPEG_FILTERS)} required filters present (libass included)",
+            else "captions, H.264, loudness and frame checks available",
         )
     )
     return out

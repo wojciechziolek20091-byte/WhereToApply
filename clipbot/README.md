@@ -17,6 +17,12 @@ your TikTok account, with nobody in the loop:
 It only processes content you have rights to: your own videos, Creative Commons
 (CC BY) videos, or videos you have written permission for.
 
+> **Giving clipbot to someone?** Run `uv run python scripts/make_dist.py` and send
+> them `dist/clipbot-<version>.zip`. They unzip it, double-click **Install clipbot**,
+> then the **clipbot** icon on their desktop; the browser opens a setup wizard.
+> `START HERE.txt` in the zip explains it in plain words. No terminal, no Python,
+> no ffmpeg install (ffmpeg 9 ships inside the `imageio-ffmpeg` package).
+
 ---
 
 ## What you need
@@ -144,10 +150,12 @@ uv run clipbot clip episode.mp4 --source my-channel
 Same for a file on disk, under the rights of the source you name.
 
 ```bash
-uv run clipbot run
+uv run clipbot start
 ```
 
-The bot itself: every 30 seconds it polls running uploads, checks your channels
+Starts the bot with its dashboard and opens it in your browser (this is what the
+desktop icon runs; `clipbot run` does the same without opening the browser). The
+bot itself: every 30 seconds it polls running uploads, checks your channels
 for new videos (every 30 minutes), moves one video one step forward, and posts the
 best ready clip when a posting window is open. Stop it with Ctrl+C. (With Docker
 or systemd it runs on its own.)
