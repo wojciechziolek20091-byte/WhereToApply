@@ -1,68 +1,74 @@
 {% extends "base.html" %}
 {% block content %}
-<section class="status card {{ 'paused' if bot.paused else ('live' if bot.running else 'stopped') }}" id="status" data-poll="/api/status">
-  <div>
-    <div class="state">
-      {% if bot.paused %}Paused{% elif bot.running %}Running{% else %}Not running{% endif %}
-    </div>
-    <div class="muted">
+<h1>Overview</h1>
+
+{% set state = 'paused' if bot.paused else ('running' if bot.running else 'stopped') %}
+<section class="panel status" data-poll="/api/status" aria-label="Bot status">
+  <div class="status-text">
+    <p class="status-state {{ state }}">{% if bot.paused %}Paused{% elif bot.running %}Running{% else %}Not running{% endif %}</p>
+    <p class="muted small">
       {% if bot.paused %}
-        {{ bot.pause_reason }}{% if bot.pause_until %} &middot; resumes by itself {{ ago(bot.pause_until, now) }}{% endif %}
+        {{ bot.pause_reason }}{% if bot.pause_until %}. Resumes on its own <time datetime="{{ bot.pause_until.isoformat() }}" data-fmt="relative">{{ ago(bot.pause_until, now) }}</time>{% endif %}
       {% elif bot.running %}
-        Last activity {{ ago(bot.last_tick, now) }}.
+        Last activity <time datetime="{{ bot.last_tick.isoformat() }}" data-fmt="relative">{{ ago(bot.last_tick, now) }}</time>
       {% else %}
-        Start it with <code>clipbot run</code> (last activity {{ ago(bot.last_tick, now) }}).
+        Start it with <code translate="no">clipbot run</code>.
       {% endif %}
-    </div>
+    </p>
   </div>
   {% if bot.paused %}
-  <form method="post" action="/resume"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="primary">Resume</button></form>
+  <form method="post" action="/resume"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Resuming…">Resume</button></form>
   {% else %}
-  <form method="post" action="/pause" data-confirm="Pause the bot? Nothing will be processed or posted until you resume."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="ghost">Pause</button></form>
+  <form method="post" action="/pause" data-confirm="Pause the bot? Nothing is processed or posted until you resume."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Pausing…">Pause</button></form>
   {% endif %}
 </section>
 
-<section class="card">
-  <h2>Clip a video</h2>
-  <form method="post" action="/clip" class="inline">
+<section class="panel" aria-labelledby="clip-h">
+  <h2 id="clip-h">Clip a Video</h2>
+  <form method="post" action="/clip" class="link-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">
-    <input type="url" name="url" required placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube link" autocomplete="off">
-    <button class="primary">Clip it</button>
+    <label for="url">YouTube link</label>
+    <div class="link-row">
+      <input id="url" type="url" name="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…">
+      <button class="btn primary" data-busy="Checking…">Clip Video</button>
+    </div>
+    <p class="muted small">Accepted when the channel is in your sources with a rights tag, or the video is Creative Commons.</p>
   </form>
-  <p class="muted small">Accepted when the channel is in your sources with a rights tag, or the video is Creative Commons. The running bot does the rest.</p>
 </section>
 
-<section class="grid3">
-  <div class="card stat"><div class="num">{{ posted_24h }} / {{ [s.publish.posts_per_day, 8]|min }}</div><div class="muted">posted in the last 24 h</div></div>
-  <div class="card stat"><div class="num">{{ clips.get('qa_passed', 0) + clips.get('scheduled', 0) }}</div><div class="muted">clips ready to post</div></div>
-  <div class="card stat">
-    <div class="num small-num">{% if next_why == 'now' %}now{% else %}{{ next_post.astimezone(s.tz).strftime('%a %H:%M') }}{% endif %}</div>
-    <div class="muted">next possible post{% if next_why not in ('now',) %}, waiting for {{ next_why }}{% endif %}</div>
+<section class="panel metrics" aria-label="Posting">
+  <div class="metric"><p class="num big">{{ posted_24h }}/{{ [s.publish.posts_per_day, 8]|min }}</p><p class="muted small">Posted in 24&nbsp;h</p></div>
+  <div class="metric"><p class="num big">{{ clips.get('qa_passed', 0) + clips.get('scheduled', 0) }}</p><p class="muted small">Ready to post</p></div>
+  <div class="metric">
+    <p class="num big">{% if next_why == 'now' %}Now{% else %}<time datetime="{{ next_post.isoformat() }}" data-fmt="weekday-time">{{ next_post.astimezone(s.tz).strftime('%a %H:%M') }}</time>{% endif %}</p>
+    <p class="muted small">Next post{% if next_why != 'now' %}, after {{ next_why }}{% endif %}</p>
   </div>
 </section>
 
 {% if review %}
-<section>
-  <h2>Waiting for your approval</h2>
+<section aria-labelledby="review-h">
+  <h2 id="review-h">Waiting for Your Approval</h2>
   <div class="clips">{% for c in review %}{% include "_clip.html" %}{% endfor %}</div>
 </section>
 {% endif %}
 
 {% if ready %}
-<section>
-  <div class="row between"><h2>Next up</h2><a href="/clips?tab=ready">All ready clips &rarr;</a></div>
+<section aria-labelledby="next-h">
+  <div class="section-head"><h2 id="next-h">Next Up</h2><a href="/clips?tab=ready">All ready clips</a></div>
   <div class="clips">{% for c in ready %}{% include "_clip.html" %}{% endfor %}</div>
 </section>
 {% endif %}
 
-<section class="card">
-  <h2>Recent activity</h2>
+<section class="panel" aria-labelledby="activity-h">
+  <h2 id="activity-h">Recent Activity</h2>
   {% if events %}
   <ul class="events">
     {% for e in events %}
-    <li class="lvl-{{ e.level }}"><span class="muted small">{{ ago(e.ts, now) }}</span> <b>{{ e.kind.replace('_', ' ') }}</b> {{ e.message }}</li>
+    <li class="lvl-{{ e.level }}"><time class="num muted" datetime="{{ e.ts.isoformat() }}" data-fmt="relative">{{ ago(e.ts, now) }}</time><span><span class="event-kind">{{ e.title }}</span>{% if e.detail %} <span class="muted">{{ e.detail }}</span>{% endif %}</span></li>
     {% endfor %}
   </ul>
-  {% else %}<p class="muted">Nothing yet. Paste a link above to start.</p>{% endif %}
+  {% else %}
+  <p class="muted">Nothing yet. Paste a YouTube link above to start.</p>
+  {% endif %}
 </section>
 {% endblock %}

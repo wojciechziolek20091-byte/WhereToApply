@@ -236,6 +236,42 @@ def create_app(
     def clip_video(clip_id: str) -> FileResponse:
         return FileResponse(clip_file(clip_id, "render_path"), media_type="video/mp4")
 
+    @app.get("/clips/{clip_id}/poster", dependencies=deps)
+    def clip_poster(clip_id: str) -> FileResponse:
+        """A still frame shown before playback, made once and cached."""
+        import subprocess
+
+        video = clip_file(clip_id, "render_path")
+        poster = video.with_suffix(".poster.jpg")
+        if not poster.is_file():
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-ss",
+                    "1.0",
+                    "-i",
+                    str(video),
+                    "-frames:v",
+                    "1",
+                    "-vf",
+                    "scale=540:-2",
+                    "-q:v",
+                    "4",
+                    str(poster),
+                ],
+                check=False,
+                timeout=60,
+            )
+        if not poster.is_file():
+            raise HTTPException(404)
+        return FileResponse(
+            poster, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"}
+        )
+
     @app.get("/clips/{clip_id}/sheet", dependencies=deps)
     def clip_sheet(clip_id: str) -> FileResponse:
         return FileResponse(clip_file(clip_id, "contact_sheet_path"), media_type="image/jpeg")

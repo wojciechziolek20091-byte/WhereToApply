@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Health - clipbot{% endblock %}
+{% block title %}Health{% endblock %}
 {% block content %}
-<div class="row between">
-  <h2>Health checks</h2>
-  {% if not online %}<a class="button ghost" href="/health?online=1">Also test the APIs (slower)</a>{% endif %}
+<div class="section-head">
+  <h1>Health</h1>
+  {% if not online %}<a class="btn" href="/health?online=1" data-busy-link="Testing…">Test APIs Too</a>{% endif %}
 </div>
-<div class="card">
+<div class="panel flush">
 <ul class="checks big">
   {% for r in results %}
-  <li class="{{ {'ok': 'ok', 'fail': 'bad', 'warn': 'warn', 'skip': 'skip'}[r.status] }}"><b>{{ r.name }}</b> {{ r.detail }}</li>
+  <li class="{{ {'ok': 'ok', 'fail': 'bad', 'warn': 'warn', 'skip': 'skip'}[r.status] }}"><span class="check-name">{{ r.name }}</span> <span class="muted">{{ r.detail }}</span></li>
   {% endfor %}
 </ul>
 </div>

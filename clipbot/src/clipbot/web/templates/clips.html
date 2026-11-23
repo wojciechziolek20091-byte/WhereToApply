@@ -1,14 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Clips - clipbot{% endblock %}
+{% block title %}Clips{% endblock %}
 {% block content %}
-<nav class="tabs">
+<h1>Clips</h1>
+<nav class="tabs" aria-label="Clip status">
   {% for key, (label, _) in tabs.items() %}
-  <a href="/clips?tab={{ key }}" class="{{ 'on' if key == tab }}">{{ label }} <span class="count">{{ tab_counts[key] }}</span></a>
+  <a href="/clips?tab={{ key }}" {% if key == tab %}aria-current="page"{% endif %}>{{ label }} <span class="num muted">{{ tab_counts[key] }}</span></a>
   {% endfor %}
 </nav>
+<h2 class="sr-only">{{ tabs[tab][0] }}</h2>
 {% if items %}
 <div class="clips">{% for c in items %}{% include "_clip.html" %}{% endfor %}</div>
 {% else %}
-<p class="card muted">No clips here yet.</p>
+<p class="panel muted">No clips here yet. {% if tab in ('ready', 'review') %}Clips appear once a video is processed and passes its checks.{% endif %}</p>
 {% endif %}
 {% endblock %}

@@ -1,22 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Videos - clipbot{% endblock %}
+{% block title %}Videos{% endblock %}
 {% block content %}
-<h2>Videos</h2>
+<h1>Videos</h1>
 {% if items %}
-<div class="card table-wrap">
+<div class="panel flush table-wrap">
 <table>
-  <thead><tr><th>Video</th><th>Status</th><th>Clips</th><th>Updated</th></tr></thead>
+  <thead><tr><th scope="col">Video</th><th scope="col">Status</th><th scope="col" class="r">Clips</th><th scope="col" class="r">Updated</th></tr></thead>
   <tbody>
   {% for v in items %}
   <tr>
-    <td><div class="title">{{ v.title or v.id }}</div><div class="muted small">{{ v.channel_title or '' }}{% if v.license == 'creativeCommon' %} &middot; CC BY{% elif v.license == 'local_file' %} &middot; local file{% endif %}</div></td>
-    <td><span class="pill st-{{ v.state }}">{{ v.label }}</span><div class="muted small">{{ v.state_reason or '' }}</div></td>
-    <td>{{ v.clips }}{% if v.posted %} ({{ v.posted }} posted){% endif %}</td>
-    <td class="muted small">{{ ago(v.updated, now) }}</td>
+    <td><p class="cell-title clamp">{{ v.title or v.id }}</p><p class="muted small">{{ v.channel_title or '' }}{% if v.license == 'creativeCommon' %} · CC BY{% elif v.license == 'local_file' %} · local file{% endif %}</p></td>
+    <td><span class="tag st-{{ v.state }}">{{ v.label }}</span>{% if v.state_reason %}<p class="muted small clamp">{{ v.state_reason }}</p>{% endif %}</td>
+    <td class="r num">{{ v.clips }}{% if v.posted %} <span class="muted">({{ v.posted }} posted)</span>{% endif %}</td>
+    <td class="r num muted small"><time datetime="{{ v.updated.isoformat() }}" data-fmt="relative">{{ ago(v.updated, now) }}</time></td>
   </tr>
   {% endfor %}
   </tbody>
 </table>
 </div>
-{% else %}<p class="card muted">No videos yet.</p>{% endif %}
+{% else %}
+<p class="panel muted">No videos yet. Paste a YouTube link on the <a href="/">Overview</a> page.</p>
+{% endif %}
 {% endblock %}

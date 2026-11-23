@@ -89,8 +89,9 @@ def test_every_page_renders(config_dir: Path) -> None:
     c = client(config_dir)
     home = c.get("/")
     assert home.status_code == 200
-    assert "Not running" in home.text and "Clip a video" in home.text
-    assert "Dry run is on" in home.text and "Waiting for your approval" in home.text
+    assert "Not running" in home.text and "Clip a Video" in home.text
+    assert "Dry run:" in home.text and "Waiting for Your Approval" in home.text
+    assert 'name="theme-color" content="#0c100e"' in home.text and "Skip to content" in home.text
     for path in ["/clips", "/videos", "/settings", "/health"] + [
         f"/clips?tab={t}" for t in ("ready", "review", "posted", "working", "rejected")
     ]:
@@ -328,3 +329,27 @@ def test_next_post_time(env) -> None:
     # 3 posts today: the first one (12:00) drops out of the 24 h count at 12:00 tomorrow
     assert t.astimezone(WARSAW) == NOW.replace(hour=12, minute=0, second=1) + timedelta(days=1)
     assert why == "the daily limit of 3"
+
+
+def test_poster_frame_is_made_once(config_dir: Path) -> None:
+    from tests.factories import make_mp4
+
+    cid = seed_clip(config_dir, "qa_passed", render=False)
+    _, paths = conn_for(config_dir)
+    make_mp4(paths.renders / f"{cid}.mp4", seconds=2)
+    c = client(config_dir)
+    r = c.get(f"/clips/{cid}/poster")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+    assert (paths.renders / f"{cid}.poster.jpg").is_file()
+
+
+def test_activity_is_plain_english() -> None:
+    from clipbot.web.status import _event_text
+
+    assert _event_text("qa", "qa_passed: all gates passed") == ("Checks passed", "")
+    assert _event_text("qa", "qa_rejected: visual: 3.0s black") == (
+        "Checks failed", "visual: 3.0s black")
+    assert _event_text("render", "rendered") == ("Clip made", "")
+    assert _event_text("publish_submit", "submitted via dryrun") == ("Dry-run post", "")
+    assert _event_text("discover", "skipped: too short (60s < 180s)") == (
+        "Video skipped", "too short (60s < 180s)")

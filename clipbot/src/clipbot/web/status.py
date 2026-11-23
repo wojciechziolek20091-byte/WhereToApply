@@ -110,13 +110,60 @@ def counts(conn: sqlite3.Connection, table: str) -> dict[str, int]:
     return dict(conn.execute(f"SELECT state, COUNT(*) FROM {table} GROUP BY state").fetchall())
 
 
-def recent_events(conn: sqlite3.Connection, limit: int = 15) -> list[dict[str, Any]]:
+# Plain-English activity lines. Internal bookkeeping events are not shown.
+_EVENT_TITLE = {
+    "discover": "Video found",
+    "acquire": "Downloaded",
+    "acquire_failed": "Download failed",
+    "transcribe": "Transcribed",
+    "select": "Clips picked",
+    "render": "Clip made",
+    "qa": "Checks",
+    "publish_submit": "Sent to TikTok",
+    "published": "Posted",
+    "publish_error": "Posting problem",
+    "pause": "Paused",
+    "resume": "Resumed",
+    "review": "Reviewed",
+    "digest": "Daily summary sent",
+}
+_HIDDEN = ("llm_call", "discover_error")
+
+
+def _event_text(kind: str, message: str) -> tuple[str, str]:
+    title = _EVENT_TITLE.get(kind, kind.replace("_", " ").capitalize())
+    if kind in ("render", "acquire", "transcribe", "digest", "resume"):
+        return title, ""
+    if kind == "qa":
+        passed = message.startswith("qa_passed")
+        return (
+            "Checks passed" if passed else "Checks failed",
+            "" if passed else message.split(": ", 1)[-1],
+        )
+    if kind == "publish_submit":
+        return ("Dry-run post" if "dryrun" in message else title), ""
+    if kind == "published":
+        return title, message if message.startswith("http") else ""
+    if kind == "discover":
+        state, _, why = message.partition(": ")
+        return ("Video accepted" if state == "discovered" else "Video skipped"), why
+    if kind == "pause":
+        return title, message.removeprefix("paused: ")
+    return title, message
+
+
+def recent_events(conn: sqlite3.Connection, limit: int = 12) -> list[dict[str, Any]]:
+    marks = ",".join("?" * len(_HIDDEN))
     rows = conn.execute(
         "SELECT ts, level, kind, message, video_id, clip_id FROM events "
-        "WHERE kind NOT IN ('llm_call') ORDER BY id DESC LIMIT ?",
-        (limit,),
+        f"WHERE kind NOT IN ({marks}) ORDER BY id DESC LIMIT ?",
+        (*_HIDDEN, limit),
     )
-    return [dict(r) | {"ts": db.parse_iso(r["ts"])} for r in rows]
+    out = []
+    for r in rows:
+        title, detail = _event_text(r["kind"], r["message"])
+        out.append(dict(r) | {"ts": db.parse_iso(r["ts"]), "title": title, "detail": detail})
+    return out
 
 
 @dataclass
