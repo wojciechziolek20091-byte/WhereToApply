@@ -14,7 +14,7 @@ llm:
   free_only: true          # only $0 models are ever called; no paid fallback
   preferred_models:        # tried first while free; then any other free model
     - nvidia/nemotron-3.5-super-vl:free
-    - google/gemma-4-31b-it:free
+    - openrouter/free
   min_context_tokens: 32000
   max_models_per_call: 6   # models tried per request before giving up until later
   cooldown_minutes: 15     # rest a model after a rate limit or error

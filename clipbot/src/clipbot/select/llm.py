@@ -11,6 +11,13 @@ Free-only is enforced three ways:
 2. Each request asks OpenRouter to report the real cost; a non-zero cost bans
    that model and raises an alert event.
 3. The OpenRouter key itself should carry a $0 credit limit (README).
+
+Thinking models: many free models "think" before answering and can spend the
+whole output budget on hidden reasoning, returning an empty reply. The router
+asks for reasoning to be switched off wherever the model allows it, learns which
+models insist on reasoning (HTTP 400 "Reasoning is mandatory") and tries those
+last, with a larger budget. An empty reply cut off at the token limit counts as
+"truncated", not as bad JSON.
 """
 
 from __future__ import annotations
@@ -27,6 +34,7 @@ import httpx
 from clipbot.logging import get_logger
 
 OPENROUTER_BASE = "https://openrouter.ai/api/v1"
+REASONING_BUDGET_FACTOR = 3
 log = get_logger(__name__)
 
 
@@ -65,6 +73,7 @@ class ModelInfo:
     context_length: int
     pricing: dict[str, float | None]
     supported_parameters: frozenset[str]
+    output_modalities: frozenset[str] = frozenset({"text"})
 
     @property
     def is_free(self) -> bool:
@@ -73,6 +82,15 @@ class ModelInfo:
         if not self.pricing:
             return False
         return all(p is not None and p == 0 for p in self.pricing.values())
+
+    @property
+    def text_out(self) -> bool:
+        """Answers in text only (music, image and speech models are left out)."""
+        return self.output_modalities == {"text"}
+
+    @property
+    def reasoning(self) -> bool:
+        return "reasoning" in self.supported_parameters
 
     @property
     def structured(self) -> bool:
@@ -85,11 +103,13 @@ class ModelInfo:
     @classmethod
     def from_api(cls, d: dict[str, Any]) -> ModelInfo:
         raw = d.get("pricing") or {}
+        out = (d.get("architecture") or {}).get("output_modalities") or ["text"]
         return cls(
             id=str(d["id"]),
             context_length=int(d.get("context_length") or 0),
             pricing={k: _price(v) for k, v in raw.items()},
             supported_parameters=frozenset(d.get("supported_parameters") or []),
+            output_modalities=frozenset(str(x) for x in out),
         )
 
 
@@ -183,6 +203,7 @@ class FreeModelRouter:
         self._models_at: float | None = None
         self._cooldowns: dict[str, _Cooldown] = {}
         self._banned: set[str] = set()  # charged money once: never again this process
+        self._must_reason: set[str] = set()  # refuse to answer with reasoning off
 
     # ---- model list
 
@@ -199,12 +220,17 @@ class FreeModelRouter:
         return self._models
 
     def free_models(self) -> list[ModelInfo]:
-        return [m for m in self.refresh_models() if m.is_free and m.id not in self._banned]
+        return [
+            m
+            for m in self.refresh_models()
+            if m.is_free and m.text_out and m.id not in self._banned
+        ]
 
     def candidates(self, min_context: int | None = None) -> list[ModelInfo]:
         """Free models, best first: preferred list order, then models with JSON
         schema support, then JSON mode, then the rest; larger context breaks ties.
-        Models on cooldown are left out."""
+        Models that cannot answer without reasoning go last: they often spend the
+        whole budget thinking. Models on cooldown are left out."""
         need = self.min_context if min_context is None else min_context
         now = self._clock()
         pool = [
@@ -215,11 +241,12 @@ class FreeModelRouter:
         ]
         rank = {mid: i for i, mid in enumerate(self.preferred)}
 
-        def key(m: ModelInfo) -> tuple[int, int, int]:
+        def key(m: ModelInfo) -> tuple[int, int, int, int]:
+            last = 1 if m.id in self._must_reason else 0
             if m.id in rank:
-                return (0, rank[m.id], 0)
+                return (last, 0, rank[m.id], 0)
             tier = 1 if m.structured else 2 if m.json_mode else 3
-            return (tier, 0, -m.context_length)
+            return (last, tier, 0, -m.context_length)
 
         return sorted(pool, key=key)
 
@@ -242,6 +269,13 @@ class FreeModelRouter:
             "max_tokens": max_tokens,
             "usage": {"include": True},  # report real cost so we can verify $0
         }
+        if m.reasoning:
+            if m.id in self._must_reason:
+                # Thinking cannot be switched off: give room for it and the answer.
+                body["max_tokens"] = max_tokens * REASONING_BUDGET_FACTOR
+                body["reasoning"] = {"effort": "low", "exclude": True}
+            else:
+                body["reasoning"] = {"enabled": False}
         if schema is not None and m.structured:
             body["response_format"] = {
                 "type": "json_schema",
@@ -269,11 +303,17 @@ class FreeModelRouter:
         `validate` receives the parsed JSON and returns the typed value, raising
         InvalidOutput (or pydantic ValidationError / ValueError) to reject it."""
         attempts: list[Attempt] = []
-        for m in self.candidates(min_context)[: self.max_models_per_call]:
+        queue = self.candidates(min_context)[: self.max_models_per_call]
+        retried: set[str] = set()
+        while queue:
+            m = queue.pop(0)
             t0 = self._clock()
             outcome, result = self._try(m, messages, validate, schema, schema_name, max_tokens)
             attempts.append(Attempt(m.id, outcome, round(self._clock() - t0, 2)))
             log.info("llm_attempt", purpose=purpose, model=m.id, outcome=outcome)
+            if outcome == "needs_reasoning" and m.id not in retried:
+                retried.add(m.id)
+                queue.append(m)  # once more, after the others, with reasoning on
             if result is not None:
                 result.attempts = attempts
                 return result
@@ -298,6 +338,11 @@ class FreeModelRouter:
             self._cool(m.id, "network", 5 * 60)
             return f"network_error:{type(e).__name__}", None
 
+        if r.status_code in (402, 403) and "limit" in r.text.lower():
+            # "Key limit exceeded": the model is charging against the key's $0
+            # credit limit, so it is not really free.
+            self._banned.add(m.id)
+            return "not_free", None
         if r.status_code in (401, 403):
             # 403 can also mean a moderation refusal on one model; the key check
             # on /models tells the two apart.
@@ -313,6 +358,9 @@ class FreeModelRouter:
             return "rate_limited", None
         if r.status_code in (400, 404):
             text = r.text.lower()
+            if "reasoning is mandatory" in text and m.id not in self._must_reason:
+                self._must_reason.add(m.id)
+                return "needs_reasoning", None  # retried later in this call, with room
             if "free" in text or "not found" in text or "unavailable" in text:
                 self._cool(m.id, "unavailable", self.models_ttl_s)
                 return "unavailable", None
@@ -340,10 +388,15 @@ class FreeModelRouter:
                 self._on_paid_usage(m.id, cost)
 
         try:
-            msg = data["choices"][0]["message"]
-            text = msg.get("content")
+            choice = data["choices"][0]
+            text = choice["message"].get("content")
         except (KeyError, IndexError, TypeError):
             return "bad_response", None
+        if not (text or "").strip() and choice.get("finish_reason") == "length":
+            # Spent the whole budget thinking and never answered.
+            self._must_reason.add(m.id)
+            self._cool(m.id, "truncated")
+            return "truncated", None
         try:
             value = validate(extract_json(text))
         except InvalidOutput:

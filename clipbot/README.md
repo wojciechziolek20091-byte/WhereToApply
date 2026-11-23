@@ -176,7 +176,10 @@ In dry run, what would have been posted is in `data/dryrun/`.
 (`clipbot web` opens just the dashboard). From there you can:
 
 - see whether the bot is running, and pause or resume it
-- paste a YouTube link to clip
+- paste a YouTube link to clip, and choose how many clips to make from it (1-10)
+- follow each pasted video live under **Clipping Now**: queued, downloading,
+  transcribing, picking clips, making clips (2 of 3 made), checking, ready or failed
+  with the reason
 - watch every clip before it posts, with its caption and QA results, and approve,
   reject or remove it
 - follow each video's progress and the recent activity
@@ -251,8 +254,12 @@ networks, especially cloud servers. clipbot retries after 1, 6 and 16 hours, the
 alerts. It never uses cookies or proxies to get around this. Run it from a home
 connection, or have the creator send you the files and use `acquire: local_folder`.
 
-**"no free model gave a valid answer"**: every free OpenRouter model was busy. The
-video or clip waits 30 minutes and tries again on its own.
+**"no free model gave a valid answer"**: every free OpenRouter model it tried was
+busy or failed. The video or clip waits 30 minutes and tries again on its own, and
+the dashboard shows "The free AI models are busy" with the retry time. Many free
+models "think" before answering and used to spend the whole answer budget on that,
+returning nothing; clipbot now switches thinking off where a model allows it, tries
+models that insist on thinking last, and skips music and image models.
 
 ---
 
@@ -290,7 +297,7 @@ source too (the zip already contains it).
 ## Development
 
 ```bash
-make check        # ruff + pytest (280 tests)
+make check        # ruff + pytest
 CLIPBOT_LIVE=1 uv run pytest -k live   # also calls the real free models
 ```
 

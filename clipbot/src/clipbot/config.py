@@ -26,6 +26,7 @@ from pydantic import (
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 POSTS_PER_DAY_CEILING = 8
+MAX_CLIPS = 10  # most clips one video can be asked for
 
 Rights = Literal["own", "cc_by", "permission"]
 RIGHTS_VALUES: tuple[str, ...] = ("own", "cc_by", "permission")
@@ -76,7 +77,7 @@ class LLMSettings(_Strict):
     # Tried first, in this order, while they are free. Any other free model on
     # OpenRouter is used after these.
     preferred_models: list[str] = Field(
-        default_factory=lambda: ["nvidia/nemotron-3.5-super-vl:free", "google/gemma-4-31b-it:free"]
+        default_factory=lambda: ["nvidia/nemotron-3.5-super-vl:free", "openrouter/free"]
     )
     min_context_tokens: int = Field(32_000, ge=8_000)
     max_models_per_call: int = Field(6, ge=1, le=20)
@@ -99,7 +100,7 @@ class DiscoverySettings(_Strict):
 class ClipSettings(_Strict):
     min_seconds: float = Field(20, gt=0)
     max_seconds: float = Field(60, gt=0)
-    per_video: int = Field(3, ge=1)
+    per_video: int = Field(3, ge=1, le=MAX_CLIPS)
     min_score: int = Field(70, ge=0, le=100)
     pre_roll: float = Field(0.2, ge=0)
     post_roll: float = Field(0.4, ge=0)

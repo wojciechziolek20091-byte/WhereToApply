@@ -61,7 +61,10 @@ if (status) {
       const r = await fetch(status.dataset.poll, { credentials: "same-origin" });
       if (!r.ok) return;
       const s = await r.json();
-      const key = JSON.stringify([s.running, s.paused, s.clips, s.videos]);
+      // Video stages are shown live in "Clipping Now"; reload only for what the
+      // rest of the page shows: bot state and finished clips.
+      const c = s.clips || {};
+      const key = JSON.stringify([s.running, s.paused, c.qa_passed, c.scheduled, c.awaiting_approval, c.published]);
       const busy = document.activeElement && ["INPUT", "SELECT"].includes(document.activeElement.tagName);
       if (last !== null && key !== last && !busy) location.reload();
       last = key;
@@ -69,4 +72,26 @@ if (status) {
   };
   check();
   setInterval(check, 10000);
+}
+
+// "Clipping Now": refresh the stage of each video every few seconds.
+const jobs = document.querySelector("[data-progress]");
+if (jobs) {
+  const panel = jobs.closest("section");
+  let last = jobs.innerHTML.trim();
+  const refresh = async () => {
+    if (document.hidden) return;
+    try {
+      const r = await fetch(jobs.dataset.progress, { credentials: "same-origin" });
+      if (!r.ok) return;
+      const html = (await r.text()).trim();
+      if (html !== last) {
+        last = html;
+        jobs.innerHTML = html;
+        formatTimes();
+      }
+      panel.hidden = html === "";
+    } catch (_) { /* briefly offline */ }
+  };
+  setInterval(refresh, 3000);
 }

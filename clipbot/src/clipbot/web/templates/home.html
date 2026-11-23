@@ -30,10 +30,21 @@
     <label for="url">YouTube link</label>
     <div class="link-row">
       <input id="url" type="url" name="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…">
+      <div class="count-field">
+        <label for="count" class="sr-only">Number of clips</label>
+        <select id="count" name="count" aria-label="Number of clips">
+          {% for n in range(1, max_clips + 1) %}<option value="{{ n }}"{% if n == s.clips.per_video %} selected{% endif %}>{{ n }} clip{{ '' if n == 1 else 's' }}</option>{% endfor %}
+        </select>
+      </div>
       <button class="btn primary" data-busy="Checking…">Clip Video</button>
     </div>
     <p class="muted small">Accepted when the channel is in your sources with a rights tag, or the video is Creative Commons.</p>
   </form>
+</section>
+
+<section class="panel" aria-labelledby="progress-h" id="progress"{% if not jobs %} hidden{% endif %}>
+  <h2 id="progress-h">Clipping Now</h2>
+  <div class="jobs" data-progress="/progress" aria-live="polite">{% include "_progress.html" %}</div>
 </section>
 
 <section class="panel metrics" aria-label="Posting">

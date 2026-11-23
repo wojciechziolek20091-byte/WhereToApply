@@ -496,3 +496,94 @@ def test_settings_shows_accounts_and_channels(config_dir: Path) -> None:
     page = client(config_dir).get("/settings").text
     assert "Accounts" in page and "Channels" in page and "Practice mode" in page
     assert "Not connected: clips are made but not posted" in page
+
+
+# ---------------------------------------------------------------- progress
+
+
+def test_clip_count_and_live_progress(config_dir: Path) -> None:
+    cc = meta(
+        "bbbbbbbbbbb",
+        channel_id=OTHER_CHANNEL,
+        channel_title="CC Chan",
+        license="creativeCommon",
+        title="A CC talk",
+    )
+    c = client(config_dir, metas=[cc])
+    home = c.get("/").text
+    assert 'id="count"' in home and 'value="3" selected' in home
+    assert 'id="progress" hidden' in home  # nothing being clipped yet
+    r = c.post(
+        "/clip",
+        data={"csrf": token(c), "url": "https://youtu.be/bbbbbbbbbbb", "count": "5"},
+        follow_redirects=True,
+    )
+    assert "Clipping Now" in r.text and 'id="progress" hidden' not in r.text
+    conn, _ = conn_for(config_dir)
+    meta_json = conn.execute("SELECT meta_json FROM videos WHERE id='bbbbbbbbbbb'").fetchone()[0]
+    assert '"clip_count": 5' in meta_json
+    frag = c.get("/progress").text
+    assert "A CC talk" in frag and 'aria-current="step">Queued' in frag
+    assert "Aiming for 5 clips" in frag
+    # Changing the number while it is still queued takes effect.
+    r = c.post(
+        "/clip",
+        data={"csrf": token(c), "url": "https://youtu.be/bbbbbbbbbbb", "count": "2"},
+        follow_redirects=True,
+    )
+    assert "new number of clips will be used" in r.text
+    # Out-of-range numbers are clamped.
+    c.post(
+        "/clip",
+        data={"csrf": token(c), "url": "https://youtu.be/bbbbbbbbbbb", "count": "99"},
+    )
+    meta_json = conn.execute("SELECT meta_json FROM videos WHERE id='bbbbbbbbbbb'").fetchone()[0]
+    assert '"clip_count": 10' in meta_json
+
+
+def test_progress_stages_waits_and_outcomes(config_dir: Path) -> None:
+    from clipbot.web.status import progress
+
+    conn, _ = conn_for(config_dir)
+    now = db.iso(NOW)
+    conn.execute(
+        "INSERT INTO sources(id, youtube_channel_id, name, rights, updated_at) "
+        "VALUES ('mine', 'UCabcdefghijklmnopqrstuv', 'Mine', 'own', ?)",
+        (now,),
+    )
+    later = db.iso(NOW + timedelta(minutes=30))
+    old = db.iso(NOW - timedelta(hours=5))
+    rows = [
+        ("v_busy00001", "transcribed", "select: no free model gave a valid answer (x)", later, now),
+        ("v_making001", "selected", "2 clip(s)", None, now),
+        ("v_ready0001", "done", "", None, now),
+        ("v_failed001", "failed", "download refused", None, now),
+        ("v_oldone001", "done", "", None, old),
+    ]
+    for i, (vid, state, reason, nxt, changed) in enumerate(rows):
+        conn.execute(
+            "INSERT INTO videos(id, source_id, title, state, state_reason, next_attempt_at, "
+            "state_changed_at, created_at, updated_at) VALUES (?, 'mine', ?, ?, ?, ?, ?, ?, ?)",
+            (vid, vid, state, reason, nxt, changed, db.iso(NOW + timedelta(seconds=i)), now),
+        )
+    for cid, vid, st in [
+        ("c1", "v_making001", "qa_passed"),
+        ("c2", "v_making001", "rendering"),
+        ("c3", "v_ready0001", "qa_passed"),
+        ("c4", "v_ready0001", "qa_rejected"),
+    ]:
+        conn.execute(
+            "INSERT INTO clips(id, video_id, start_ms, end_ms, score, hook, title, summary, "
+            "state, state_changed_at, created_at, updated_at) "
+            "VALUES (?, ?, 0, 1000, 80, 'h', 't', 's', ?, ?, ?, ?)",
+            (cid, vid, st, now, now, now),
+        )
+    jobs = {j["id"]: j for j in progress(conn, NOW, limit=10)}
+    assert "v_oldone001" not in jobs  # finished long ago
+    busy = jobs["v_busy00001"]
+    assert busy["stage"] == 3 and busy["wait"] == "The free AI models are busy"
+    making = jobs["v_making001"]
+    assert making["stage"] == 4 and making["detail"] == "1 of 2 made"
+    assert jobs["v_ready0001"]["outcome"] == "ready"
+    assert jobs["v_ready0001"]["detail"] == "1 clip ready"
+    assert jobs["v_failed001"]["outcome"] == "failed"

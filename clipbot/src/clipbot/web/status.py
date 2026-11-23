@@ -261,3 +261,97 @@ def ago(t: datetime | None, now: datetime) -> str:
     if s < 172800:
         return f"{s / 3600:.1f} h ago"
     return f"{s / 86400:.0f} days ago"
+
+
+# --------------------------------------------------------------------------- progress
+
+STAGES = ("Queued", "Downloading", "Transcribing", "Picking clips", "Making clips", "Checking")
+_STAGE_OF = {
+    "discovered": 0,
+    "acquiring": 1,
+    "acquire_failed": 1,
+    "acquired": 2,
+    "transcribing": 2,
+    "transcribed": 3,
+    "selecting": 3,
+}
+FINISHED = ("done", "skipped", "failed")
+SHOW_FINISHED_FOR = timedelta(hours=2)
+_UNRENDERED = ("selected", "rendering")
+_UNCHECKED = (*_UNRENDERED, "rendered")
+_GOOD = ("qa_passed", "scheduled", "publishing", "published", "awaiting_approval")
+
+
+def _friendly_wait(state: str, reason: str) -> str:
+    if state == "transcribed" and "no free model" in reason:
+        return "The free AI models are busy"
+    if state == "acquire_failed":
+        return "The download did not work"
+    return reason.split(" (")[0][:140] if reason else "Waiting"
+
+
+def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[dict[str, Any]]:
+    """Videos being clipped right now, plus ones that finished in the last two
+    hours, each with its stage, clip counts and any wait or failure reason."""
+    since = db.iso(now - SHOW_FINISHED_FOR)
+    rows = conn.execute(
+        "SELECT id, title, channel_title, state, state_reason, next_attempt_at, meta_json, "
+        "state_changed_at FROM videos "
+        f"WHERE state NOT IN {FINISHED} OR state_changed_at >= ? "
+        "ORDER BY created_at DESC LIMIT ?",
+        (since, limit),
+    ).fetchall()
+    out = []
+    for r in rows:
+        clips = conn.execute(
+            "SELECT state, COUNT(*) AS n FROM clips WHERE video_id = ? GROUP BY state", (r["id"],)
+        ).fetchall()
+        by = {c["state"]: c["n"] for c in clips}
+        total = sum(by.values())
+        rendered = total - sum(by.get(s, 0) for s in _UNRENDERED)
+        checked = total - sum(by.get(s, 0) for s in _UNCHECKED)
+        good = sum(by.get(s, 0) for s in _GOOD)
+        state, reason = r["state"], r["state_reason"] or ""
+        meta = json.loads(r["meta_json"] or "{}")
+        item: dict[str, Any] = {
+            "id": r["id"],
+            "title": r["title"] or r["id"],
+            "channel": r["channel_title"] or "",
+            "requested": meta.get("clip_count"),
+            "total": total,
+            "good": good,
+            "outcome": None,
+            "detail": "",
+            "wait": "",
+            "retry_at": None,
+        }
+        if state in FINISHED:
+            item["stage"] = len(STAGES)
+            if state == "done" and good:
+                item["outcome"] = "ready"
+                item["detail"] = f"{good} clip{'' if good == 1 else 's'} ready"
+            elif state == "done":
+                item["outcome"] = "none"
+                item["detail"] = (
+                    f"No clip passed the checks ({total} made)"
+                    if total
+                    else "The AI found no moment worth clipping"
+                )
+            else:
+                item["outcome"] = "failed"
+                item["detail"] = reason[:200] or STATE_LABEL.get(state, state)
+        elif state == "selected":
+            if rendered < total:
+                item["stage"] = 4
+                item["detail"] = f"{rendered} of {total} made"
+            else:
+                item["stage"] = 5
+                item["detail"] = f"{checked} of {total} checked"
+        else:
+            item["stage"] = _STAGE_OF.get(state, 0)
+        retry = db.parse_iso(r["next_attempt_at"]) if r["next_attempt_at"] else None
+        if state not in FINISHED and retry is not None and retry > now:
+            item["wait"] = _friendly_wait(state, reason)
+            item["retry_at"] = retry
+        out.append(item)
+    return out

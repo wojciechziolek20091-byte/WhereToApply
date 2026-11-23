@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 from clipbot import accounts as acc
 from clipbot import db
-from clipbot.config import PRIVACY_LEVELS, AppConfig, ConfigError, Settings, load_config
+from clipbot.config import MAX_CLIPS, PRIVACY_LEVELS, AppConfig, ConfigError, Settings, load_config
 from clipbot.models import DataPaths
 from clipbot.tools import ffmpeg_exe
 from clipbot.web import status as st
@@ -171,6 +171,18 @@ def create_app(
                 events=st.recent_events(conn),
                 review=st.clip_views(conn, ("awaiting_approval",), 6),
                 ready=st.clip_views(conn, ("qa_passed", "scheduled"), 3),
+                jobs=st.progress(conn, now),
+                stages=st.STAGES,
+                max_clips=MAX_CLIPS,
+            )
+
+    @app.get("/progress", response_class=HTMLResponse, dependencies=deps)
+    def progress_fragment(request: Request) -> HTMLResponse:
+        """The "Clipping Now" panel's contents, polled by the overview page."""
+        cfg = config()
+        with database(cfg) as (conn, _):
+            return page(
+                request, "_progress.html", cfg, jobs=st.progress(conn, clock()), stages=st.STAGES
             )
 
     @app.get("/clips", response_class=HTMLResponse, dependencies=deps)
@@ -320,7 +332,9 @@ def create_app(
         return back("/", "Resumed.")
 
     @app.post("/clip", dependencies=post_deps)
-    def do_clip(url: Annotated[str, Form()]) -> RedirectResponse:
+    def do_clip(
+        url: Annotated[str, Form()], count: Annotated[int | None, Form()] = None
+    ) -> RedirectResponse:
         from clipbot.pipeline import Pipeline
         from clipbot.sources.youtube_api import BadVideoURL, YouTubeError
 
@@ -330,7 +344,8 @@ def create_app(
             make = pipeline_factory or Pipeline
             pipe = make(conn, cfg, paths)
             try:
-                reg = pipe.ingest_url(url.strip())
+                n = min(max(count, 1), MAX_CLIPS) if count else None
+                reg = pipe.ingest_url(url.strip(), clip_count=n)
             except BadVideoURL:
                 return back("/", "That is not a YouTube video link.", error=True)
             except (LookupError, YouTubeError) as e:
@@ -339,8 +354,9 @@ def create_app(
         if reg.state == "skipped":
             return back("/", f"Refused {label}: {reg.reason}", error=True)
         if not reg.new:
-            return back("/", f"Already known: {label} ({st.STATE_LABEL.get(reg.state)}).")
-        return back("/", f"Accepted {label}. The bot will download and clip it next.")
+            more = " The new number of clips will be used." if reg.count_updated else ""
+            return back("/", f"Already known: {label} ({st.STATE_LABEL.get(reg.state)}).{more}")
+        return back("/", f"Accepted {label}. Follow it under Clipping Now.")
 
     def clip_action(clip_id: str, expect: set[str], to: str, reason: str) -> None:
         cfg = config()

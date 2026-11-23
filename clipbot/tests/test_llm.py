@@ -226,3 +226,82 @@ def test_extract_json() -> None:
     for bad in ("", None, "nope", "{broken"):
         with pytest.raises(InvalidOutput):
             extract_json(bad)
+
+
+def thinking(text: str = "", finish: str = "length") -> httpx.Response:
+    return httpx.Response(
+        200,
+        json={
+            "choices": [
+                {"message": {"content": text, "reasoning": "hmm " * 500}, "finish_reason": finish}
+            ],
+            "usage": {"prompt_tokens": 11, "completion_tokens": 6000, "cost": 0},
+        },
+    )
+
+
+MANDATORY = httpx.Response(
+    400,
+    json={"error": {"message": "Reasoning is mandatory for this endpoint and cannot be disabled."}},
+)
+
+
+def test_reasoning_switched_off_when_supported() -> None:
+    models = [model("free/think", params=("structured_outputs", "reasoning")), model("free/plain")]
+    fake = Fake({"free/think": [reply('{"ok": true}')]}, models=models)
+    call(fake.router(preferred=["free/think"]))
+    assert fake.calls[0]["reasoning"] == {"enabled": False}
+    fake.script["free/plain"] = [reply('{"ok": true}')]
+    r = fake.router(preferred=["free/plain"])
+    call(r)
+    assert "reasoning" not in fake.calls[1]
+
+
+def test_empty_reply_cut_off_by_thinking_is_truncated() -> None:
+    models = [model("free/think", params=("reasoning",)), model("free/plain")]
+    fake = Fake({"free/think": [thinking()], "free/plain": [reply('{"ok": true}')]}, models=models)
+    r = fake.router(preferred=["free/think", "free/plain"])
+    res = call(r)
+    assert [a.outcome for a in res.attempts] == ["truncated", "ok"]
+    assert "free/think" in r._must_reason
+
+
+def test_mandatory_reasoning_retried_last_with_bigger_budget() -> None:
+    models = [model("free/think", params=("reasoning",)), model("free/plain")]
+    fake = Fake(
+        {
+            "free/think": [MANDATORY, reply('{"ok": true}')],
+            "free/plain": [httpx.Response(429, json={})],
+        },
+        models=models,
+    )
+    r = fake.router(preferred=["free/think", "free/plain"])
+    res = call(r)
+    assert [a.outcome for a in res.attempts] == ["needs_reasoning", "rate_limited", "ok"]
+    last = fake.calls[-1]
+    assert last["reasoning"] == {"effort": "low", "exclude": True}
+    assert last["max_tokens"] == 4096 * 3
+    # From now on it is ranked behind models that can answer without thinking.
+    r._cooldowns.clear()
+    assert [m.id for m in r.candidates()][-1] == "free/think"
+
+
+def test_non_text_models_are_not_candidates() -> None:
+    music = model("free/music") | {"architecture": {"output_modalities": ["text", "audio"]}}
+    fake = Fake({}, models=[music, model("free/a")])
+    assert [m.id for m in fake.router().candidates()] == ["free/a"]
+
+
+def test_key_limit_exceeded_bans_model() -> None:
+    fake = Fake(
+        {
+            "free/a": [
+                httpx.Response(403, json={"error": {"message": "Key limit exceeded (total limit)"}})
+            ],
+            "free/b": [reply('{"ok": true}')],
+        }
+    )
+    r = fake.router()
+    res = call(r)
+    assert res.attempts[0].outcome == "not_free"
+    assert "free/a" in r._banned

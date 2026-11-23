@@ -58,6 +58,11 @@ ACQUIRE_RETRY_DELAYS = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=
 SELECT_RETRY_DELAY = timedelta(minutes=30)
 
 
+BEFORE_SELECT = frozenset(
+    {"discovered", "acquiring", "acquired", "acquire_failed", "transcribing", "transcribed"}
+)
+
+
 @dataclass(frozen=True)
 class Registered:
     video_id: str
@@ -66,6 +71,7 @@ class Registered:
     new: bool
     title: str = ""
     channel: str = ""
+    count_updated: bool = False
 
 
 class Pipeline:
@@ -175,6 +181,7 @@ class Pipeline:
         source: Source,
         decision: Decision,
         origin: str,
+        clip_count: int | None = None,
     ) -> Registered:
         existing = self.conn.execute(
             "SELECT state, state_reason FROM videos WHERE id = ?", (meta.id,)
@@ -210,7 +217,10 @@ class Pipeline:
                     state,
                     decision.reason,
                     now,
-                    json.dumps({"origin": origin, "channel_id": meta.channel_id}),
+                    json.dumps(
+                        {"origin": origin, "channel_id": meta.channel_id}
+                        | ({"clip_count": clip_count} if clip_count else {})
+                    ),
                     now,
                     now,
                 ),
@@ -269,13 +279,30 @@ class Pipeline:
             out.append(self.register(meta, source, self._gate(meta, source, cutoff), "rss"))
         return out
 
-    def ingest_url(self, url: str) -> Registered:
-        """Register a video pasted by link. Raises BadVideoURL on a bad link."""
+    def ingest_url(self, url: str, clip_count: int | None = None) -> Registered:
+        """Register a video pasted by link. Raises BadVideoURL on a bad link.
+
+        `clip_count` asks for that many clips instead of `clips.per_video`. For a
+        video already known it still applies while its clips are not picked yet."""
         vid = parse_video_id(url)
         row = self.conn.execute(
-            "SELECT state, state_reason, title, channel_title FROM videos WHERE id = ?", (vid,)
+            "SELECT state, state_reason, title, channel_title, meta_json FROM videos WHERE id = ?",
+            (vid,),
         ).fetchone()
         if row:
+            updated = False
+            meta = json.loads(row["meta_json"] or "{}")
+            if (
+                clip_count
+                and row["state"] in BEFORE_SELECT
+                and meta.get("clip_count") != clip_count
+            ):
+                meta["clip_count"] = clip_count
+                with db.tx(self.conn):
+                    self.conn.execute(
+                        "UPDATE videos SET meta_json = ? WHERE id = ?", (json.dumps(meta), vid)
+                    )
+                updated = True
             return Registered(
                 vid,
                 row["state"],
@@ -283,6 +310,7 @@ class Pipeline:
                 False,
                 row["title"] or "",
                 row["channel_title"] or "",
+                updated,
             )
         meta = self.yt.video(vid)
         if meta is None:
@@ -300,7 +328,7 @@ class Pipeline:
                 f"no rights: channel {meta.channel_title!r} is not in sources.yaml "
                 f"and the video license is {meta.license!r}, not Creative Commons",
             )
-        return self.register(meta, source, decision, "url")
+        return self.register(meta, source, decision, "url", clip_count)
 
     # ------------------------------------------------------------------ acquire
 
@@ -555,7 +583,12 @@ class Pipeline:
 
     # ------------------------------------------------------------------ select
 
-    def rules(self) -> SnapRules:
+    def clip_count(self, row: sqlite3.Row) -> int:
+        """Clips wanted for this video: chosen when it was pasted, else the setting."""
+        n = json.loads(row["meta_json"] or "{}").get("clip_count")
+        return int(n) if n else self.cfg.settings.clips.per_video
+
+    def rules(self, count: int | None = None) -> SnapRules:
         c = self.cfg.settings.clips
         return SnapRules(
             min_seconds=c.min_seconds,
@@ -563,7 +596,7 @@ class Pipeline:
             pre_roll=c.pre_roll,
             post_roll=c.post_roll,
             min_score=c.min_score,
-            per_video=c.per_video,
+            per_video=count or c.per_video,
             blocked_flags=frozenset(c.blocked_risk_flags),
         )
 
@@ -576,6 +609,7 @@ class Pipeline:
         tr = Transcript.from_json(Path(row["transcript_path"]).read_text(encoding="utf-8"))
         source = self.source_by_id(row["source_id"])
         clips = self.cfg.settings.clips
+        wanted = self.clip_count(row)
         log_dir = self.paths.work_dir(video_id) / "select"
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -592,7 +626,7 @@ class Pipeline:
                     topics_hint=source.topics_hint,
                     min_s=clips.min_seconds,
                     max_s=clips.max_seconds,
-                    n=max(clips.per_video * 2, 5),
+                    n=max(wanted * 2, 5),
                     window=(ws, we) if len(wins) > 1 else None,
                 )
                 res = self.router.complete_json(
@@ -664,7 +698,7 @@ class Pipeline:
             return "transcribed"
 
         merged = merge_window_candidates(per_window)
-        plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules())
+        plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules(wanted))
         (log_dir / "plan.json").write_text(
             json.dumps(
                 {

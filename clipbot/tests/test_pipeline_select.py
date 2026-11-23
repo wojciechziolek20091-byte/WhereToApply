@@ -163,3 +163,23 @@ def test_local_file_needs_a_source_whose_rights_apply(env, config_dir: Path) -> 
 def test_parse_selection_used_by_router_validates() -> None:
     with pytest.raises(Exception):  # noqa: B017
         parse_selection({"nope": 1})
+
+
+def test_clip_count_chosen_per_video(env) -> None:
+    router = FakeRouter([{"clips": [clip(10.4, 43.5, 90), clip(50, 80, 88), clip(100, 130, 86)]}])
+    p = make(env, yt=FakeYT([]))
+    p._router = router
+    p._transcribe = FakeTranscriber(fake_transcript())
+    src = make_mp4(env[1].root / "in" / "ep1.mp4", seconds=181)
+    vid = p.ingest_file(src, "mine", title="Episode 1").video_id
+    env[2].execute(
+        "UPDATE videos SET meta_json = json_set(meta_json, '$.clip_count', 1) WHERE id = ?",
+        (vid,),
+    )
+    p.acquire(vid)
+    p.transcribe(vid)
+    p.step(vid)
+    rows = env[2].execute("SELECT score FROM clips WHERE video_id = ?", (vid,)).fetchall()
+    assert [r["score"] for r in rows] == [90]  # only the best one, as asked
+    plan = json.loads((p.paths.work_dir(vid) / "select" / "plan.json").read_text())
+    assert any("per_video=1" in d["reason"] for d in plan["dropped"])

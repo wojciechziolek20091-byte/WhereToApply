@@ -76,7 +76,7 @@
 <section class="panel" aria-labelledby="clips-h">
   <h2 id="clips-h">Clips</h2>
   <div class="fields">
-    <div class="field"><label for="pv">Clips per video</label><input id="pv" type="number" name="per_video" min="1" inputmode="numeric" autocomplete="off" value="{{ s.clips.per_video }}"></div>
+    <div class="field"><label for="pv">Clips per video</label><input id="pv" type="number" name="per_video" min="1" max="10" inputmode="numeric" autocomplete="off" value="{{ s.clips.per_video }}"></div>
     <div class="field"><label for="ms">Minimum AI score</label><input id="ms" type="number" name="min_score" min="0" max="100" inputmode="numeric" autocomplete="off" value="{{ s.clips.min_score }}"></div>
     <div class="field"><label for="mins">Shortest clip, seconds</label><input id="mins" type="number" name="min_seconds" min="3" step="1" inputmode="numeric" autocomplete="off" value="{{ '%g'|format(s.clips.min_seconds) }}"></div>
     <div class="field"><label for="maxs">Longest clip, seconds</label><input id="maxs" type="number" name="max_seconds" max="600" step="1" inputmode="numeric" autocomplete="off" value="{{ '%g'|format(s.clips.max_seconds) }}"></div>
