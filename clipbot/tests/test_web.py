@@ -348,8 +348,12 @@ def test_activity_is_plain_english() -> None:
 
     assert _event_text("qa", "qa_passed: all gates passed") == ("Checks passed", "")
     assert _event_text("qa", "qa_rejected: visual: 3.0s black") == (
-        "Checks failed", "visual: 3.0s black")
+        "Checks failed",
+        "visual: 3.0s black",
+    )
     assert _event_text("render", "rendered") == ("Clip made", "")
     assert _event_text("publish_submit", "submitted via dryrun") == ("Dry-run post", "")
     assert _event_text("discover", "skipped: too short (60s < 180s)") == (
-        "Video skipped", "too short (60s < 180s)")
+        "Video skipped",
+        "too short (60s < 180s)",
+    )
