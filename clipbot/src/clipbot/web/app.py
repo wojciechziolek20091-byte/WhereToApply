@@ -10,6 +10,7 @@ bot downloads, transcribes, renders and posts it. Safe by default:
 
 import io
 import ipaddress
+import json
 import os
 import secrets
 import threading
@@ -29,6 +30,7 @@ from pydantic import ValidationError
 
 from clipbot import accounts as acc
 from clipbot import db
+from clipbot import stats as stats_mod
 from clipbot.config import (
     CAPTION_LANGUAGES,
     MAX_CLIPS,
@@ -121,8 +123,11 @@ def create_app(
 
     async def check_csrf(request: Request) -> None:
         same_origin(request)
-        form = await request.form()
-        if not secrets.compare_digest(str(form.get("csrf", "")), csrf):
+        sent = request.headers.get("x-csrf-token")
+        if sent is None:
+            form = await request.form()
+            sent = str(form.get("csrf", ""))
+        if not secrets.compare_digest(sent, csrf):
             raise HTTPException(403, "this page has expired; reload it and try again")
 
     @contextmanager
@@ -171,11 +176,7 @@ def create_app(
         with database(cfg) as (conn, paths):
             bot = st.bot_state(conn, paths, now)
             nxt, why = st.next_post_time(conn, cfg.settings, now)
-            since = db.iso(now - timedelta(hours=24))
-            posted_24h = conn.execute(
-                f"SELECT COUNT(*) FROM clips WHERE state IN {st.POSTED} AND submitted_at >= ?",
-                (since,),
-            ).fetchone()[0]
+            counts = st.counts(conn, "clips")
             return page(
                 request,
                 "home.html",
@@ -183,12 +184,27 @@ def create_app(
                 bot=bot,
                 next_post=nxt,
                 next_why=why,
-                posted_24h=posted_24h,
-                clips=st.counts(conn, "clips"),
-                videos=st.counts(conn, "videos"),
-                events=st.recent_events(conn),
+                greeting=greeting(now.astimezone(cfg.settings.tz)),
+                stats=stats_mod.home_stats(conn, now, cfg.settings.tz),
+                compact=stats_mod.compact,
+                ready_count=counts.get("qa_passed", 0) + counts.get("scheduled", 0),
                 review=st.clip_views(conn, ("awaiting_approval",), 6),
-                ready=st.clip_views(conn, ("qa_passed", "scheduled"), 3),
+                recent=st.clip_views(conn, ("qa_passed", "scheduled", "published"), 6),
+                working=len([j for j in st.progress(conn, now) if not j["outcome"]]),
+            )
+
+    @app.get("/upload", response_class=HTMLResponse, dependencies=deps)
+    def upload(request: Request) -> Any:
+        cfg = config()
+        if not is_configured(cfg):
+            return RedirectResponse("/setup", status_code=303)
+        now = clock()
+        with database(cfg) as (conn, _):
+            return page(
+                request,
+                "upload.html",
+                cfg,
+                events=st.recent_events(conn, 8),
                 jobs=st.progress(conn, now),
                 stages=st.STAGES,
                 max_clips=MAX_CLIPS,
@@ -204,20 +220,31 @@ def create_app(
             )
 
     @app.get("/clips", response_class=HTMLResponse, dependencies=deps)
-    def clips(request: Request, tab: str = "ready") -> HTMLResponse:
+    def clips(request: Request, tab: str = "ready", video: str = "") -> HTMLResponse:
         cfg = config()
         if tab not in st.CLIP_TABS:
             tab = "ready"
         with database(cfg) as (conn, _):
             counts = st.counts(conn, "clips")
             tab_counts = {k: sum(counts.get(s, 0) for s in v[1]) for k, v in st.CLIP_TABS.items()}
+            vrow = (
+                conn.execute("SELECT id, title FROM videos WHERE id = ?", (video,)).fetchone()
+                if video
+                else None
+            )
+            if vrow:  # "Go to clips" from a finished video: all its clips
+                states = tuple(sorted(db.CLIP_STATES))
+                items = st.clip_views(conn, states, video_id=vrow["id"])
+            else:
+                items = st.clip_views(conn, st.CLIP_TABS[tab][1])
             return page(
                 request,
                 "clips.html",
                 cfg,
                 tab=tab,
                 tab_counts=tab_counts,
-                items=st.clip_views(conn, st.CLIP_TABS[tab][1]),
+                items=items,
+                video=dict(vrow) if vrow else None,
             )
 
     @app.get("/videos", response_class=HTMLResponse, dependencies=deps)
@@ -324,6 +351,7 @@ def create_app(
 
     @app.post("/pause", dependencies=post_deps)
     def do_pause(
+        request: Request,
         reason: Annotated[str, Form()] = "paused from the dashboard",
         hours: Annotated[str, Form()] = "",
     ) -> RedirectResponse:
@@ -332,10 +360,12 @@ def create_app(
         with database(cfg) as (conn, _):
             db.set_pause(conn, reason.strip() or "paused from the dashboard", until)
             db.log_event(conn, "pause", f"paused: {reason}", data={"by": "dashboard"})
-        return back("/", "Paused. Nothing is processed or posted until you resume.")
+        return back(
+            _return_to(request, "/"), "Paused. Nothing is processed or posted until you resume."
+        )
 
     @app.post("/resume", dependencies=post_deps)
-    def do_resume() -> RedirectResponse:
+    def do_resume(request: Request) -> RedirectResponse:
         cfg = config()
         with database(cfg) as (conn, paths):
             db.clear_pause(conn)
@@ -347,7 +377,7 @@ def create_app(
                     "keeps the bot paused. Delete it to really resume.",
                     error=True,
                 )
-        return back("/", "Resumed.")
+        return back(_return_to(request, "/"), "Resumed.")
 
     @app.post("/clip", dependencies=post_deps)
     def do_clip(
@@ -365,21 +395,25 @@ def create_app(
                 n = min(max(count, 1), MAX_CLIPS) if count else None
                 reg = pipe.ingest_url(url.strip(), clip_count=n)
             except BadVideoURL:
-                return back("/", "That is not a YouTube video link.", error=True)
+                return back("/upload", "That is not a YouTube video link.", error=True)
             except (LookupError, YouTubeError) as e:
-                return back("/", f"Could not look up the video: {e}", error=True)
+                return back("/upload", f"Could not look up the video: {e}", error=True)
         label = f"“{reg.title}” by {reg.channel}" if reg.title else reg.video_id
         if reg.state == "skipped":
-            return back("/", f"Refused {label}: {reg.reason}", error=True)
+            return back("/upload", f"Refused {label}: {reg.reason}", error=True)
         if clip_now:
             start_clipping(cfg, reg.video_id)  # also restarts anything that was stuck
         if reg.again == "more":
-            return back("/", f"Making more clips from {label}, different moments from last time.")
+            return back(
+                "/upload", f"Making more clips from {label}, different moments from last time."
+            )
         if reg.again == "retry":
-            return back("/", f"Trying {label} again now.")
+            return back("/upload", f"Trying {label} again now.")
         if reg.again == "busy":
-            return back("/", f"{label} is being clipped right now. Follow it under Clipping Now.")
-        return back("/", f"Accepted {label}. Follow it under Clipping Now.")
+            return back(
+                "/upload", f"{label} is being clipped right now. Follow it under Clipping Now."
+            )
+        return back("/upload", f"Accepted {label}. Follow it under Clipping Now.")
 
     def start_clipping(cfg: AppConfig, video_id: str) -> None:
         """Run the pasted video from link to clips in a background thread, unless
@@ -387,6 +421,160 @@ def create_app(
         from clipbot import runner
 
         runner.start(cfg, video_id, factory=pipeline_factory)
+
+    @app.post("/videos/{video_id}/deploy", dependencies=post_deps)
+    def deploy_video(video_id: str) -> RedirectResponse:
+        from clipbot.publish import deploy
+
+        cfg = config()
+        with database(cfg) as (conn, _):
+            n = deploy(conn, video_id, clock())
+        if not n:
+            return back("/upload", "Nothing to deploy: these clips are already queued or posted.")
+        p = cfg.settings.publish
+        how = (
+            "Practice mode is on, so they are saved as practice posts, not sent to TikTok."
+            if cfg.settings.dry_run
+            else f"They post one at a time, at least {p.min_gap_minutes} min apart, "
+            f"at most {min(p.posts_per_day, 8)} a day."
+        )
+        return back("/upload", f"Deployed {n} clip{'' if n == 1 else 's'}. {how}")
+
+    # ------------------------------------------------------------------ editor
+
+    def clip_row(conn: Any, clip_id: str) -> Any:
+        row = conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+        if row is None:
+            raise HTTPException(404, "no such clip")
+        return row
+
+    def editor_pipeline(conn: Any, cfg: AppConfig, paths: DataPaths) -> Any:
+        from clipbot.pipeline import Pipeline
+
+        return (pipeline_factory or Pipeline)(conn, cfg, paths)
+
+    @app.get("/clips/{clip_id}/edit", response_class=HTMLResponse, dependencies=deps)
+    def edit_page(request: Request, clip_id: str) -> HTMLResponse:
+        cfg = config()
+        with database(cfg) as (conn, _):
+            c = clip_row(conn, clip_id)
+            v = conn.execute("SELECT title FROM videos WHERE id = ?", (c["video_id"],)).fetchone()
+            return page(
+                request,
+                "editor.html",
+                cfg,
+                clip=dict(c),
+                video_title=v["title"] if v else c["video_id"],
+                locked=c["state"] in ("publishing", "published", "rendering"),
+            )
+
+    @app.get("/clips/{clip_id}/editor.json", dependencies=deps)
+    def editor_data(clip_id: str) -> JSONResponse:
+        """Everything the editor needs: the clip, a playable stretch of the source
+        around it, its subtitle lines and caption."""
+        from clipbot.transcribe import Transcript
+
+        cfg = config()
+        with database(cfg) as (conn, paths):
+            c = clip_row(conn, clip_id)
+            pipe = editor_pipeline(conn, cfg, paths)
+            v = pipe._row(c["video_id"])
+            tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+            try:
+                _, offset, dur = pipe.preview_source(c)
+            except Exception as e:  # shown in the editor
+                raise HTTPException(502, f"could not load the video for editing: {e}") from None
+            cap = pipe.caption(c, v)
+            edit = json.loads(c["edit_json"] or "{}")
+            lim, capset = cfg.settings.clips, cfg.settings.captions
+            return JSONResponse(
+                {
+                    "clip": {
+                        "id": c["id"],
+                        "start": c["start_ms"] / 1000,
+                        "end": c["end_ms"] / 1000,
+                        "hook": c["hook"],
+                        "state": c["state"],
+                    },
+                    "edit": {
+                        "hook_seconds": edit.get("hook_seconds", capset.hook_seconds),
+                        "framing": edit.get("framing", "auto"),
+                        "crop_x": edit.get("crop_x", 0.5),
+                    },
+                    "source": {"offset": offset, "duration": dur, "video_duration": tr.duration},
+                    "limits": {"min": lim.min_seconds, "max": lim.max_seconds},
+                    "lines": pipe.clip_lines(
+                        {
+                            "id": c["id"],
+                            "video_id": c["video_id"],
+                            "start_ms": max(0, round(offset * 1000)),
+                            "end_ms": round((offset + dur) * 1000),
+                        },
+                        tr,
+                    ),
+                    "caption": {
+                        "title": cap.hook if cap else "",
+                        "text": cap.summary if cap else "",
+                        "hashtags": list(cap.hashtags) if cap else [],
+                    },
+                    "language": CAPTION_LANGUAGES.get(cfg.settings.post.language, ""),
+                }
+            )
+
+    @app.get("/clips/{clip_id}/preview.mp4", dependencies=deps)
+    def editor_preview(clip_id: str) -> FileResponse:
+        cfg = config()
+        with database(cfg) as (conn, paths):
+            c = clip_row(conn, clip_id)
+            path, _, _ = editor_pipeline(conn, cfg, paths).preview_source(c)
+        return FileResponse(path, media_type="video/mp4")
+
+    @app.get("/clips/{clip_id}/filmstrip.jpg", dependencies=deps)
+    def editor_filmstrip(clip_id: str) -> FileResponse:
+        """A strip of 20 frames across the editor's stretch of video."""
+        import subprocess
+
+        cfg = config()
+        with database(cfg) as (conn, paths):
+            c = clip_row(conn, clip_id)
+            path, _, dur = editor_pipeline(conn, cfg, paths).preview_source(c)
+            out = paths.work_dir(c["video_id"]) / "render" / clip_id / "filmstrip.jpg"
+        if not out.is_file() or out.stat().st_mtime < path.stat().st_mtime:
+            n = 20
+            subprocess.run(
+                [
+                    ffmpeg_exe(), "-hide_banner", "-loglevel", "error", "-y",
+                    "-skip_frame", "nokey", "-i", str(path),
+                    "-vf", f"fps={n / max(dur, 1):.5f},scale=-2:96,tile={n}x1",
+                    "-frames:v", "1", "-q:v", "5", str(out),
+                ],
+                capture_output=True, timeout=120, check=False,
+            )  # fmt: skip
+        if not out.is_file():
+            raise HTTPException(404)
+        return FileResponse(out, media_type="image/jpeg")
+
+    @app.post("/clips/{clip_id}/edit", dependencies=post_deps)
+    async def save_edit(request: Request, clip_id: str) -> JSONResponse:
+        from clipbot import runner
+        from clipbot.pipeline import EditError
+
+        cfg = config()
+        data = await request.json()
+        with database(cfg) as (conn, paths):
+            pipe = editor_pipeline(conn, cfg, paths)
+            try:
+                pipe.apply_edit(clip_id, data)
+            except EditError as e:
+                return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+            vid = clip_row(conn, clip_id)["video_id"]
+        if clip_now:
+            runner.start(cfg, vid, factory=pipeline_factory)
+        msg = quote(
+            "Saved. The clip is being made again with your changes; "
+            "it is checked again before it can post."
+        )
+        return JSONResponse({"ok": True, "redirect": f"/clips?video={vid}&msg={msg}"})
 
     def clip_action(clip_id: str, expect: set[str], to: str, reason: str) -> None:
         cfg = config()
@@ -492,6 +680,24 @@ def create_app(
         if current not in order:
             return f"/setup/{order[0]}"
         return f"/setup/{order[order.index(current) + 1]}"
+
+    @app.post("/setup/name", dependencies=post_deps)
+    async def setup_name(request: Request) -> RedirectResponse:
+        """The welcome step: the name the home page greets the user by."""
+        form = await request.form()
+        name = " ".join(str(form.get("name", "")).split())[:40]
+        if name:
+            from ruamel.yaml import YAML
+
+            path = config_dir / "settings.yaml"
+            yaml = YAML()
+            yaml.preserve_quotes = True
+            doc = yaml.load(path.read_text(encoding="utf-8")) or {}
+            if _set(doc, ["web", "name"], name):
+                buf = io.StringIO()
+                yaml.dump(doc, buf)
+                path.write_text(buf.getvalue(), encoding="utf-8")
+        return RedirectResponse(f"/setup/{form.get('next') or 'ai'}", status_code=303)
 
     @app.post("/setup/ai", dependencies=post_deps)
     async def setup_ai(request: Request) -> RedirectResponse:
@@ -714,6 +920,11 @@ def account_status(cfg: AppConfig) -> dict[str, Any]:
     }
 
 
+def greeting(local: datetime) -> str:
+    h = local.hour
+    return "Good morning" if 5 <= h < 12 else "Good afternoon" if 12 <= h < 18 else "Good evening"
+
+
 def _return_to(request: Request, default: str) -> str:
     ref = request.headers.get("referer") or ""
     u = urlparse(ref)
@@ -789,6 +1000,8 @@ def save_settings_form(path: Path, form: dict[str, Any]) -> bool:
         ("clips", "max_seconds"): num("max_seconds", float),
         ("captions", "hook_seconds"): num("hook_seconds", float),
     }
+    if form.get("name") is not None and str(form.get("name")).strip():
+        changes[("web", "name")] = " ".join(str(form["name"]).split())[:40]
     changed = False
     for keys, value in changes.items():
         changed |= _set(doc, list(keys), value)

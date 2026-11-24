@@ -114,10 +114,14 @@ def test_every_page_renders(config_dir: Path) -> None:
     c = client(config_dir)
     home = c.get("/")
     assert home.status_code == 200
-    assert "Not running" in home.text and "Clip a Video" in home.text
-    assert "Practice mode:" in home.text and "Waiting for Your Approval" in home.text
+    assert "not running" in home.text and ", Franiu</h1>" in home.text
+    assert "Net views in" in home.text and "Clips posted in" in home.text
+    assert 'href="/upload"' in home.text and "Upload clips" in home.text
+    assert "Practice mode:" in home.text and "Waiting for your approval" in home.text
+    up = c.get("/upload")
+    assert up.status_code == 200 and "Clip Video" in up.text
     assert 'name="theme-color" content="#0c100e"' in home.text and "Skip to content" in home.text
-    for path in ["/clips", "/videos", "/settings", "/health"] + [
+    for path in ["/clips", "/videos", "/settings", "/health", "/clips?video=aaaaaaaaaaa"] + [
         f"/clips?tab={t}" for t in ("ready", "review", "posted", "working", "rejected")
     ]:
         r = c.get(path)
@@ -518,7 +522,7 @@ def test_clip_count_and_live_progress(config_dir: Path) -> None:
         title="A CC talk",
     )
     c = client(config_dir, metas=[cc])
-    home = c.get("/").text
+    home = c.get("/upload").text
     assert 'id="count"' in home and 'value="3" selected' in home
     assert 'id="progress" hidden' in home  # nothing being clipped yet
     r = c.post(

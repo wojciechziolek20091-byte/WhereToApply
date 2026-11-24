@@ -285,6 +285,8 @@ class WebSettings(_Strict):
     # network, which requires DASHBOARD_PASSWORD in .env.
     host: str = "127.0.0.1"
     port: int = Field(8080, ge=1, le=65535)
+    # The name the home page greets you by (set in Settings).
+    name: str = Field("Franiu", max_length=40)
 
 
 class RetentionSettings(_Strict):

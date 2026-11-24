@@ -1,5 +1,5 @@
 {# One clip. Expects `c` (ClipView). #}
-<article class="clip">
+<article class="clip" id="clip-{{ c.id }}">
   <div class="player">
     {% if c.has_video %}
     <video controls preload="none" playsinline poster="/clips/{{ c.id }}/poster" src="/clips/{{ c.id }}/video" aria-label="Clip: {{ c.hook }}"></video>
@@ -10,7 +10,7 @@
   <div class="clip-body">
     <div class="clip-meta">
       <span class="tag st-{{ c.state }}">{{ c.label }}</span>
-      <span class="num muted" title="How likely a viewer watches to the end, according to the AI">Score {{ c.score }}</span>
+      {% if c.views is not none %}<span class="views-chip" title="TikTok views">{{ c.views }} views</span>{% else %}<span class="num muted" title="How likely a viewer watches to the end, according to the AI">Score {{ c.score }}</span>{% endif %}
     </div>
     <h3>{{ c.hook }}</h3>
     <p class="muted small clamp">{{ c.video_title }} · {{ c.start|mmss }}-{{ c.end|mmss }} ({{ '%.0f'|format(c.length) }}&nbsp;s)</p>
@@ -30,12 +30,15 @@
     {% endif %}
     {% if c.reason and c.state not in ('qa_passed', 'published', 'awaiting_approval', 'scheduled') %}<p class="small muted clamp">{{ c.reason }}</p>{% endif %}
     {% if c.post_url %}<p class="small"><a href="{{ c.post_url }}" target="_blank" rel="noopener">Open on TikTok</a></p>{% endif %}
-    {% if c.state in ('awaiting_approval', 'qa_passed', 'scheduled') %}
+    {% if c.state not in ('publishing', 'published', 'rendering') %}
     <div class="clip-actions">
+      <a class="btn" href="/clips/{{ c.id }}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i>Edit</a>
       {% if c.state == 'awaiting_approval' %}
       <form method="post" action="/clips/{{ c.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Approving…">Approve</button></form>
       {% endif %}
-      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Remove this clip? It will never be posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Removing…">{{ 'Reject' if c.state == 'awaiting_approval' else "Don't Post" }}</button></form>
+      {% if c.state in ('awaiting_approval', 'qa_passed', 'scheduled') %}
+      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Remove this clip? It will never be posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Removing…"><i class="ph ph-x" aria-hidden="true"></i>{{ 'Reject' if c.state == 'awaiting_approval' else "Don't Post" }}</button></form>
+      {% endif %}
     </div>
     {% endif %}
   </div>

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Upload{% endblock %}
+{% block content %}
+<section class="upload-head">
+  <h1>Upload clips</h1>
+  <p>Paste a YouTube link. The finished clips appear below it in about a minute.</p>
+</section>
+
+<section class="panel" aria-label="Clip a video">
+  <form method="post" action="/clip" class="link-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label for="url">YouTube link</label>
+    <div class="link-row">
+      <input id="url" type="url" name="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…" autofocus>
+      <div class="count-field">
+        <label for="count" class="sr-only">Number of clips</label>
+        <select id="count" name="count">
+          {% for n in range(1, max_clips + 1) %}<option value="{{ n }}"{% if n == s.clips.per_video %} selected{% endif %}>{{ n }} clip{{ '' if n == 1 else 's' }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="btn primary" data-busy="Checking…"><i class="ph ph-scissors" aria-hidden="true"></i>Clip Video</button>
+    </div>
+    <p class="muted small">Accepted when the channel is in your sources with a rights tag, or the video is Creative Commons. Paste the same link again for more clips.</p>
+  </form>
+</section>
+
+<section class="panel" aria-labelledby="progress-h" id="progress"{% if not jobs %} hidden{% endif %}>
+  <h2 id="progress-h">Clipping Now</h2>
+  <div class="jobs" data-progress="/progress" aria-live="polite">{% include "_progress.html" %}</div>
+</section>
+
+<details class="panel activity">
+  <summary><h2 id="activity-h">Recent activity</h2></summary>
+  {% if events %}
+  <ul class="events">
+    {% for e in events %}
+    <li class="lvl-{{ e.level }}"><time class="num muted" datetime="{{ e.ts.isoformat() }}" data-fmt="relative">{{ ago(e.ts, now) }}</time><span><span class="event-kind">{{ e.title }}</span>{% if e.detail %} <span class="muted">{{ e.detail }}</span>{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted">Nothing yet.</p>
+  {% endif %}
+</details>
+{% endblock %}

@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Edit clip{% endblock %}
+{% block body_class %}wide{% endblock %}
+{% block head %}<meta name="csrf" content="{{ csrf }}">{% endblock %}
+{% block content %}
+<div class="editor" id="editor" data-clip="{{ clip.id }}" data-locked="{{ 'true' if locked else 'false' }}">
+  <header class="ed-bar">
+    <a class="btn ghost" href="/clips?video={{ clip.video_id }}#clip-{{ clip.id }}"><i class="ph ph-arrow-left" aria-hidden="true"></i><span class="hide-sm">Clips</span></a>
+    <div class="ed-title">
+      <h1 id="ed-h">Edit clip</h1>
+      <p class="muted small clamp">{{ video_title }}</p>
+    </div>
+    <div class="ed-actions">
+      <span class="ed-dirty muted small" id="ed-dirty" hidden>Unsaved changes</span>
+      <button class="btn ghost" type="button" id="ed-reset" disabled><i class="ph ph-arrow-counter-clockwise" aria-hidden="true"></i><span class="hide-sm">Reset</span></button>
+      <button class="btn primary" type="button" id="ed-save" disabled><i class="ph ph-floppy-disk" aria-hidden="true"></i>Save changes</button>
+    </div>
+  </header>
+
+  {% if locked %}
+  <p class="notice plain">{% if clip.state == 'rendering' %}This clip is being made right now. Come back in a minute to edit it.{% else %}This clip is already posted, so it can no longer be changed.{% endif %}</p>
+  {% endif %}
+  <p class="notice bad" id="ed-error" role="alert" hidden></p>
+
+  <div class="ed-body">
+    <nav class="ed-rail" role="tablist" aria-label="Edit tools">
+      <button role="tab" aria-selected="true" aria-controls="p-trim" data-tool="trim"><i class="ph ph-scissors" aria-hidden="true"></i><span>Trim</span></button>
+      <button role="tab" aria-selected="false" aria-controls="p-text" data-tool="text"><i class="ph ph-text-t" aria-hidden="true"></i><span>Hook</span></button>
+      <button role="tab" aria-selected="false" aria-controls="p-subs" data-tool="subs"><i class="ph ph-closed-captioning" aria-hidden="true"></i><span>Subtitles</span></button>
+      <button role="tab" aria-selected="false" aria-controls="p-frame" data-tool="frame"><i class="ph ph-crop" aria-hidden="true"></i><span>Framing</span></button>
+      <button role="tab" aria-selected="false" aria-controls="p-cap" data-tool="cap"><i class="ph ph-chat-text" aria-hidden="true"></i><span>Caption</span></button>
+    </nav>
+
+    <section class="ed-panel" aria-live="polite">
+      <div role="tabpanel" id="p-trim" class="ed-pane">
+        <h2>Trim</h2>
+        <p class="muted small">Drag the green handles on the timeline, or nudge them here. Press <kbd>[</kbd> or <kbd>]</kbd> to set the start or end at the playhead.</p>
+        <div class="trim-grid">
+          <div class="field"><span class="field-label">Start</span>
+            <div class="nudge"><button type="button" class="btn" data-nudge="start:-0.5" aria-label="Start half a second earlier"><i class="ph ph-minus"></i></button><output id="o-start" class="mono">0:00.0</output><button type="button" class="btn" data-nudge="start:0.5" aria-label="Start half a second later"><i class="ph ph-plus"></i></button></div>
+          </div>
+          <div class="field"><span class="field-label">End</span>
+            <div class="nudge"><button type="button" class="btn" data-nudge="end:-0.5" aria-label="End half a second earlier"><i class="ph ph-minus"></i></button><output id="o-end" class="mono">0:00.0</output><button type="button" class="btn" data-nudge="end:0.5" aria-label="End half a second later"><i class="ph ph-plus"></i></button></div>
+          </div>
+        </div>
+        <p class="trim-length"><span class="mono" id="o-len">0.0 s</span> <span class="muted small" id="o-limits"></span></p>
+      </div>
+
+      <div role="tabpanel" id="p-text" class="ed-pane" hidden>
+        <h2>Hook</h2>
+        <label for="f-hook">Text on screen at the start</label>
+        <textarea id="f-hook" rows="2" maxlength="80"></textarea>
+        <p class="muted small"><span id="c-hook">0</span>/80 characters</p>
+        <label for="f-hook-s">Shown for <output id="o-hook-s" class="mono">2.5 s</output></label>
+        <input id="f-hook-s" type="range" min="1" max="10" step="0.5">
+      </div>
+
+      <div role="tabpanel" id="p-subs" class="ed-pane" hidden>
+        <h2>Subtitles</h2>
+        <p class="muted small" id="subs-note"></p>
+        <ol class="sub-list" id="sub-list"></ol>
+      </div>
+
+      <div role="tabpanel" id="p-frame" class="ed-pane" hidden>
+        <h2>Framing</h2>
+        <fieldset class="frame-choices">
+          <legend class="sr-only">How the wide video fits the tall clip</legend>
+          <label class="frame-choice"><input type="radio" name="framing" value="auto"><span><b>Automatic</b><span class="muted small">Follows the speaker's face when the clip is made.</span></span></label>
+          <label class="frame-choice"><input type="radio" name="framing" value="crop"><span><b>Fixed crop</b><span class="muted small">Fills the screen. Choose the part to keep.</span></span></label>
+          <label class="frame-choice"><input type="radio" name="framing" value="full"><span><b>Full frame</b><span class="muted small">The whole picture over a blurred copy of itself.</span></span></label>
+        </fieldset>
+        <label for="f-crop">Crop position</label>
+        <input id="f-crop" type="range" min="0" max="100" step="1">
+      </div>
+
+      <div role="tabpanel" id="p-cap" class="ed-pane" hidden>
+        <h2>TikTok caption</h2>
+        <p class="muted small" id="cap-note"></p>
+        <label for="f-cap-title">First line</label>
+        <input id="f-cap-title" type="text" maxlength="150">
+        <label for="f-cap-text">Text</label>
+        <textarea id="f-cap-text" rows="4" maxlength="600"></textarea>
+        <label for="f-cap-tags">Hashtags</label>
+        <input id="f-cap-tags" type="text" spellcheck="false" placeholder="ciekawostki nauka…">
+        <p class="muted small">Separated by spaces. The credit to the original creator is added below the caption.</p>
+      </div>
+    </section>
+
+    <section class="ed-stage-wrap" aria-label="Preview">
+      <div class="ed-stage" id="stage">
+        <video class="v-bg" id="v-bg" muted playsinline preload="auto" aria-hidden="true"></video>
+        <video class="v-fg" id="v-fg" playsinline preload="auto"></video>
+        <div class="ov-hook" id="ov-hook" hidden></div>
+        <p class="ov-sub" id="ov-sub"></p>
+        <div class="ed-loading" id="ed-loading"><span class="skel"></span><span class="muted small">Loading the video…</span></div>
+        <span class="ov-out" id="ov-out" hidden>Outside the clip</span>
+      </div>
+      <div class="ed-transport">
+        <button class="btn" type="button" id="b-play" aria-label="Play clip"><i class="ph ph-play" aria-hidden="true"></i></button>
+        <span class="mono small"><span id="o-time">0:00.0</span> <span class="muted">/ <span id="o-dur">0:00.0</span></span></span>
+        <label class="loop"><input type="checkbox" id="f-loop" checked> Loop</label>
+      </div>
+    </section>
+  </div>
+
+  <section class="ed-timeline" aria-label="Timeline">
+    <div class="tl-labels" aria-hidden="true">
+      <span></span>
+      <span><i class="ph ph-film-strip"></i></span>
+      <span><i class="ph ph-text-t"></i></span>
+      <span><i class="ph ph-closed-captioning"></i></span>
+    </div>
+    <div class="tl-scroll">
+      <div class="tl" id="tl">
+        <div class="tl-ruler" id="tl-ruler"></div>
+        <div class="tl-track tl-video" id="tl-video">
+          <div class="shade shade-l" id="shade-l"></div><div class="shade shade-r" id="shade-r"></div>
+          <div class="trim" id="trim" role="group" aria-label="Clip range">
+            <button class="handle h-start" id="h-start" type="button" aria-label="Clip start"></button>
+            <button class="handle h-end" id="h-end" type="button" aria-label="Clip end"></button>
+          </div>
+        </div>
+        <div class="tl-track tl-text"><div class="blk blk-hook" id="blk-hook"><span>Hook</span><span class="handle h-hook" id="h-hook" aria-hidden="true"></span></div></div>
+        <div class="tl-track tl-subs" id="tl-subs"></div>
+        <div class="tl-playhead" id="playhead" aria-hidden="true"></div>
+      </div>
+    </div>
+  </section>
+</div>
+<script src="/static/editor.js" defer></script>
+{% endblock %}

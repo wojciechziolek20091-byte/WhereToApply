@@ -50,7 +50,7 @@ def test_wizard_skips_ai_step_with_shared_key(
     monkeypatch.setattr(assets, "PACKAGE_ROOT", app)
     c = client(config_dir, configured=False)
     page = c.get("/setup").text
-    assert "The AI is already set up" in page and 'href="/setup/youtube"' in page
+    assert "The AI is already set up" in page and 'name="next" value="youtube"' in page
     assert ">AI<" not in c.get("/setup/youtube").text  # no AI step in the stepper
     settings = client(config_dir).get("/settings").text
     _ = token

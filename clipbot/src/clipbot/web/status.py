@@ -185,6 +185,8 @@ class ClipView:
     post_url: str | None
     qa: dict[str, Any]
     updated: datetime
+    views: int | None = None
+    edited: bool = False
 
     @property
     def length(self) -> float:
@@ -192,13 +194,17 @@ class ClipView:
 
 
 def clip_views(
-    conn: sqlite3.Connection, states: tuple[str, ...], limit: int = 60
+    conn: sqlite3.Connection,
+    states: tuple[str, ...],
+    limit: int = 60,
+    video_id: str | None = None,
 ) -> list[ClipView]:
     marks = ",".join("?" * len(states))
+    where = f"c.state IN ({marks})" + (" AND c.video_id = ?" if video_id else "")
     rows = conn.execute(
         f"SELECT c.*, v.title AS video_title FROM clips c JOIN videos v ON v.id = c.video_id "
-        f"WHERE c.state IN ({marks}) ORDER BY c.updated_at DESC LIMIT ?",
-        (*states, limit),
+        f"WHERE {where} ORDER BY c.score DESC, c.updated_at DESC LIMIT ?",
+        (*states, *([video_id] if video_id else []), limit),
     )
     out = []
     from pathlib import Path
@@ -223,6 +229,8 @@ def clip_views(
                 post_url=r["post_url"] if (r["post_url"] or "").startswith("http") else None,
                 qa=json.loads(r["qa_json"]) if r["qa_json"] else {},
                 updated=db.parse_iso(r["updated_at"]),
+                views=r["views"],
+                edited=bool(r["edit_json"]),
             )
         )
     return out
@@ -337,6 +345,19 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
             if state == "done" and good:
                 item["outcome"] = "ready"
                 item["detail"] = f"{good} clip{'' if good == 1 else 's'} ready"
+                item["clips"] = [
+                    {"id": c["id"], "hook": c["hook"], "state": c["state"],
+                     "length": (c["end_ms"] - c["start_ms"]) / 1000}
+                    for c in conn.execute(
+                        "SELECT id, hook, state, start_ms, end_ms FROM clips WHERE video_id = ? "
+                        "AND created_at >= ? AND state IN ('qa_passed', 'awaiting_approval', "
+                        "'scheduled', 'publishing', 'published') ORDER BY score DESC",
+                        (r["id"], meta.get("round_since", "")),
+                    )
+                ]  # fmt: skip
+                item["deployable"] = sum(
+                    1 for c in item["clips"] if c["state"] in ("qa_passed", "awaiting_approval")
+                )
             elif state == "done":
                 item["outcome"] = "none"
                 item["detail"] = (

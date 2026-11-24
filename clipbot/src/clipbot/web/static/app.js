@@ -1,22 +1,17 @@
 // Progressive enhancement only: every page works without this file.
 
-// Confirm before destructive or disruptive actions.
-document.querySelectorAll("form[data-confirm]").forEach((f) => {
-  f.addEventListener("submit", (e) => {
-    if (!confirm(f.dataset.confirm)) e.preventDefault();
-  });
-});
-
-// Show that a submitted action is running, and prevent double submits.
-document.querySelectorAll("form").forEach((f) => {
-  f.addEventListener("submit", (e) => {
-    if (e.defaultPrevented) return;
-    const b = f.querySelector("button[data-busy]");
-    if (!b) return;
-    b.setAttribute("aria-busy", "true");
-    b.textContent = b.dataset.busy;
-    setTimeout(() => { b.disabled = true; }, 0);
-  });
+// Confirm before destructive or disruptive actions, then show that the action is
+// running and prevent double submits. Delegated, so forms added later (the
+// "Clipping Now" panel refreshes itself) behave the same.
+document.addEventListener("submit", (e) => {
+  const f = e.target;
+  if (!(f instanceof HTMLFormElement)) return;
+  if (f.dataset.confirm && !confirm(f.dataset.confirm)) { e.preventDefault(); return; }
+  const b = f.querySelector("button[data-busy]");
+  if (!b) return;
+  b.setAttribute("aria-busy", "true");
+  b.textContent = b.dataset.busy;
+  setTimeout(() => { b.disabled = true; }, 0);
 });
 document.querySelectorAll("a[data-busy-link]").forEach((a) => {
   a.addEventListener("click", () => { a.setAttribute("aria-busy", "true"); a.textContent = a.dataset.busyLink; });
@@ -88,6 +83,7 @@ if (jobs) {
       if (html !== last) {
         last = html;
         jobs.innerHTML = html;
+        markShowcases();
         formatTimes();
       }
       panel.hidden = html === "";
@@ -95,3 +91,44 @@ if (jobs) {
   };
   setInterval(refresh, 3000);
 }
+
+// A showcase animates in once per finished round; after that it just shows.
+function markShowcases() {
+  document.querySelectorAll(".showcase[data-key]").forEach((el) => {
+    const key = "showcase:" + el.dataset.key;
+    let seen = false;
+    try { seen = sessionStorage.getItem(key) === "1"; sessionStorage.setItem(key, "1"); } catch (_) {}
+    if (seen) el.classList.add("seen");
+  });
+}
+markShowcases();
+
+// Hover (or keyboard focus) on a clip thumbnail plays it, muted.
+const startPreview = (reel) => {
+  const frame = reel.querySelector(".reel-frame");
+  if (!frame || !reel.dataset.preview) return;
+  let v = frame.querySelector("video");
+  if (!v) {
+    v = document.createElement("video");
+    Object.assign(v, { muted: true, loop: true, playsInline: true, preload: "metadata" });
+    v.src = reel.dataset.preview;
+    frame.appendChild(v);
+  }
+  v.play().then(() => v.classList.add("playing")).catch(() => {});
+};
+const stopPreview = (reel) => {
+  const v = reel.querySelector(".reel-frame video");
+  if (v) { v.pause(); v.classList.remove("playing"); }
+};
+if (window.matchMedia("(hover: hover)").matches) {
+  document.addEventListener("mouseover", (e) => {
+    const r = e.target.closest && e.target.closest(".reel");
+    if (r && !r.contains(e.relatedTarget)) startPreview(r);
+  });
+  document.addEventListener("mouseout", (e) => {
+    const r = e.target.closest && e.target.closest(".reel");
+    if (r && !r.contains(e.relatedTarget)) stopPreview(r);
+  });
+}
+document.addEventListener("focusin", (e) => { const r = e.target.closest && e.target.closest(".reel"); if (r) startPreview(r); });
+document.addEventListener("focusout", (e) => { const r = e.target.closest && e.target.closest(".reel"); if (r) stopPreview(r); });

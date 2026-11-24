@@ -180,6 +180,19 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE clips ADD COLUMN caption_lang TEXT;
     """,
+    # 3: edits from the clip editor, "deploy all", TikTok view counts
+    """
+    ALTER TABLE clips ADD COLUMN edit_json TEXT;
+    ALTER TABLE clips ADD COLUMN deploy_at TEXT;
+    ALTER TABLE clips ADD COLUMN views INTEGER;
+    ALTER TABLE clips ADD COLUMN views_at TEXT;
+    CREATE TABLE clip_views (
+        clip_id  TEXT NOT NULL REFERENCES clips(id),
+        ts       TEXT NOT NULL,
+        views    INTEGER NOT NULL
+    );
+    CREATE INDEX clip_views_clip ON clip_views(clip_id, ts);
+    """,
 ]
 
 

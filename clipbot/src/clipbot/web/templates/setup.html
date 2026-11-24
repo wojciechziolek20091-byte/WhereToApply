@@ -27,7 +27,12 @@
     <li><b>Your TikTok login</b> if you want clips posted automatically.</li>
   </ul>
   <p class="muted small">Nothing is posted until you say so. Everything stays on this computer.</p>
-  <div class="setup-actions"><a class="btn primary" href="/setup/{{ first_step }}">Start Setup</a></div>
+  <form method="post" action="/setup/name" class="key-form">
+    <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ first_step }}">
+    <label for="name">What should clipbot call you?</label>
+    <input id="name" name="name" type="text" maxlength="40" autocomplete="given-name" placeholder="Your first name…">
+    <div class="setup-actions"><button class="btn primary">Start Setup</button></div>
+  </form>
 </section>
 
 {% elif step == 'ai' %}

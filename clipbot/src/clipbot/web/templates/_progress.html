@@ -1,8 +1,7 @@
 {% for p in jobs %}
 <article class="job{% if p.outcome %} job-{{ p.outcome }}{% endif %}" aria-label="{{ p.title }}">
   <div class="job-head">
-    <p class="job-title"><b>{{ p.title }}</b>{% if p.round > 1 %} <span class="tag">round {{ p.round }}</span>{% endif %}{% if p.channel %} <span class="muted">· {{ p.channel }}</span>{% endif %}</p>
-    {% if p.outcome == 'ready' %}<a class="btn" href="/clips?tab=ready">See Clips</a>{% endif %}
+    <p class="job-title"><b>{{ p.title }}</b>{% if p.round > 1 %} <span class="tag">round {{ p.round }}</span>{% endif %}{% if p.channel %} <span class="muted">by {{ p.channel }}</span>{% endif %}</p>
   </div>
   <ol class="stages" aria-label="Stage">
     {% for name in stages %}
@@ -17,5 +16,26 @@
     {% elif p.outcome %}{{ p.detail }}{% if p.requested and p.outcome == 'ready' %} (you asked for {{ p.requested }}){% endif %}.
     {% else %}{{ p.detail or stages[p.stage] }}…{% if p.requested and p.stage < 4 %} Aiming for {{ p.requested }} clip{{ '' if p.requested == 1 else 's' }}.{% endif %}{% endif %}
   </p>
+  {% if p.outcome == 'ready' and p.clips %}
+  <div class="showcase" data-key="{{ p.id }}-{{ p.round }}-{{ p.clips|length }}" style="--n: {{ p.clips|length }}" aria-label="Finished clips">
+    {% for c in p.clips %}
+    <a class="reel" style="--i: {{ loop.index0 }}" href="/clips?video={{ p.id }}#clip-{{ c.id }}" data-preview="/clips/{{ c.id }}/video">
+      <span class="reel-frame"><img src="/clips/{{ c.id }}/poster" alt="" loading="lazy"></span>
+      <span class="reel-hook">{{ c.hook }}</span>
+      <span class="reel-meta">{{ '%.0f'|format(c.length) }} s{% if c.state in ('scheduled', 'publishing') %}, queued{% elif c.state == 'published' %}, posted{% endif %}</span>
+    </a>
+    {% endfor %}
+  </div>
+  <div class="quick-menu">
+    {% if p.deployable %}
+    <form method="post" action="/videos/{{ p.id }}/deploy" data-confirm="Send {{ p.deployable }} clip{{ '' if p.deployable == 1 else 's' }} to TikTok? They post one at a time, within the daily limit.">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn primary" data-busy="Deploying…"><i class="ph ph-rocket-launch" aria-hidden="true"></i>Deploy all ({{ p.deployable }})</button>
+    </form>
+    {% endif %}
+    <a class="btn" href="/clips?video={{ p.id }}"><i class="ph ph-squares-four" aria-hidden="true"></i>Go to clips</a>
+    <p class="note">{% if not p.deployable %}All of these are queued or posted.{% elif s.dry_run %}Practice mode is on: deployed clips are saved as practice posts.{% else %}Edit or reject single clips under Go to clips.{% endif %}</p>
+  </div>
+  {% endif %}
 </article>
 {% endfor %}

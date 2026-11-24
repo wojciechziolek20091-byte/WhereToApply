@@ -77,9 +77,29 @@ ACQUIRE_RETRY_DELAYS = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=
 # When every free model is busy, selection waits and tries again.
 SELECT_RETRY_DELAY = timedelta(minutes=30)
 HEARTBEAT_S = 20  # how often a fast worker refreshes its claim on a video
+_subs_lock = threading.Lock()
 
 _download_locks: dict[str, threading.Lock] = {}
 _download_locks_guard = threading.Lock()
+
+
+class EditError(ValueError):
+    """An edit from the clip editor that cannot be applied, with the reason."""
+
+
+def framing_override(edit: dict[str, Any], src_w: int, src_h: int, dur: float) -> list[Any]:
+    """Framing chosen in the editor: a fixed crop at `crop_x` (0 = left edge,
+    1 = right edge), or the full frame over a blurred background. [] = automatic."""
+    from clipbot.render.reframe import ScenePlan, crop_width
+
+    if edit.get("framing") == "full":
+        return [ScenePlan(0.0, dur, "blur_pad", reason="full frame, set in the editor")]
+    if edit.get("framing") == "crop":
+        cw = crop_width(src_w, src_h)
+        x = int((src_w - cw) * float(edit.get("crop_x", 0.5)))
+        x -= x % 2
+        return [ScenePlan(0.0, dur, "crop", x, cw, "crop set in the editor")]
+    return []
 
 
 def _download_lock(video_id: str) -> threading.Lock:
@@ -1249,7 +1269,7 @@ class Pipeline:
             self._faces = FaceDetector(face_model(self.paths.models))
         return self._faces
 
-    def caption_layout(self) -> CaptionLayout:
+    def caption_layout(self, hook_seconds: float | None = None) -> CaptionLayout:
         c, r = self.cfg.settings.captions, self.cfg.settings.render
         return CaptionLayout(
             width=r.width,
@@ -1259,7 +1279,7 @@ class Pipeline:
             hook_font_size=c.hook_font_size,
             bottom_margin_pct=c.bottom_margin_pct,
             right_margin_pct=c.right_margin_pct,
-            hook_seconds=c.hook_seconds,
+            hook_seconds=hook_seconds or c.hook_seconds,
         )
 
     def encode_settings(self) -> EncodeSettings:
@@ -1298,7 +1318,8 @@ class Pipeline:
             src, offset = self.clip_source(c, v)
             info = probe(src)
             s0, s1 = start - offset, end - offset  # times inside `src`
-            scenes = plan_clip(
+            edit = json.loads(c["edit_json"] or "{}")
+            scenes = framing_override(edit, info.width, info.height, s1 - s0) or plan_clip(
                 src,
                 self.face_detector(),
                 s0,
@@ -1307,7 +1328,9 @@ class Pipeline:
                 info.height,
                 scenes=self.cfg.settings.render.scene_detect,
             )
-            ass = build_ass(words, end - start, c["hook"], self.caption_layout())
+            ass = build_ass(
+                words, end - start, c["hook"], self.caption_layout(edit.get("hook_seconds"))
+            )
             render_clip(src, s0, s1, scenes, ass, font_files(), out, work, self.encode_settings())
             contact_sheet(out, sheet, end - start)
         except (RenderError, AssetError, ProbeError, AcquireError, OSError) as e:
@@ -1362,17 +1385,22 @@ class Pipeline:
             args.append(video_id)
         return [r["id"] for r in self.conn.execute(sql + " ORDER BY score DESC", args)]
 
+    def caption_file(self, clip: sqlite3.Row, lang: str) -> Path:
+        return (
+            self.paths.work_dir(clip["video_id"]) / "render" / clip["id"] / f"caption.{lang}.json"
+        )
+
     def caption(self, clip: sqlite3.Row, video: sqlite3.Row) -> Caption | None:
         """The caption in the chosen language. None when no free model answered
         (the caller waits and tries again). Cached next to the render."""
         lang = self.cfg.settings.post.language
         tags = json.loads(clip["hashtags_json"] or "[]")
-        if lang == "original":
-            return Caption(clip["hook"], clip["summary"], tuple(tags))
-        cache = self.paths.work_dir(video["id"]) / "render" / clip["id"] / f"caption.{lang}.json"
-        if cache.is_file():
+        cache = self.caption_file(clip, lang)
+        if cache.is_file():  # written by the clip-picking call, or edited by hand
             d = json.loads(cache.read_text(encoding="utf-8"))
             return Caption(d["hook"], d["summary"], tuple(d["hashtags"]))
+        if lang == "original":
+            return Caption(clip["hook"], clip["summary"], tuple(tags))
         try:
             res = self.router.complete_json(
                 purpose="caption",
@@ -1547,7 +1575,164 @@ class Pipeline:
             )
         return to
 
+    # ------------------------------------------------------------------ editor
+
+    def apply_edit(self, clip_id: str, data: dict[str, Any]) -> None:
+        """Save the clip editor's changes and queue the clip to be made again.
+        Raises EditError with a reason the user can act on."""
+        c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+        if c is None:
+            raise EditError("this clip no longer exists")
+        if c["state"] in ("publishing", "published"):
+            raise EditError("this clip is already posted; posted clips cannot be changed")
+        if c["state"] == "rendering":
+            raise EditError("this clip is being made right now; try again in a minute")
+        v = self._row(c["video_id"])
+        tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+        lim = self.cfg.settings.clips
+        try:
+            start, end = float(data["start"]), float(data["end"])
+            hook = " ".join(str(data.get("hook") or "").split())
+            hook_s = float(data.get("hook_seconds") or self.cfg.settings.captions.hook_seconds)
+            framing = str(data.get("framing") or "auto")
+            crop_x = min(max(float(data.get("crop_x", 0.5)), 0.0), 1.0)
+        except (KeyError, TypeError, ValueError):
+            raise EditError("the edit was incomplete; reload the editor") from None
+        if not 0 <= start < end <= tr.duration + 0.5:
+            raise EditError("the clip must stay inside the video")
+        if not lim.min_seconds - 0.05 <= end - start <= lim.max_seconds + 0.05:
+            raise EditError(
+                f"a clip must be {lim.min_seconds:g} to {lim.max_seconds:g} seconds long"
+            )
+        if not hook or len(hook) > 80:
+            raise EditError("the hook text is needed, at most 80 characters")
+        if framing not in ("auto", "crop", "full") or not 1 <= hook_s <= 10:
+            raise EditError("unknown framing or hook duration")
+
+        # Subtitle text typed in the editor: kept as hand edits.
+        lang = self._subs_language(tr)
+        lines = {ln["key"]: ln for ln in self.source_lines(tr, start, end)}
+        edits = {}
+        for e in data.get("lines") or []:
+            ln = lines.get(str(e.get("key")))
+            text = " ".join(str(e.get("text") or "").split())
+            if ln and text:
+                edits[ln["key"]] = {"start": ln["start"], "end": ln["end"], "text": text}
+        current = {ln["key"]: ln["text"] for ln in self.clip_lines(c, tr)}
+        changed = {k: v | {"edited": True} for k, v in edits.items() if current.get(k) != v["text"]}
+        if changed:
+            self._write_subs(v["id"], lang, changed)
+
+        cap = data.get("caption") or {}
+        if cap.get("title"):
+            tags = [
+                "".join(ch for ch in str(t).lstrip("#").lower() if ch.isalnum() or ch == "_")
+                for t in (cap.get("hashtags") or [])
+            ]
+            f = self.caption_file(c, self.cfg.settings.post.language)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(
+                json.dumps(
+                    {
+                        "hook": " ".join(str(cap["title"]).split())[:150],
+                        "summary": " ".join(str(cap.get("text") or "").split())[:600],
+                        "hashtags": [t for t in tags if t][:8],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+        # A cut of the source that no longer covers the clip is fetched again.
+        work = self.paths.work_dir(v["id"]) / "render" / clip_id
+        meta = work / "source.json"
+        if meta.is_file() and (work / "source.mp4").is_file():
+            from clipbot.media import probe as _probe
+
+            off = float(json.loads(meta.read_text())["offset"])
+            dur = _probe(work / "source.mp4").duration
+            if start < off or end > off + dur - 0.05:
+                (work / "source.mp4").unlink(missing_ok=True)
+                meta.unlink(missing_ok=True)
+        for f in (c["render_path"], c["contact_sheet_path"]):
+            if f:
+                Path(f).unlink(missing_ok=True)
+        edit = {"hook_seconds": hook_s, "framing": framing, "crop_x": crop_x}
+        now = db.iso(self.now())
+        with db.tx(self.conn):
+            self.conn.execute(
+                "UPDATE clips SET start_ms = ?, end_ms = ?, hook = ?, edit_json = ?, "
+                "prev_state = state, state = 'selected', state_reason = ?, state_changed_at = ?, "
+                "updated_at = ?, render_path = NULL, contact_sheet_path = NULL, qa_json = NULL, "
+                "post_text = NULL, next_attempt_at = NULL, attempts = 0 WHERE id = ?",
+                (
+                    round(start * 1000),
+                    round(end * 1000),
+                    hook,
+                    json.dumps(edit),
+                    "edited: being made again",
+                    now,
+                    now,
+                    clip_id,
+                ),
+            )
+            if v["state"] in ("done", "failed"):
+                self.conn.execute(
+                    "UPDATE videos SET prev_state = state, state = 'selected', state_reason = ?, "
+                    "state_changed_at = ?, updated_at = ?, next_attempt_at = NULL WHERE id = ?",
+                    ("a clip was edited", now, now, v["id"]),
+                )
+            db.log_event(self.conn, "edit", "clip edited", clip_id=clip_id, video_id=v["id"])
+
+    def preview_source(self, clip: sqlite3.Row, pad: float = 30.0) -> tuple[Path, float, float]:
+        """A playable file for the editor covering the clip plus `pad` seconds on
+        each side: (file, source time it starts at, its duration)."""
+        v = self._row(clip["video_id"])
+        tr_duration = float(v["duration_sec"] or 0) or None
+        if v["raw_path"] and Path(v["raw_path"]).is_file():
+            path = Path(v["raw_path"])
+            return path, 0.0, probe(path).duration
+        work = self.paths.work_dir(v["id"]) / "render" / clip["id"]
+        out, meta = work / "preview.mp4", work / "preview.json"
+        a = max(0.0, clip["start_ms"] / 1000 - pad)
+        b = clip["end_ms"] / 1000 + pad
+        if tr_duration:
+            b = min(b, tr_duration)
+        if out.is_file() and meta.is_file():
+            m = json.loads(meta.read_text())
+            if m["offset"] <= a + 0.5 and m["offset"] + m["duration"] >= b - 0.5:
+                return out, m["offset"], m["duration"]
+        info_path = self._info_path(v["id"])
+        source = self.source_by_id(v["source_id"])
+        provider = self.provider_for(source)
+        url = f"https://www.youtube.com/watch?v={v['id']}"
+        for fresh in (False, True):
+            try:
+                if fresh or not info_path.is_file():
+                    if not isinstance(provider, YtDlpProvider):
+                        break
+                    info_path.write_text(json.dumps(fetch_info(provider, url)), encoding="utf-8")
+                info = json.loads(info_path.read_text(encoding="utf-8"))
+                offset = fetch_section(info, a, b, out, pad=0.0)
+                break
+            except AcquireError as e:
+                log.warning("preview_failed", clip_id=clip["id"], error=str(e)[:300])
+        else:
+            offset = None
+        if offset is None:  # fall back to the clip's own cut
+            path, offset = self.clip_source(clip, v)
+            return path, offset, probe(path).duration
+        dur = probe(out).duration
+        meta.write_text(json.dumps({"offset": offset, "duration": dur}))
+        return out, offset, dur
+
     # ------------------------------------------------------------------ subtitles
+    #
+    # Subtitle lines live in one store per video and language:
+    #   work/<video>/subs.<lang>.json   {key: {start, end, text, edited?}}
+    # A line's key is its start in the source video, in ms; times are source
+    # times. Clips (and edited, re-trimmed clips) share the lines they cover, so a
+    # line is translated once, and text edited by hand is never translated over.
 
     def _subs_language(self, tr: Transcript) -> str | None:
         """The language to translate subtitles into, or None to show them as
@@ -1557,41 +1742,119 @@ class Pipeline:
             return None
         return lang
 
-    def _subs_file(self, clip: sqlite3.Row, lang: str) -> Path:
-        return self.paths.work_dir(clip["video_id"]) / "render" / clip["id"] / f"subs.{lang}.json"
+    def _subs_store(self, video_id: str, lang: str | None) -> Path:
+        return self.paths.work_dir(video_id) / f"subs.{lang or 'orig'}.json"
+
+    def _read_subs(self, video_id: str, lang: str | None) -> dict[str, dict[str, Any]]:
+        f = self._subs_store(video_id, lang)
+        if not f.is_file() and lang:
+            self._import_old_subs(video_id, lang)
+        return json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+
+    def _import_old_subs(self, video_id: str, lang: str) -> None:
+        """Clips made by 0.1.11 kept translated lines per clip, in clip time. Move
+        them into the video's store, matched to lines by start time, so clips made
+        before the update need no new translation."""
+        old = list((self.paths.work_dir(video_id) / "render").glob(f"*/subs.{lang}.json"))
+        if not old:
+            return
+        v = self.conn.execute("SELECT transcript_path FROM videos WHERE id = ?", (video_id,))
+        row = v.fetchone()
+        if row is None or not row["transcript_path"]:
+            return
+        tr = Transcript.from_json(Path(row["transcript_path"]).read_text(encoding="utf-8"))
+        found: dict[str, Any] = {}
+        for f in old:
+            c = self.conn.execute(
+                "SELECT start_ms, end_ms FROM clips WHERE id = ?", (f.parent.name,)
+            ).fetchone()
+            if c is None:
+                continue
+            start = c["start_ms"] / 1000
+            lines = self.source_lines(tr, start, c["end_ms"] / 1000)
+            for ln in json.loads(f.read_text(encoding="utf-8")):
+                t = start + float(ln["start"])
+                near = min(lines, key=lambda x: abs(x["start"] - t), default=None)
+                if near and abs(near["start"] - t) < 1.0 and near["key"] not in found:
+                    found[near["key"]] = {
+                        "start": near["start"], "end": near["end"], "text": ln["text"]
+                    }  # fmt: skip
+        if found:
+            self._write_subs(video_id, lang, found)
+
+    def _write_subs(self, video_id: str, lang: str | None, lines: dict[str, Any]) -> None:
+        """Merge `lines` into the store (several clips may write at once)."""
+        with _subs_lock:
+            f = self._subs_store(video_id, lang)
+            store = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+            for k, v in lines.items():
+                if store.get(k, {}).get("edited") and not v.get("edited"):
+                    continue  # a hand edit wins over a fresh translation
+                store[k] = v
+            f = self._subs_store(video_id, lang)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            tmp = f.with_suffix(f".{threading.get_ident()}.tmp")
+            tmp.write_text(json.dumps(store, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp, f)
 
     @staticmethod
-    def _clip_lines(tr: Transcript, start: float, end: float) -> list[list[Any]]:
-        """The clip's spoken words, grouped in lines (transcript lines, at most 12
-        words each), in source time."""
-        lines = []
+    def source_lines(tr: Transcript, start: float, end: float) -> list[dict[str, Any]]:
+        """The transcript lines (at most 12 words) that overlap [start, end], with
+        their original text and source times. Lines are cut from whole transcript
+        segments, so the same line has the same key in every clip."""
+        out = []
         for seg in tr.segments:
-            ws = [w for w in seg.words if w.start >= start - 0.05 and w.end <= end + 0.05]
-            lines += [ws[i : i + 12] for i in range(0, len(ws), 12)]
-        return lines
+            for i in range(0, len(seg.words), 12):
+                ws = seg.words[i : i + 12]
+                if ws and ws[-1].end > start and ws[0].start < end:
+                    out.append(
+                        {
+                            "key": str(round(ws[0].start * 1000)),
+                            "start": ws[0].start,
+                            "end": ws[-1].end,
+                            "text": " ".join(w.w for w in ws),
+                        }
+                    )
+        return out
+
+    def clip_lines(self, clip: sqlite3.Row, tr: Transcript) -> list[dict[str, Any]]:
+        """The clip's subtitle lines as they will be shown: translated (or edited)
+        text where the store has it, `missing` set where a translation is due."""
+        start, end = clip["start_ms"] / 1000, clip["end_ms"] / 1000
+        lang = self._subs_language(tr)
+        store = self._read_subs(clip["video_id"], lang)
+        out = []
+        for ln in self.source_lines(tr, start, end):
+            have = store.get(ln["key"])
+            out.append(
+                ln
+                | {
+                    "original": ln["text"],
+                    "text": have["text"] if have else ln["text"],
+                    "edited": bool(have and have.get("edited")),
+                    "missing": lang is not None and have is None,
+                }
+            )
+        return out
 
     def translate_subtitles(self, clip_ids: list[str]) -> int:
-        """Translate the subtitles of these clips in one free AI request and keep
-        them next to each clip. Returns how many clips got subtitles."""
-        jobs: dict[str, tuple[sqlite3.Row, list[list[Any]]]] = {}
-        lang = None
+        """Translate the not-yet-translated lines of these clips in one free AI
+        request. Returns how many clips got all their lines."""
+        jobs: dict[str, list[dict[str, Any]]] = {}
+        lang, video_id = None, None
         for cid in clip_ids:
             c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (cid,)).fetchone()
             if c is None:
                 continue
             v = self._row(c["video_id"])
             tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
-            lang = self._subs_language(tr)
-            if lang is None or self._subs_file(c, lang).is_file():
-                continue
-            lines = self._clip_lines(tr, c["start_ms"] / 1000, c["end_ms"] / 1000)
-            if lines:
-                jobs[cid] = (c, lines)
-        if not jobs or lang is None:
+            lang, video_id = self._subs_language(tr), v["id"]
+            missing = [ln for ln in self.clip_lines(c, tr) if ln["missing"]]
+            if lang and missing:
+                jobs[cid] = missing
+        if not jobs or lang is None or video_id is None:
             return 0
-        texts = [
-            (cid, [" ".join(w.w for w in ln) for ln in lines]) for cid, (_, lines) in jobs.items()
-        ]
+        texts = [(cid, [ln["original"] for ln in lines]) for cid, lines in jobs.items()]
         try:
             res = self.router.complete_json(
                 purpose="subtitles",
@@ -1605,45 +1868,40 @@ class Pipeline:
         except NoFreeModelAvailable as e:
             self._llm_error = e
             return 0
+        new: dict[str, Any] = {}
         for cid, translated in res.value.items():
-            c, lines = jobs[cid]
-            start = c["start_ms"] / 1000
-            out = [
-                {"start": ln[0].start - start, "end": ln[-1].end - start, "text": text}
-                for ln, text in zip(lines, translated, strict=True)
-                if text
-            ]
-            f = self._subs_file(c, lang)
-            f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+            for ln, text in zip(jobs[cid], translated, strict=True):
+                new[ln["key"]] = {"start": ln["start"], "end": ln["end"], "text": text}
+        self._write_subs(video_id, lang, new)
         return len(res.value)
 
     def subtitle_words(
         self, clip: sqlite3.Row, tr: Transcript, translate: bool = True
     ) -> list[Word] | None:
-        """The words shown on screen, in clip time: as spoken, or translated into
-        the caption language (each translated line spread over the time its
-        original line was spoken). None: the translation is not available yet."""
+        """The words shown on screen, in clip time. Spoken words keep their own
+        timing; translated or edited lines are spread over the time their original
+        line was spoken. None: a translation is not available yet."""
         start, end = clip["start_ms"] / 1000, clip["end_ms"] / 1000
-        lang = self._subs_language(tr)
-        if lang is None:
-            return clip_words(tr.words, start, end)
-        f = self._subs_file(clip, lang)
-        if not f.is_file() and translate:
+        lines = self.clip_lines(clip, tr)
+        if any(ln["missing"] for ln in lines) and translate:
             self.translate_subtitles([clip["id"]])
-        if not f.is_file():
+            lines = self.clip_lines(clip, tr)
+        if any(ln["missing"] for ln in lines):
             return None
+        if self._subs_language(tr) is None and not any(ln["edited"] for ln in lines):
+            return clip_words(tr.words, start, end)
         out: list[Word] = []
-        for ln in json.loads(f.read_text(encoding="utf-8")):
+        for ln in lines:
             toks = ln["text"].split()
             if not toks:
                 continue
-            a, b = max(ln["start"], 0.0), min(max(ln["end"], ln["start"] + 0.3), end - start)
-            step = (b - a) / len(toks)
-            out += [
-                Word(t, round(a + i * step, 3), round(a + (i + 1) * step, 3))
-                for i, t in enumerate(toks)
-            ]
+            step = (ln["end"] - ln["start"]) / len(toks)
+            for i, t in enumerate(toks):
+                a, b = ln["start"] + i * step, ln["start"] + (i + 1) * step
+                if a >= start - 0.05 and b <= end + 0.05:
+                    out.append(
+                        Word(t, round(max(a - start, 0.0), 3), round(min(b, end) - start, 3))
+                    )
         return out
 
     def _safety_file(self, clip: sqlite3.Row) -> Path:

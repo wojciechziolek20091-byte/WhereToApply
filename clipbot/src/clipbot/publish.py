@@ -72,6 +72,28 @@ def make_poster(cfg: AppConfig, paths: DataPaths) -> Poster:
     return UploadPostPoster(key.get_secret_value(), cfg.secrets.upload_post_profile)
 
 
+def tiktok_url(post_id: str | None) -> str | None:
+    """A TikTok video's public address from its id (TikTok fills in the account)."""
+    return f"https://www.tiktok.com/@_/video/{post_id}" if post_id and post_id.isdigit() else None
+
+
+def deploy(conn: sqlite3.Connection, video_id: str, now: datetime) -> int:
+    """ "Deploy all": queue every finished clip of a video to post next, without
+    waiting for a posting window. The daily cap and the gap between posts still
+    apply. Returns how many clips were queued."""
+    with db.tx(conn):
+        cur = conn.execute(
+            "UPDATE clips SET prev_state = state, state = 'scheduled', deploy_at = ?, "
+            "state_reason = 'deployed', state_changed_at = ?, updated_at = ?, "
+            "next_attempt_at = NULL WHERE video_id = ? AND state IN ('qa_passed', "
+            "'awaiting_approval')",
+            (db.iso(now), db.iso(now), db.iso(now), video_id),
+        )
+        if cur.rowcount:
+            db.log_event(conn, "deploy", f"{cur.rowcount} clip(s) deployed", video_id=video_id)
+    return cur.rowcount
+
+
 class Publisher:
     def __init__(
         self,
@@ -296,7 +318,7 @@ class Publisher:
                 to="published",
                 reason="published",
                 now=self.now(),
-                post_url=st.post_url,
+                post_url=st.post_url or tiktok_url(st.post_id),
                 published_at=db.iso(self.now()),
             )
             db.kv_set(self.conn, "consecutive_failures", "0")

@@ -177,7 +177,24 @@ In dry run, what would have been posted is in `data/dryrun/`.
 ## The dashboard
 
 `clipbot run` also opens a dashboard in your browser at **http://127.0.0.1:8080**
-(`clipbot web` opens just the dashboard). From there you can:
+(`clipbot web` opens just the dashboard).
+
+- **Home** greets you (set your name in Settings) and shows the TikTok views your
+  clips gained this month, how many clips were posted this month, and an **Upload
+  clips** button. Views are read from each posted clip's public TikTok page every
+  few hours, a few clips at a time.
+- **Upload** is where you paste a link. When a video is done, its clips slide in
+  under it, followed by **Deploy all** (queue them all to post: they go out one at
+  a time, outside posting windows too, but never past the daily limit or the gap
+  between posts) and **Go to clips**.
+- **Clips** lists every clip. **Edit** opens the clip editor (layout after
+  [react-video-editor](https://github.com/openvideodev/react-video-editor)): trim
+  on a timeline with a filmstrip, change the hook text and how long it shows, fix
+  any subtitle line, choose the framing (automatic, a fixed crop, or the full
+  frame over a blur) and rewrite the TikTok caption. The preview updates live;
+  **Save changes** makes the clip again and checks it again before it can post.
+
+From the dashboard you can also:
 
 - see whether the bot is running, and pause or resume it
 - paste a YouTube link to clip, and choose how many clips to make from it (1-10);

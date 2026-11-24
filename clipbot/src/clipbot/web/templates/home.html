@@ -1,85 +1,80 @@
 {% extends "base.html" %}
+{% block title %}Home{% endblock %}
 {% block content %}
-<h1>Overview</h1>
-
 {% set state = 'paused' if bot.paused else ('running' if bot.running else 'stopped') %}
-<section class="panel status" data-poll="/api/status" aria-label="Bot status">
-  <div class="status-text">
-    <p class="status-state {{ state }}">{% if bot.paused %}Paused{% elif bot.running %}Running{% else %}Not running{% endif %}</p>
-    <p class="muted small">
-      {% if bot.paused %}
-        {{ bot.pause_reason }}{% if bot.pause_until %}. Resumes on its own <time datetime="{{ bot.pause_until.isoformat() }}" data-fmt="relative">{{ ago(bot.pause_until, now) }}</time>{% endif %}
-      {% elif bot.running %}
-        Last activity <time datetime="{{ bot.last_tick.isoformat() }}" data-fmt="relative">{{ ago(bot.last_tick, now) }}</time>
-      {% else %}
-        Start it with <code translate="no">clipbot run</code>.
-      {% endif %}
-    </p>
-  </div>
-  {% if bot.paused %}
-  <form method="post" action="/resume"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Resuming…">Resume</button></form>
-  {% else %}
-  <form method="post" action="/pause" data-confirm="Pause the bot? Nothing is processed or posted until you resume."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Pausing…">Pause</button></form>
-  {% endif %}
-</section>
-
-<section class="panel" aria-labelledby="clip-h">
-  <h2 id="clip-h">Clip a Video</h2>
-  <form method="post" action="/clip" class="link-form">
-    <input type="hidden" name="csrf" value="{{ csrf }}">
-    <label for="url">YouTube link</label>
-    <div class="link-row">
-      <input id="url" type="url" name="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://www.youtube.com/watch?v=…">
-      <div class="count-field">
-        <label for="count" class="sr-only">Number of clips</label>
-        <select id="count" name="count" aria-label="Number of clips">
-          {% for n in range(1, max_clips + 1) %}<option value="{{ n }}"{% if n == s.clips.per_video %} selected{% endif %}>{{ n }} clip{{ '' if n == 1 else 's' }}</option>{% endfor %}
-        </select>
-      </div>
-      <button class="btn primary" data-busy="Checking…">Clip Video</button>
+<div class="home">
+  <section class="home-head" aria-labelledby="hello">
+    <div>
+      <h1 id="hello" class="hello">{{ greeting }}, {{ s.web.name or 'there' }}</h1>
+      <p class="hello-sub">
+        {%- if bot.paused %}Paused: {{ bot.pause_reason }}{% if bot.pause_until %}, until <time datetime="{{ bot.pause_until.isoformat() }}" data-fmt="relative">{{ ago(bot.pause_until, now) }}</time>{% endif %}. {% endif -%}
+        {%- if working %}{{ working }} video{{ '' if working == 1 else 's' }} being clipped. {% endif -%}
+        {{ ready_count }} clip{{ '' if ready_count == 1 else 's' }} ready to post.
+        {% if next_why == 'now' %}Next post: now.{% else %}Next post <time datetime="{{ next_post.isoformat() }}" data-fmt="weekday-time">{{ next_post.astimezone(s.tz).strftime('%a %H:%M') }}</time>.{% endif %}
+      </p>
     </div>
-    <p class="muted small">Accepted when the channel is in your sources with a rights tag, or the video is Creative Commons.</p>
-  </form>
-</section>
+    <div class="bot-chip {{ state }}" data-poll="/api/status" role="status">
+      <i class="ph ph-{{ 'pause-circle' if bot.paused else ('lightning' if bot.running else 'warning-circle') }}" aria-hidden="true"></i>
+      <span>Bot <b>{% if bot.paused %}paused{% elif bot.running %}running{% else %}not running{% endif %}</b></span>
+      {% if bot.paused %}
+      <form method="post" action="/resume"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Resuming…">Resume</button></form>
+      {% else %}
+      <form method="post" action="/pause" data-confirm="Pause the bot? Nothing is processed or posted until you resume."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Pausing…">Pause</button></form>
+      {% endif %}
+    </div>
+  </section>
 
-<section class="panel" aria-labelledby="progress-h" id="progress"{% if not jobs %} hidden{% endif %}>
-  <h2 id="progress-h">Clipping Now</h2>
-  <div class="jobs" data-progress="/progress" aria-live="polite">{% include "_progress.html" %}</div>
-</section>
+  <section class="bento" aria-label="This month">
+    <div class="tile tile-views">
+      <p class="tile-label"><i class="ph ph-eye" aria-hidden="true"></i>Net views in {{ stats.month }}</p>
+      <div>
+        <p class="stat" title="{{ stats.views }} views">{{ compact(stats.views) }}</p>
+        <p class="stat-note">
+          {% if stats.tracked == 0 %}
+            Views show up here once clips are posted to TikTok{% if s.dry_run %} (practice mode is on){% endif %}.
+          {% elif stats.views_prev %}
+            {% set pct = ((stats.views - stats.views_prev) / stats.views_prev * 100)|round|int %}
+            <span class="delta {{ 'up' if pct >= 0 else 'down' }}">{{ '+' if pct >= 0 }}{{ pct }}%</span> against last month, across all posted clips.
+          {% else %}
+            Gained this month across all {{ stats.tracked }} posted clip{{ '' if stats.tracked == 1 else 's' }}.
+          {% endif %}
+          {% if stats.views_read_at %}Updated <time datetime="{{ stats.views_read_at.isoformat() }}" data-fmt="relative">{{ ago(stats.views_read_at, now) }}</time>.{% endif %}
+        </p>
+      </div>
+    </div>
+    <div class="tile tile-posted">
+      <p class="tile-label"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Clips posted in {{ stats.month }}</p>
+      <div>
+        <p class="stat">{{ stats.posted }}</p>
+        <p class="stat-note">{% if stats.per_post %}{{ compact(stats.per_post) }} views per clip on average.{% else %}{{ stats.posted_prev }} last month.{% endif %}</p>
+      </div>
+    </div>
+    <a class="tile tile-upload" href="/upload">
+      <p class="tile-label"><i class="ph ph-link-simple" aria-hidden="true"></i>Paste a YouTube link</p>
+      <span class="upload-cta">Upload clips<i class="ph ph-arrow-right" aria-hidden="true"></i></span>
+    </a>
+  </section>
 
-<section class="panel metrics" aria-label="Posting">
-  <div class="metric"><p class="num big">{{ posted_24h }}/{{ [s.publish.posts_per_day, 8]|min }}</p><p class="muted small">Posted in 24&nbsp;h</p></div>
-  <div class="metric"><p class="num big">{{ clips.get('qa_passed', 0) + clips.get('scheduled', 0) }}</p><p class="muted small">Ready to post</p></div>
-  <div class="metric">
-    <p class="num big">{% if next_why == 'now' %}Now{% else %}<time datetime="{{ next_post.isoformat() }}" data-fmt="weekday-time">{{ next_post.astimezone(s.tz).strftime('%a %H:%M') }}</time>{% endif %}</p>
-    <p class="muted small">Next post{% if next_why != 'now' %}, after {{ next_why }}{% endif %}</p>
-  </div>
-</section>
-
-{% if review %}
-<section aria-labelledby="review-h">
-  <h2 id="review-h">Waiting for Your Approval</h2>
-  <div class="clips">{% for c in review %}{% include "_clip.html" %}{% endfor %}</div>
-</section>
-{% endif %}
-
-{% if ready %}
-<section aria-labelledby="next-h">
-  <div class="section-head"><h2 id="next-h">Next Up</h2><a href="/clips?tab=ready">All ready clips</a></div>
-  <div class="clips">{% for c in ready %}{% include "_clip.html" %}{% endfor %}</div>
-</section>
-{% endif %}
-
-<section class="panel" aria-labelledby="activity-h">
-  <h2 id="activity-h">Recent Activity</h2>
-  {% if events %}
-  <ul class="events">
-    {% for e in events %}
-    <li class="lvl-{{ e.level }}"><time class="num muted" datetime="{{ e.ts.isoformat() }}" data-fmt="relative">{{ ago(e.ts, now) }}</time><span><span class="event-kind">{{ e.title }}</span>{% if e.detail %} <span class="muted">{{ e.detail }}</span>{% endif %}</span></li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="muted">Nothing yet. Paste a YouTube link above to start.</p>
+  {% if review %}
+  <section aria-labelledby="review-h">
+    <div class="strip-head"><h2 id="review-h">Waiting for your approval</h2><a href="/clips?tab=review">Review all</a></div>
+    <div class="clips">{% for c in review %}{% include "_clip.html" %}{% endfor %}</div>
+  </section>
   {% endif %}
-</section>
+
+  {% if recent %}
+  <section aria-labelledby="recent-h">
+    <div class="strip-head"><h2 id="recent-h">Latest clips</h2><a href="/clips">All clips</a></div>
+    <div class="reel-row">
+      {% for c in recent %}
+      <a class="reel" href="/clips?video={{ c.video_id }}#clip-{{ c.id }}" data-preview="/clips/{{ c.id }}/video">
+        <span class="reel-frame">{% if c.has_video %}<img src="/clips/{{ c.id }}/poster" alt="" loading="lazy">{% endif %}</span>
+        <span class="reel-hook">{{ c.hook }}</span>
+        <span class="reel-meta">{% if c.views is not none %}{{ compact(c.views) }} views{% else %}{{ c.label|capitalize }}{% endif %}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
 {% endblock %}

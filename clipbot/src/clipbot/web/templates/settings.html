@@ -56,6 +56,13 @@
 <form method="post" action="/settings" class="settings" data-dirty-guard>
 <input type="hidden" name="csrf" value="{{ csrf }}">
 
+<section class="panel" aria-labelledby="you-h">
+  <h2 id="you-h">You</h2>
+  <div class="fields">
+    <div class="field"><label for="name">Your name</label><input id="name" type="text" name="name" maxlength="40" autocomplete="given-name" value="{{ s.web.name }}"><p class="muted small">The home page greets you by this name.</p></div>
+  </div>
+</section>
+
 <section class="panel" aria-labelledby="posting-h">
   <h2 id="posting-h">Posting</h2>
   <label class="toggle"><input type="checkbox" name="dry_run" {{ 'checked' if s.dry_run }}><span><span class="toggle-title">Practice mode</span><span class="muted small">Make and check clips, but never post them.{% if not accounts.tiktok %} Stays on until TikTok is connected.{% endif %}</span></span></label>

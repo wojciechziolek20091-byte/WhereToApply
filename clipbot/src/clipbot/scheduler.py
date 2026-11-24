@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from clipbot import db, runner
+from clipbot import db, runner, stats
 from clipbot.config import POSTS_PER_DAY_CEILING, AppConfig
 from clipbot.logging import get_logger
 from clipbot.notify import Notifier
@@ -38,6 +38,7 @@ APPROVAL_EXPIRY = timedelta(hours=24)
 DIGEST_HOUR = 20
 QA_WINDOW_VIDEOS = 10
 QA_REJECT_LIMIT = 0.80
+VIEWS_EVERY = timedelta(minutes=20)
 MAX_PARALLEL_VIDEOS = 2  # videos clipped at the same time by the bot
 RESUME = "Run `clipbot resume` when it is fixed."
 POSTED = ("publishing", "published")
@@ -246,6 +247,17 @@ class Scheduler:
         )
         return "\n".join(lines)
 
+    def maybe_refresh_views(self, r: TickReport) -> None:
+        """Every 20 minutes, read the TikTok view counts of a few posted clips."""
+        last = db.kv_get(self.conn, "views_refreshed_at")
+        if last and self.now - db.parse_iso(last) < VIEWS_EVERY:
+            return
+        with db.tx(self.conn):
+            db.kv_set(self.conn, "views_refreshed_at", db.iso(self.now))
+        n = stats.refresh_views(self.conn, self.now)
+        if n:
+            r.add(f"views updated for {n} clip(s)")
+
     def maybe_digest(self, r: TickReport) -> None:
         local = self.local()
         today = local.date().isoformat()
@@ -413,11 +425,20 @@ class Scheduler:
         t = self.local().time()
         return any(w.contains(t) for w in self.cfg.settings.publish.windows)
 
+    def deployed_waiting(self) -> bool:
+        """Clips sent with "Deploy all" post without waiting for a posting window
+        (the daily cap and the gap between posts still apply)."""
+        return bool(
+            self.conn.execute(
+                "SELECT 1 FROM clips WHERE state = 'scheduled' AND deploy_at IS NOT NULL"
+            ).fetchone()
+        )
+
     def can_publish(self) -> tuple[bool, str]:
         paused, why = self.paused()
         if paused:
             return False, f"paused ({why})"
-        if not self.in_window():
+        if not self.in_window() and not self.deployed_waiting():
             return False, "outside posting windows"
         if self.conn.execute("SELECT 1 FROM clips WHERE state = 'publishing'").fetchone():
             return False, "a post is in progress"
@@ -441,14 +462,17 @@ class Scheduler:
     def next_clip(self) -> str | None:
         """Retries and approved clips first, then the best new clip."""
         now = db.iso(self.now)
+        window = self.in_window()
         row = self.conn.execute(
             "SELECT id FROM clips WHERE state = 'scheduled' AND "
-            "(next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY score DESC LIMIT 1",
+            "(next_attempt_at IS NULL OR next_attempt_at <= ?) "
+            + ("" if window else "AND deploy_at IS NOT NULL ")
+            + "ORDER BY deploy_at IS NULL, deploy_at, score DESC LIMIT 1",
             (now,),
         ).fetchone()
         if row:
             return row["id"]
-        if self.cfg.settings.review_mode == "hold":
+        if self.cfg.settings.review_mode == "hold" or not window:
             return None
         row = self.conn.execute(
             "SELECT id FROM clips WHERE state = 'qa_passed' ORDER BY score DESC, created_at LIMIT 1"
@@ -494,6 +518,7 @@ class Scheduler:
             r.add(f"paused: {why}")
         self.forward_alerts()
         if not missing:
+            self.maybe_refresh_views(r)
             self.maybe_digest(r)
             self.maybe_update_ytdlp(r)
         return r
