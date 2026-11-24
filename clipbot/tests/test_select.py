@@ -133,8 +133,16 @@ def test_too_long_without_sentence_end_is_dropped() -> None:
     assert not plan.kept and "no sentence end" in plan.dropped[0].reason
 
 
-def test_too_short_is_dropped() -> None:
-    plan = plan_clips("vid", [cand(10.0, 18.9)], WORDS, DURATION, RULES)
+def test_too_short_reaches_back_for_the_build_up() -> None:
+    plan = plan_clips("vid", [cand(40.0, 48.9)], WORDS, DURATION, RULES)
+    (c,) = plan.kept
+    assert c.end - c.start >= RULES.min_seconds and round(c.end - 0.4, 3) == 48.9
+    assert any(abs(w.start - (c.start + 0.2)) < 1e-6 for w in WORDS)  # starts on a word
+
+
+def test_too_short_video_is_dropped() -> None:
+    tiny = [w for w in WORDS if w.end < 12]
+    plan = plan_clips("vid", [cand(1.0, 8.0)], tiny, 12, RULES)
     assert "too short" in plan.dropped[0].reason
 
 
@@ -228,7 +236,12 @@ def test_transcript_lines_and_prompt() -> None:
     )
     user = msgs[1]["content"]
     assert "20 to 60 seconds" in user and "science facts" in user and "[65.2]" in user
-    assert "cliffhanger" in user and "Skip intros and outros" in user and "sponsor mention" in user
+    assert (
+        "Never return a single line" in user
+        and "cliffhanger" in user
+        and "Skip intros and outros" in user
+        and "sponsor mention" in user
+    )
     assert "00:00.0 to 20:00.0" in user and "caption_title" not in user
     pl = build_messages(lines, topics_hint="", min_s=20, max_s=60, n=6, language="Polish")
     assert "caption_title: in Polish" in pl[1]["content"] and "SZOK" in pl[1]["content"]

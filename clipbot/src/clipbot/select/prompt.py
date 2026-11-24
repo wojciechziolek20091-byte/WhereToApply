@@ -61,8 +61,10 @@ said: never invent, reword or merge lines. You answer with JSON only."""
 RULES = """Find the {n} strongest cliffhanger moments: stretches where tension builds \
 so a viewer cannot scroll away. A question is raised, a reveal or twist is coming, a \
 conflict escalates, a risk or a surprising number is set up.
-- Each clip is {min_s:g} to {max_s:g} seconds. It starts on the line that opens the \
-tension and ends right at its peak: on the reveal, or just before it.
+- Each clip is {min_s:g} to {max_s:g} seconds long (end_sec minus start_sec), so it \
+spans several transcript lines. It starts on the line that opens the tension and \
+builds up through the following lines to the peak: it ends on the reveal, or just \
+before it. Never return a single line.
 - Clips do not overlap. Skip intros and outros. A clip must not contain any part of \
 an ad, sponsor mention, product plug, discount code or "link in the description".
 - Each transcript line starts with its time in seconds, like [125.4]. Copy those \

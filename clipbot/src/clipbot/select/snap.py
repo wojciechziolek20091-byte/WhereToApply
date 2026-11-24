@@ -215,6 +215,18 @@ def place(
     if e <= s:
         return "snapped end before start"
 
+    # Too short (models often pick just the peak line): reach back for the build-up,
+    # to the start of a word, then forward if the video starts too soon.
+    target = r.min_seconds + 0.5 - r.pre_roll - r.post_roll
+    if e - s < target:
+        want = e - target
+        earlier = [w.start for w in words if w.start <= max(want, 0.0)]
+        s = earlier[-1] if earlier else (words[0].start if words else s)
+        if e - s < target:
+            later = [w.end for w in words if w.end >= s + target]
+            if later:
+                e = later[0]
+
     # Too long: cut back to the last full sentence that fits.
     limit = s - r.pre_roll + r.max_seconds - r.post_roll
     if e > limit:
