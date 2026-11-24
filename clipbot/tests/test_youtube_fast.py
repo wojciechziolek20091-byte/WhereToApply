@@ -186,6 +186,20 @@ class BatchRouter(FakeRouter):
     """Scripted selection; the batched safety review allows every clip it is shown."""
 
     def complete_json(self, *, purpose, messages, validate, **kw):
+        if purpose == "subtitles":  # "translate" by marking every line
+            import re
+
+            from clipbot.select.llm import Attempt, LLMResult
+
+            self.calls.append(messages)
+            clips = re.findall(r"^Clip (\w+):\n((?:\d+\. .*\n?)+)", messages[1]["content"], re.M)
+            answer = {
+                "clips": [
+                    {"id": cid, "lines": ["PL " + ln.split(". ", 1)[1] for ln in body.splitlines()]}
+                    for cid, body in clips
+                ]
+            }
+            return LLMResult(validate(answer), "free/model", "", 1, 1, 0.0, [Attempt("m", "ok")])
         if purpose != "safety":
             return super().complete_json(purpose=purpose, messages=messages, validate=validate)
         import re
@@ -226,6 +240,10 @@ def test_link_to_checked_clips_without_a_full_download(env, monkeypatch, tmp_pat
     assert all(r["post_text"].startswith("SZOK! Tego się nie spodziewasz") for r in rows)
     assert all(Path(r["render_path"]).is_file() for r in rows)
     assert not paths.raw_video("abcdefghijk").exists()  # never downloaded in full
-    assert len(router.calls) == 2  # one selection (with captions) + one safety review
-    assert "Clip " in router.calls[1][1]["content"]
+    prompts = [m[1]["content"] for m in router.calls]
+    assert sum("Translate these spoken subtitle lines" in t for t in prompts) == 1
+    assert sum("Judge each clip below" in t for t in prompts) == 1
+    # Subtitles burned into the video are the translated ones.
+    ass = (paths.work_dir("abcdefghijk") / "render").glob("*/clip.ass")
+    assert all("PL" in a.read_text() for a in ass)
     assert db.kv_get(conn, "busy:abcdefghijk") is None

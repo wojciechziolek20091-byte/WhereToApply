@@ -51,7 +51,9 @@ def test_resent_link_makes_different_clips(env, monkeypatch, tmp_path) -> None:
     reg = again(p)
     assert reg.again == "more" and reg.state == "transcribed"
     assert p.fast_process(VID)[-1] == "done"
-    prompt = router.calls[-2][1]["content"]
+    prompt = next(
+        m[1]["content"] for m in reversed(router.calls) if "cliffhanger" in m[1]["content"]
+    )
     assert "already clipped" in prompt and "10." in prompt
     rows = p.conn.execute("SELECT id, start_ms, state FROM clips").fetchall()
     new = [r for r in rows if r["id"] not in first]
@@ -114,3 +116,35 @@ def test_paused_bot_is_shown_as_paused(env) -> None:
     db.set_pause(conn, "testing")
     (job,) = progress(conn, now)
     assert "paused" in job["wait"]
+
+
+def test_clip_waits_for_translated_subtitles(env, monkeypatch, tmp_path) -> None:
+    p, _ = setup(env, monkeypatch, tmp_path, [{"clips": [clip(10.4, 43.5, 90) | POLISH]}])
+    monkeypatch.setattr(Pipeline, "translate_subtitles", lambda self, ids: 0)
+    p._llm_error = None
+    p.fast_process(VID)
+    row = p.conn.execute("SELECT state, state_reason, next_attempt_at FROM clips").fetchone()
+    assert row["state"] == "selected" and "subtitles waiting" in row["state_reason"]
+    assert row["next_attempt_at"] is not None
+    assert p._row(VID)["state"] == "selected"  # not "done" while a clip waits
+    (job,) = progress(p.conn, p.now())
+    assert job["wait"] == "Waiting for a free AI model" and job["retry_at"] is not None
+
+
+def test_partial_answers_are_kept() -> None:
+    import pytest
+
+    from clipbot.post.localize import parse_subtitles
+    from clipbot.qa import parse_safety_batch
+    from clipbot.select.llm import InvalidOutput
+
+    got = parse_safety_batch(["a", "b"])(
+        {"verdicts": [{"id": "a", "decision": "allow", "category": "none", "reason": "ok"}]}
+    )
+    assert list(got) == ["a"]
+    subs = parse_subtitles({"a": 2, "b": 1})(
+        {"clips": [{"id": "a", "lines": ["jeden", "dwa"]}, {"id": "b", "lines": ["x", "y"]}]}
+    )
+    assert subs == {"a": ["jeden", "dwa"]}  # b had the wrong number of lines
+    with pytest.raises(InvalidOutput):
+        parse_subtitles({"a": 2})({"clips": []})

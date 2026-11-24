@@ -365,6 +365,22 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
         if state not in FINISHED and retry is not None and retry > now:
             item["wait"] = _friendly_wait(state, reason)
             item["retry_at"] = retry
+        elif state == "selected":
+            waiting = conn.execute(
+                "SELECT state_reason, MIN(next_attempt_at) AS at FROM clips WHERE video_id = ? "
+                "AND state IN ('selected', 'rendered') AND next_attempt_at > ?",
+                (r["id"], db.iso(now)),
+            ).fetchone()
+            if waiting and waiting["at"]:
+                why = waiting["state_reason"] or ""
+                item["wait"] = (
+                    "Today's free AI requests are used up"
+                    if "used up" in why
+                    else "Waiting for a free AI model"
+                )
+                item["retry_at"] = db.parse_iso(waiting["at"])
+            elif paused:
+                item["wait"] = "The bot is paused. Press Resume to continue"
         elif state not in FINISHED and paused:
             item["wait"] = "The bot is paused. Press Resume to continue"
         out.append(item)

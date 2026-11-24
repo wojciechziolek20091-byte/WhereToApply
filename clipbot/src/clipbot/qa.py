@@ -375,9 +375,8 @@ def parse_safety_batch(ids: Sequence[str]) -> Any:
         for v in data["verdicts"]:
             if isinstance(v, dict) and str(v.get("id", "")).strip() in ids:
                 out[str(v["id"]).strip()] = parse_safety(v)
-        missing = set(ids) - set(out)
-        if missing:
-            raise InvalidOutput(f"no verdict for {sorted(missing)}")
+        if not out:  # some verdicts are kept; clips without one are asked alone
+            raise InvalidOutput(f"no verdict for any of {sorted(ids)}")
         return out
 
     return parse

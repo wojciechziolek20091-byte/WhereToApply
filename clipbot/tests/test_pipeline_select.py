@@ -43,6 +43,8 @@ class FakeRouter:
 
     def complete_json(self, *, purpose, messages, validate, **kw):
         self.calls.append(messages)
+        if not self.outcomes:  # script used up: like every free model being busy
+            raise NoFreeModelAvailable(purpose, [])
         o = self.outcomes.pop(0)
         if isinstance(o, Exception):
             raise o
@@ -149,8 +151,9 @@ def test_long_video_is_chunked(env) -> None:
     long_words = speech(sentences=600)  # 600 * 5 s = 50 minutes
     router = FakeRouter([{"clips": [clip(100.4, 133.5)]}, {"clips": [clip(2300.4, 2333.5)]}])
     to_transcribed(env, router, fake_transcript(long_words))
-    assert len(router.calls) == 2  # both windows asked at the same time
-    prompts = " ".join(c[1]["content"] for c in router.calls)
+    # Both windows at once, then both again for the 3rd clip asked for (none left here).
+    assert len(router.calls) >= 3
+    prompts = " ".join(c[1]["content"] for c in router.calls[:2])
     assert "from 00:00.0 to 30:00.0" in prompts and "from 28:00.0 to " in prompts
     assert env[2].execute("SELECT COUNT(*) FROM clips").fetchone()[0] == 2
 

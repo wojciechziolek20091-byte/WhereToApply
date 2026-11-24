@@ -73,8 +73,8 @@ right after its last line. Plain seconds, never minutes or milliseconds.
 
 For each clip:
 - score: 0-100, how hard it is to scroll past.
-- hook: at most {hook_words} words shown on screen at the start, in the video's \
-language. Punchy, true to what is said, no emoji or hashtags.
+- hook: at most {hook_words} words shown on screen at the start, in {hook_language}. \
+Punchy, full of tension, true to what is said, no emoji or hashtags.
 - title: at most {title_len} characters. summary: one sentence.
 - hashtags: 3 to 5 topic tags, lower case, no '#'.
 - risk_flags: any of {flags} that apply, or ["none"]. Use sponsor_read if any \
@@ -174,6 +174,7 @@ def build_messages(
         min_s=min_s,
         max_s=max_s,
         hook_words=MAX_HOOK_WORDS,
+        hook_language=language or "the video's language",
         title_len=MAX_TITLE,
         flags=", ".join(sorted(RISK_FLAGS - {"none"})),
         n=n,

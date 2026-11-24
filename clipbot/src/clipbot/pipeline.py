@@ -26,8 +26,16 @@ from clipbot.assets import AssetError, face_model, font_files
 from clipbot.config import CAPTION_LANGUAGES, AppConfig, Source
 from clipbot.logging import get_logger
 from clipbot.media import ProbeError, probe
-from clipbot.models import DataPaths
-from clipbot.post.localize import CAPTION_SCHEMA, Caption, caption_messages, parse_caption
+from clipbot.models import DataPaths, Word
+from clipbot.post.localize import (
+    CAPTION_SCHEMA,
+    SUBTITLE_SCHEMA,
+    Caption,
+    caption_messages,
+    parse_caption,
+    parse_subtitles,
+    subtitle_messages,
+)
 from clipbot.post.text import build_post_text, credit_word, youtube_url
 from clipbot.render.captions import CaptionLayout, build_ass, clip_words, count_caption_words
 from clipbot.render.encode import EncodeSettings, RenderError, contact_sheet, render_clip
@@ -834,26 +842,10 @@ class Pipeline:
         log_dir.mkdir(parents=True, exist_ok=True)
 
         wins = windows(tr.duration)
-        per_window = []
-        total_cost = 0.0
+        per_window: list[list[Any]] = []
+        cost = [0.0]
         lang = self.cfg.settings.post.language
         lang_name = None if lang == "original" else CAPTION_LANGUAGES[lang]
-        jobs = []
-        for i, (ws, we) in enumerate(wins):
-            lines = transcript_lines(tr.segments, ws, we)
-            if not lines.strip():
-                continue
-            messages = build_messages(
-                lines,
-                topics_hint=source.topics_hint,
-                min_s=clips.min_seconds,
-                max_s=clips.max_seconds,
-                n=max(wanted * 2, 5),
-                window=(ws, we) if len(wins) > 1 else None,
-                language=lang_name,
-                taken=[t for t in taken if t[1] > ws and t[0] < we],
-            )
-            jobs.append((i, ws, we, messages))
 
         def ask(messages: list[dict[str, str]]) -> Any:
             return self.router.complete_json(
@@ -865,15 +857,31 @@ class Pipeline:
                 max_tokens=6000,
             )
 
-        try:
-            # Long videos are split into windows; all windows are asked at once.
+        def gather(avoid: list[tuple[float, float]], n: int, tag: str) -> list[list[Any]]:
+            """Ask for `n` moments per window (all windows at once), avoiding `avoid`."""
+            jobs = []
+            for i, (ws, we) in enumerate(wins):
+                lines = transcript_lines(tr.segments, ws, we)
+                if not lines.strip():
+                    continue
+                messages = build_messages(
+                    lines,
+                    topics_hint=source.topics_hint,
+                    min_s=clips.min_seconds,
+                    max_s=clips.max_seconds,
+                    n=n,
+                    window=(ws, we) if len(wins) > 1 else None,
+                    language=lang_name,
+                    taken=[t for t in avoid if t[1] > ws and t[0] < we],
+                )
+                jobs.append((i, ws, we, messages))
             with ThreadPoolExecutor(max_workers=max(1, min(len(jobs), 4))) as ex:
-                futures = [ex.submit(ask, j[3]) for j in jobs]
-                answers = [f.result() for f in futures]
+                answers = list(ex.map(lambda j: ask(j[3]), jobs))
+            out = []
             for (i, ws, we, messages), res in zip(jobs, answers, strict=True):
                 cands, errors = res.value
-                per_window.append(fix_time_units(cands, tr.duration))
-                total_cost += res.cost_usd
+                out.append(fix_time_units(cands, tr.duration))
+                cost[0] += res.cost_usd
                 call = {
                     "window": [ws, we],
                     "model": res.model,
@@ -885,19 +893,37 @@ class Pipeline:
                     "messages": messages,
                     "response": res.raw_text,
                 }
-                (log_dir / f"window_{i}.json").write_text(
+                (log_dir / f"window_{i}{tag}.json").write_text(
                     json.dumps(call, indent=1, ensure_ascii=False), encoding="utf-8"
                 )
                 db.log_event(
                     self.conn,
                     "llm_call",
-                    f"select window {i}: {res.model}",
+                    f"select window {i}{tag}: {res.model}",
                     video_id=video_id,
                     data={
                         k: call[k] for k in ("model", "input_tokens", "output_tokens", "cost_usd")
                     }
                     | {"attempts": len(res.attempts), "candidates": len(cands)},
                 )
+            return out
+
+        try:
+            per_window = gather(taken, max(wanted * 2, 5), "")
+            merged = merge_window_candidates(per_window)
+            plan = plan_clips(
+                video_id, merged, tr.words, tr.duration, self.rules(wanted), taken=taken
+            )
+            short = wanted - len(plan.kept)
+            if short > 0:
+                # Fewer usable moments than asked for: ask once more, for others.
+                avoid = taken + [(c.start, c.end) for c in plan.kept]
+                with contextlib.suppress(NoFreeModelAvailable):
+                    per_window += gather(avoid, max(short * 2, 3), "_more")
+                    merged = merge_window_candidates(per_window)
+                    plan = plan_clips(
+                        video_id, merged, tr.words, tr.duration, self.rules(wanted), taken=taken
+                    )
         except NoFreeModelAvailable as e:
             retry = self._retry_at(e)
             with db.tx(self.conn):
@@ -931,8 +957,6 @@ class Pipeline:
             )
             return "transcribed"
 
-        merged = merge_window_candidates(per_window)
-        plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules(wanted), taken=taken)
         if lang_name:  # captions written in the same call: no second AI call later
             for c in plan.kept:
                 if c.candidate.caption:
@@ -1006,7 +1030,7 @@ class Pipeline:
                 reason=reason,
                 now=self.now(),
                 next_attempt_at=None,
-                cost_usd=(row["cost_usd"] or 0) + total_cost,
+                cost_usd=(row["cost_usd"] or 0) + cost[0],
             )
             db.log_event(
                 self.conn,
@@ -1016,7 +1040,7 @@ class Pipeline:
                 data={
                     "kept": [c.clip_id for c in plan.kept],
                     "dropped": [d.reason for d in plan.dropped],
-                    "cost_usd": total_cost,
+                    "cost_usd": cost[0],
                 },
             )
         return to
@@ -1043,8 +1067,9 @@ class Pipeline:
         if st == "selected":
             nxt = self.conn.execute(
                 "SELECT id FROM clips WHERE video_id = ? AND state = 'selected' "
+                "AND (next_attempt_at IS NULL OR next_attempt_at <= ?) "
                 "ORDER BY score DESC LIMIT 1",
-                (video_id,),
+                (video_id, db.iso(self.now())),
             ).fetchone()
             if nxt is not None:
                 self.render(nxt["id"])
@@ -1053,6 +1078,12 @@ class Pipeline:
             if due_qa:
                 self.qa(due_qa[0])
                 return "checking"
+            if self.conn.execute(
+                "SELECT 1 FROM clips WHERE video_id = ? "
+                "AND state IN ('selected', 'rendering', 'rendered')",
+                (video_id,),
+            ).fetchone():
+                return None  # clips still being made or waiting for their check
             with db.tx(self.conn):
                 db.transition(
                     self.conn,
@@ -1131,6 +1162,7 @@ class Pipeline:
         if ids:
             with contextlib.suppress(LLMAuthError):
                 self.router  # noqa: B018  one shared router for all workers
+                self.translate_subtitles(ids)  # one AI request for all clips' subtitles
             # All clips are made at once, then all are checked at once: the clips
             # exist as early as possible, and the checks' AI calls overlap.
             n = workers or max(1, min(len(ids), 4))
@@ -1246,11 +1278,19 @@ class Pipeline:
         if c is None:
             raise LookupError(f"unknown clip {clip_id}")
         v = self._row(c["video_id"])
+        start, end = c["start_ms"] / 1000, c["end_ms"] / 1000
+        tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+        try:
+            words = self.subtitle_words(c, tr)
+        except LLMAuthError:
+            words = None
+        if words is None:  # subtitles must be in the chosen language: wait for the AI
+            self._wait_for_model(clip_id, "subtitles waiting for a free AI model", self._llm_error)
+            return "selected"
         with db.tx(self.conn):
             db.transition(
                 self.conn, "clips", clip_id, expect="selected", to="rendering", now=self.now()
             )
-        start, end = c["start_ms"] / 1000, c["end_ms"] / 1000
         work = self.paths.work_dir(v["id"]) / "render" / clip_id
         out = self.paths.render(clip_id)
         sheet = self.paths.contact_sheet(clip_id)
@@ -1267,8 +1307,6 @@ class Pipeline:
                 info.height,
                 scenes=self.cfg.settings.render.scene_detect,
             )
-            tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
-            words = clip_words(tr.words, start, end)
             ass = build_ass(words, end - start, c["hook"], self.caption_layout())
             render_clip(src, s0, s1, scenes, ass, font_files(), out, work, self.encode_settings())
             contact_sheet(out, sheet, end - start)
@@ -1419,7 +1457,8 @@ class Pipeline:
                 if f[1] - f[0] > qa_mod.MAX_BLACK_OR_FROZEN
             }
             gates["visual"] = qa_mod.gate_visual(black, freezes, static)
-        gates["caption_sync"] = qa_mod.gate_caption_sync(ass, len(words))
+        shown = self.subtitle_words(c, tr, translate=False) or words
+        gates["caption_sync"] = qa_mod.gate_caption_sync(ass, len(shown))
         gates["transformation"] = qa_mod.gate_transformation(
             ass, source.rights, text, credit_word(self.cfg.settings.post.language)
         )
@@ -1507,6 +1546,105 @@ class Pipeline:
                 level="info" if result.passed else "warning",
             )
         return to
+
+    # ------------------------------------------------------------------ subtitles
+
+    def _subs_language(self, tr: Transcript) -> str | None:
+        """The language to translate subtitles into, or None to show them as
+        spoken (caption language "original", or the video already speaks it)."""
+        lang = self.cfg.settings.post.language
+        if lang == "original" or (tr.language or "").split("-")[0].lower() == lang:
+            return None
+        return lang
+
+    def _subs_file(self, clip: sqlite3.Row, lang: str) -> Path:
+        return self.paths.work_dir(clip["video_id"]) / "render" / clip["id"] / f"subs.{lang}.json"
+
+    @staticmethod
+    def _clip_lines(tr: Transcript, start: float, end: float) -> list[list[Any]]:
+        """The clip's spoken words, grouped in lines (transcript lines, at most 12
+        words each), in source time."""
+        lines = []
+        for seg in tr.segments:
+            ws = [w for w in seg.words if w.start >= start - 0.05 and w.end <= end + 0.05]
+            lines += [ws[i : i + 12] for i in range(0, len(ws), 12)]
+        return lines
+
+    def translate_subtitles(self, clip_ids: list[str]) -> int:
+        """Translate the subtitles of these clips in one free AI request and keep
+        them next to each clip. Returns how many clips got subtitles."""
+        jobs: dict[str, tuple[sqlite3.Row, list[list[Any]]]] = {}
+        lang = None
+        for cid in clip_ids:
+            c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (cid,)).fetchone()
+            if c is None:
+                continue
+            v = self._row(c["video_id"])
+            tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+            lang = self._subs_language(tr)
+            if lang is None or self._subs_file(c, lang).is_file():
+                continue
+            lines = self._clip_lines(tr, c["start_ms"] / 1000, c["end_ms"] / 1000)
+            if lines:
+                jobs[cid] = (c, lines)
+        if not jobs or lang is None:
+            return 0
+        texts = [
+            (cid, [" ".join(w.w for w in ln) for ln in lines]) for cid, (_, lines) in jobs.items()
+        ]
+        try:
+            res = self.router.complete_json(
+                purpose="subtitles",
+                messages=subtitle_messages(texts, lang),
+                validate=parse_subtitles({cid: len(t) for cid, t in texts}),
+                schema=SUBTITLE_SCHEMA,
+                schema_name="subtitles",
+                max_tokens=1000 + 40 * sum(len(t) for _, t in texts),
+                min_context=0,
+            )
+        except NoFreeModelAvailable as e:
+            self._llm_error = e
+            return 0
+        for cid, translated in res.value.items():
+            c, lines = jobs[cid]
+            start = c["start_ms"] / 1000
+            out = [
+                {"start": ln[0].start - start, "end": ln[-1].end - start, "text": text}
+                for ln, text in zip(lines, translated, strict=True)
+                if text
+            ]
+            f = self._subs_file(c, lang)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
+        return len(res.value)
+
+    def subtitle_words(
+        self, clip: sqlite3.Row, tr: Transcript, translate: bool = True
+    ) -> list[Word] | None:
+        """The words shown on screen, in clip time: as spoken, or translated into
+        the caption language (each translated line spread over the time its
+        original line was spoken). None: the translation is not available yet."""
+        start, end = clip["start_ms"] / 1000, clip["end_ms"] / 1000
+        lang = self._subs_language(tr)
+        if lang is None:
+            return clip_words(tr.words, start, end)
+        f = self._subs_file(clip, lang)
+        if not f.is_file() and translate:
+            self.translate_subtitles([clip["id"]])
+        if not f.is_file():
+            return None
+        out: list[Word] = []
+        for ln in json.loads(f.read_text(encoding="utf-8")):
+            toks = ln["text"].split()
+            if not toks:
+                continue
+            a, b = max(ln["start"], 0.0), min(max(ln["end"], ln["start"] + 0.3), end - start)
+            step = (b - a) / len(toks)
+            out += [
+                Word(t, round(a + i * step, 3), round(a + (i + 1) * step, 3))
+                for i, t in enumerate(toks)
+            ]
+        return out
 
     def _safety_file(self, clip: sqlite3.Row) -> Path:
         return self.paths.work_dir(clip["video_id"]) / "render" / clip["id"] / "safety.json"

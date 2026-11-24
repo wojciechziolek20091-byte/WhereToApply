@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 import pytest
 
@@ -163,10 +164,23 @@ def test_filters() -> None:
         cand(70, 93.9, score=69),
         cand(100, 123.9, risk_flags=("politics",)),  # flagged but not blocked
     ]
-    plan = plan_clips("vid", cs, WORDS, DURATION, RULES)
+    one = replace(RULES, per_video=1)
+    plan = plan_clips("vid", cs, WORDS, DURATION, one)
     reasons = [d.reason for d in plan.dropped]
     assert reasons == ["not standalone", "blocked risk flag: sponsor_read", "score 69 < 70"]
     assert len(plan.kept) == 1 and plan.kept[0].candidate.risk_flags == ("politics",)
+
+
+def test_short_plans_are_topped_up_but_never_with_hard_flags() -> None:
+    cs = [
+        cand(10, 33.9, risk_flags=("sponsor_read",)),
+        cand(40, 63.9, score=60),
+        cand(70, 93.9, risk_flags=("financial_claim",)),
+        cand(100, 123.9, score=90),
+    ]
+    plan = plan_clips("vid", cs, WORDS, DURATION, replace(RULES, per_video=5))
+    assert sorted(c.candidate.start_sec for c in plan.kept) == [40, 70, 100]
+    assert [d.reason for d in plan.dropped] == ["blocked risk flag: sponsor_read"]
 
 
 def test_per_video_keeps_best() -> None:

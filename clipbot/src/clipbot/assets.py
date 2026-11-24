@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import threading
 from pathlib import Path
 
 import httpx
@@ -32,11 +33,21 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+_download_lock = threading.Lock()
+
+
 def ensure_download(dest: Path, url: str, sha256: str) -> Path:
+    """Download once and verify. Several clips render at the same time: one thread
+    downloads while the others wait, so they never write the same file at once."""
+    with _download_lock:
+        return _ensure_download(dest, url, sha256)
+
+
+def _ensure_download(dest: Path, url: str, sha256: str) -> Path:
     if dest.is_file() and _sha256(dest) == sha256:
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_suffix(dest.suffix + ".part")
+    tmp = dest.with_suffix(f"{dest.suffix}.{os.getpid()}.part")
     try:
         with httpx.stream("GET", url, follow_redirects=True, timeout=60) as r:
             r.raise_for_status()

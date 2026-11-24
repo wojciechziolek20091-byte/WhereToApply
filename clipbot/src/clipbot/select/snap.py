@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 
 from clipbot.models import Word, make_clip_id
 
+# Flags that only hold a clip back while there are enough others.
+SOFT_FLAGS = frozenset({"medical_claim", "financial_claim", "politics", "profanity"})
 RISK_FLAGS = frozenset(
     {
         "profanity",
@@ -282,6 +284,29 @@ def plan_clips(
     kept, lost = drop_overlaps(placed, rules.max_overlap)
     for c in lost:
         plan.dropped.append(Dropped(c.candidate, "overlaps a higher-scoring clip"))
+    if len(kept) < rules.per_video:
+        # Fewer than asked for: take the best of the ones held back only for a
+        # low score or a cautious flag (health or money talk, politics, swearing).
+        # The safety review still checks each one before it can be posted.
+        for d in sorted(plan.dropped, key=lambda d: -d.candidate.score):
+            if len(kept) >= rules.per_video:
+                break
+            c = d.candidate
+            flags = set(c.risk_flags) & rules.blocked_flags
+            if not (d.reason.startswith("score ") or (flags and flags <= SOFT_FLAGS)):
+                continue
+            where = place(c, words, duration, rules)
+            if isinstance(where, str):
+                continue
+            start, end = where
+            span = (start, end)
+            if any(overlap_ratio(span, t) > rules.max_overlap for t in taken) or any(
+                overlap_ratio(span, (k.start, k.end)) > rules.max_overlap for k in kept
+            ):
+                continue
+            cid = make_clip_id(video_id, round(start * 1000), round(end * 1000))
+            kept.append(PlannedClip(cid, video_id, start, end, c))
+            plan.dropped.remove(d)
     kept.sort(key=lambda c: (-c.candidate.score, c.start))
     for c in kept[rules.per_video :]:
         plan.dropped.append(Dropped(c.candidate, f"beyond per_video={rules.per_video}"))

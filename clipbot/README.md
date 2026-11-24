@@ -261,8 +261,8 @@ connection, or have the creator send you the files and use `acquire: local_folde
 
 **"Today's free AI requests are used up"**: an OpenRouter key on the free tier may
 make 50 free-model requests a day, shared by everyone using that key. clipbot needs
-about 2 per video (one to pick clips and write captions, one safety review for all
-of its clips). It waits for the daily reset (midnight UTC) and carries on by itself.
+about 3 per video (one to pick clips and write captions, one to translate the
+subtitles, one safety review for all of its clips). It waits for the daily reset (midnight UTC) and carries on by itself.
 Adding $10 of credit to the OpenRouter account raises the limit to 1000 a day;
 clipbot still only uses free models.
 
@@ -293,9 +293,11 @@ models that insist on thinking last, and skips music and image models.
   checks** in Settings (`safety.strict_qa: true`) to have them block too.
 - **Caption language**: when a clip is finished, a free AI writes its TikTok
   caption (hook line, summary, hashtags) in Polish by default, and the credit line
-  reads `Źródło: <channel> <link> (CC BY)`. Change it under Settings, Caption
-  language (`post.language`: pl, en, de, es, fr, it, uk or original). The video,
-  its subtitles and the on-screen hook stay in the video's own language.
+  reads `Źródło: <channel> <link> (CC BY)`. The hook box and the word-by-word
+  subtitles on the video are in that language too (translated subtitles are timed
+  to each spoken line). Change it under Settings, Caption language
+  (`post.language`: pl, en, de, es, fr, it, uk, or original to keep everything in
+  the video's own language).
 - **Never twice**: each post has an id saved before the upload; after a crash the
   bot asks Upload-Post about that id instead of uploading again.
 

@@ -81,3 +81,69 @@ def parse_caption(data: Any) -> Caption:
         if t and t not in clean:
             clean.append(t)
     return Caption(hook[:150], summary[:600], tuple(clean[:8]))
+
+
+# --------------------------------------------------------------------------- subtitles
+
+SUBTITLE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["clips"],
+    "properties": {
+        "clips": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "lines"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "lines": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        }
+    },
+}
+
+
+def subtitle_messages(clips: list[tuple[str, list[str]]], language: str) -> list[dict[str, str]]:
+    """One request translating the spoken lines of several clips (id, lines)."""
+    name = CAPTION_LANGUAGES[language]
+    body = "\n\n".join(
+        f"Clip {cid}:\n" + "\n".join(f"{i + 1}. {line}" for i, line in enumerate(lines))
+        for cid, lines in clips
+    )
+    user = f"""Translate these spoken subtitle lines into natural, spoken {name}, for \
+on-screen subtitles of short videos. Keep every line as its own line, in the same \
+order, with the same number of lines per clip: line N of the answer is line N of the \
+original. Keep names and numbers. Short and natural beats word-for-word. If a line is \
+already in {name}, keep it.
+Answer with JSON only: {{"clips": [{{"id": "...", "lines": ["...", ...]}}]}}
+
+{body}"""
+    return [
+        {"role": "system", "content": "You translate subtitles. Answer with JSON only."},
+        {"role": "user", "content": user},
+    ]
+
+
+def parse_subtitles(expected: dict[str, int]) -> Any:
+    """Validator: {clip id: translated lines}; a clip whose line count does not
+    match is left out (it is asked again on its own)."""
+
+    def parse(data: Any) -> dict[str, list[str]]:
+        if not isinstance(data, dict) or not isinstance(data.get("clips"), list):
+            raise InvalidOutput('expected {"clips": [...]}')
+        out: dict[str, list[str]] = {}
+        for c in data["clips"]:
+            if not isinstance(c, dict):
+                continue
+            cid = str(c.get("id", "")).strip().removeprefix("Clip ").strip()
+            lines = c.get("lines")
+            if cid in expected and isinstance(lines, list) and len(lines) == expected[cid]:
+                out[cid] = [" ".join(str(x).split()) for x in lines]
+        if not out:
+            raise InvalidOutput("no clip translated with the right number of lines")
+        return out
+
+    return parse
