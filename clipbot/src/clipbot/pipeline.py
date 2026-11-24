@@ -6,11 +6,14 @@ transaction, so re-running a stage after a crash is safe.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
+import secrets
 import shutil
 import sqlite3
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -51,7 +54,7 @@ from clipbot.sources.providers import (
     Provider,
 )
 from clipbot.sources.providers.local import LocalFolderProvider
-from clipbot.sources.providers.ytdlp import YtDlpProvider
+from clipbot.sources.providers.ytdlp import AUDIO_FORMAT, YtDlpProvider
 from clipbot.sources.rights import Decision, adhoc_cc_source, check_eligible, check_rights
 from clipbot.sources.youtube_api import VideoMeta, YouTubeAPI, parse_video_id
 from clipbot.sources.youtube_fast import captions_transcript, fetch_info, fetch_section
@@ -65,11 +68,15 @@ log = get_logger(__name__)
 ACQUIRE_RETRY_DELAYS = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=16))
 # When every free model is busy, selection waits and tries again.
 SELECT_RETRY_DELAY = timedelta(minutes=30)
+HEARTBEAT_S = 20  # how often a fast worker refreshes its claim on a video
+
+_download_locks: dict[str, threading.Lock] = {}
+_download_locks_guard = threading.Lock()
 
 
-BEFORE_SELECT = frozenset(
-    {"discovered", "acquiring", "acquired", "acquire_failed", "transcribing", "transcribed"}
-)
+def _download_lock(video_id: str) -> threading.Lock:
+    with _download_locks_guard:
+        return _download_locks.setdefault(video_id, threading.Lock())
 
 
 @dataclass(frozen=True)
@@ -80,7 +87,7 @@ class Registered:
     new: bool
     title: str = ""
     channel: str = ""
-    count_updated: bool = False
+    again: str = ""  # for a link seen before: more | retry | busy | refused
 
 
 class Pipeline:
@@ -296,32 +303,11 @@ class Pipeline:
         video already known it still applies while its clips are not picked yet."""
         vid = parse_video_id(url)
         row = self.conn.execute(
-            "SELECT state, state_reason, title, channel_title, meta_json FROM videos WHERE id = ?",
+            "SELECT * FROM videos WHERE id = ?",
             (vid,),
         ).fetchone()
         if row:
-            updated = False
-            meta = json.loads(row["meta_json"] or "{}")
-            if (
-                clip_count
-                and row["state"] in BEFORE_SELECT
-                and meta.get("clip_count") != clip_count
-            ):
-                meta["clip_count"] = clip_count
-                with db.tx(self.conn):
-                    self.conn.execute(
-                        "UPDATE videos SET meta_json = ? WHERE id = ?", (json.dumps(meta), vid)
-                    )
-                updated = True
-            return Registered(
-                vid,
-                row["state"],
-                row["state_reason"] or "",
-                False,
-                row["title"] or "",
-                row["channel_title"] or "",
-                updated,
-            )
+            return self._again(vid, row, clip_count)
         meta = self.yt.video(vid)
         if meta is None:
             raise LookupError(f"video {vid} not found (deleted, private or wrong link)")
@@ -382,8 +368,11 @@ class Pipeline:
         if self.cfg.settings.acquire.fast and isinstance(provider, YtDlpProvider):
             try:
                 done = self._acquire_fast(video_id, row, provider, url)
-            except AcquireError as e:
+            except AcquireBlocked as e:  # YouTube's bot check: a download would fail too
                 return self._acquire_failed(video_id, row["attempts"], e)
+            except AcquireError as e:  # anything else: download in full right away
+                log.warning("fast_acquire_failed_downloading", video_id=video_id, error=str(e))
+                done = None
             if done:
                 return done
         try:
@@ -445,7 +434,9 @@ class Pipeline:
         self._info_path(video_id).write_text(json.dumps(info), encoding="utf-8")
         tr = captions_transcript(info)
         if tr is None:
-            return None
+            tr = self._transcribe_audio_only(video_id, row, provider, url)
+            if isinstance(tr, str):
+                return tr  # failed or skipped
         tp = transcript_path(work, tr.model)
         tr.save(tp)
         meta = json.loads(row["meta_json"] or "{}")
@@ -455,9 +446,14 @@ class Pipeline:
                 self.conn,
                 "videos",
                 video_id,
-                expect="acquiring",
+                expect={"acquiring", "transcribing"},
                 to="transcribed",
-                reason=f"{len(tr.words)} words from YouTube captions ({tr.language})",
+                reason=(
+                    f"{len(tr.words)} words from YouTube captions ({tr.language})"
+                    if tr.model == "youtube-captions"
+                    else f"{len(tr.words)} words, {tr.language}, {tr.model} in "
+                    f"{tr.seconds_taken:.0f}s (no YouTube captions)"
+                ),
                 now=self.now(),
                 transcript_path=str(tp),
                 meta_json=json.dumps(meta),
@@ -466,6 +462,81 @@ class Pipeline:
             )
             db.log_event(self.conn, "acquire", "youtube captions", video_id=video_id)
         return "transcribed"
+
+    def _progress(self, video_id: str) -> Any:
+        """A callback that records how far transcription is, for the dashboard."""
+        last = [0.0]
+
+        def report(fraction: float) -> None:
+            if fraction - last[0] < 0.02 and fraction < 1:
+                return
+            last[0] = fraction
+            conn = db.connect(self.paths.db)  # may run on another thread
+            try:
+                with db.tx(conn):
+                    db.kv_set(conn, f"progress:{video_id}", str(round(fraction * 100)))
+            finally:
+                conn.close()
+
+        return report
+
+    def _transcribe_audio_only(
+        self, video_id: str, row: sqlite3.Row, provider: YtDlpProvider, url: str
+    ) -> Transcript | str:
+        """No YouTube captions: fetch just the audio (a few MB) and transcribe it
+        with the quick model, instead of downloading the whole video."""
+        work = self.paths.work_dir(video_id)
+        audio = work / "audio.m4a"
+        if not audio.is_file():
+            provider.acquire(video_id, url, audio, fmt=AUDIO_FORMAT)
+        with db.tx(self.conn):
+            db.transition(
+                self.conn,
+                "videos",
+                video_id,
+                expect="acquiring",
+                to="transcribing",
+                reason="no YouTube captions: transcribing the audio",
+                now=self.now(),
+            )
+        ws = self.cfg.settings.whisper
+        if ws.fast_cpu_model:
+            ws = ws.model_copy(update={"cpu_model": ws.fast_cpu_model})
+        source = self.source_by_id(row["source_id"])
+        try:
+            tr = self._transcribe(
+                audio,
+                work,
+                ws,
+                source.language_hint,
+                self.paths.models,
+                progress=self._progress(video_id),
+            )
+        except Exception as e:
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="transcribing",
+                    to="failed",
+                    reason=f"transcription failed: {e}"[:500],
+                    now=self.now(),
+                )
+            return "failed"
+        if not tr.words:
+            with db.tx(self.conn):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    video_id,
+                    expect="transcribing",
+                    to="skipped",
+                    reason="no speech found",
+                    now=self.now(),
+                )
+            return "skipped"
+        return tr
 
     def clip_source(self, clip: sqlite3.Row, video: sqlite3.Row) -> tuple[Path, float]:
         """The file to cut this clip from, and the source time it starts at. Videos
@@ -496,9 +567,11 @@ class Pipeline:
                 continue
             meta.write_text(json.dumps({"offset": offset}))
             return sec, offset
-        # Last resort: the whole video, as before.
+        # Last resort: the whole video, as before. Clips are made in parallel: only
+        # one of them downloads, the others wait for that file.
         dest = self.paths.raw_video(video["id"])
-        path = dest if dest.is_file() else provider.acquire(video["id"], url, dest)
+        with _download_lock(video["id"]):
+            path = dest if dest.is_file() else provider.acquire(video["id"], url, dest)
         return path, 0.0
 
     def _acquire_failed(self, video_id: str, attempts: int, err: Exception) -> str:
@@ -612,6 +685,7 @@ class Pipeline:
                 self.cfg.settings.whisper,
                 source.language_hint,
                 self.paths.models,
+                progress=self._progress(video_id),
             )
         except Exception as e:
             with db.tx(self.conn):
@@ -670,6 +744,58 @@ class Pipeline:
 
     # ------------------------------------------------------------------ select
 
+    def _again(self, vid: str, row: sqlite3.Row, clip_count: int | None) -> Registered:
+        """A link that was pasted before. Never ignored:
+        - finished (or failed after its transcript was made): pick more clips,
+          different moments from the earlier ones;
+        - failed or waiting for a retry: try again now;
+        - being clipped right now: keep going (the new count applies if the clips
+          are not picked yet);
+        - refused for rights: refused again, with the reason."""
+        meta = json.loads(row["meta_json"] or "{}")
+        if clip_count:
+            meta["clip_count"] = clip_count
+        state, now = row["state"], self.now()
+        has_transcript = bool(row["transcript_path"]) and Path(row["transcript_path"]).is_file()
+        action = "busy"
+        if state == "skipped":
+            action = "refused"
+        elif state == "done" or (state == "failed" and has_transcript):
+            to, action = "transcribed", "more"
+        elif state in ("failed", "acquire_failed"):
+            to, action = "discovered", "retry"
+        elif state == "transcribed":
+            to, action = "transcribed", "retry"
+        if action in ("more", "retry"):
+            meta["round_since"] = db.iso(now)
+            meta["round"] = int(meta.get("round", 1)) + (action == "more")
+        with db.tx(self.conn):
+            self.conn.execute(
+                "UPDATE videos SET meta_json = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(meta), db.iso(now), vid),
+            )
+            if action in ("more", "retry"):
+                db.transition(
+                    self.conn,
+                    "videos",
+                    vid,
+                    expect=state,
+                    to=to,
+                    reason="picking more clips" if action == "more" else "trying again",
+                    now=now,
+                    next_attempt_at=None,
+                    attempts=0,
+                )
+        return Registered(
+            vid,
+            to if action in ("more", "retry") else state,
+            row["state_reason"] or "",
+            False,
+            row["title"] or "",
+            row["channel_title"] or "",
+            again=action,
+        )
+
     def clip_count(self, row: sqlite3.Row) -> int:
         """Clips wanted for this video: chosen when it was pasted, else the setting."""
         n = json.loads(row["meta_json"] or "{}").get("clip_count")
@@ -697,6 +823,13 @@ class Pipeline:
         source = self.source_by_id(row["source_id"])
         clips = self.cfg.settings.clips
         wanted = self.clip_count(row)
+        # Clips from earlier rounds (a re-sent link): the new ones must differ.
+        taken = [
+            (r["start_ms"] / 1000, r["end_ms"] / 1000)
+            for r in self.conn.execute(
+                "SELECT start_ms, end_ms FROM clips WHERE video_id = ?", (video_id,)
+            )
+        ]
         log_dir = self.paths.work_dir(video_id) / "select"
         log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -718,6 +851,7 @@ class Pipeline:
                 n=max(wanted * 2, 5),
                 window=(ws, we) if len(wins) > 1 else None,
                 language=lang_name,
+                taken=[t for t in taken if t[1] > ws and t[0] < we],
             )
             jobs.append((i, ws, we, messages))
 
@@ -798,7 +932,7 @@ class Pipeline:
             return "transcribed"
 
         merged = merge_window_candidates(per_window)
-        plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules(wanted))
+        plan = plan_clips(video_id, merged, tr.words, tr.duration, self.rules(wanted), taken=taken)
         if lang_name:  # captions written in the same call: no second AI call later
             for c in plan.kept:
                 if c.candidate.caption:
@@ -942,30 +1076,61 @@ class Pipeline:
                 return seen
             seen.append(after)
 
-    BUSY_PREFIX = "busy:"
-
     def fast_process(self, video_id: str, workers: int | None = None) -> list[str]:
         """Take one video from link to checked clips in one go, without waiting
         for scheduler ticks: stages back to back, clips cut, rendered and checked
-        in parallel. Other workers leave the video alone meanwhile (kv busy mark)."""
-        key = self.BUSY_PREFIX + video_id
-        with db.tx(self.conn):
-            db.kv_set(self.conn, key, db.iso(self.now()))
+        in parallel.
+
+        Safe to call from several places at once (dashboard thread, scheduler):
+        only the worker that claims the video runs; the claim is refreshed while it
+        works. Whatever goes wrong, the video is never left half-way through a
+        stage: it is rolled back so the next try starts that stage again."""
+        owner = f"{os.getpid()}:{threading.get_ident()}:{secrets.token_hex(4)}"
+        if not db.claim_video(self.conn, video_id, owner):
+            return []
+        stop = threading.Event()
+        beat = threading.Thread(target=self._heartbeat, args=(video_id, owner, stop), daemon=True)
+        beat.start()
         try:
-            seen: list[str] = []
-            while (st := self._row(video_id)["state"]) != "selected":
-                after = self.step(video_id)
-                if after is None or after == st:
-                    return seen
-                seen.append(after)
-            ids = [
-                r["id"]
-                for r in self.conn.execute(
-                    "SELECT id FROM clips WHERE video_id = ? AND state = 'selected' "
-                    "ORDER BY score DESC",
-                    (video_id,),
-                )
-            ]
+            return self._fast_stages(video_id, workers)
+        except Exception as e:
+            log.exception("fast_process_failed", video_id=video_id, error=str(e)[:300])
+            self._roll_back(video_id, e)
+            return ["interrupted"]
+        finally:
+            stop.set()
+            beat.join(timeout=5)
+            db.release_video(self.conn, video_id, owner)
+
+    def _heartbeat(self, video_id: str, owner: str, stop: threading.Event) -> None:
+        conn = db.connect(self.paths.db)
+        try:
+            while not stop.wait(HEARTBEAT_S):
+                try:
+                    db.refresh_claim(conn, video_id, owner)
+                except sqlite3.Error as e:  # busy database: try again next beat
+                    log.warning("heartbeat_failed", error=str(e))
+        finally:
+            conn.close()
+
+    def _fast_stages(self, video_id: str, workers: int | None) -> list[str]:
+        seen: list[str] = []
+        while (st := self._row(video_id)["state"]) != "selected":
+            after = self.step(video_id)
+            if after is None or after == st:
+                return seen
+            seen.append(after)
+        ids = [
+            r["id"]
+            for r in self.conn.execute(
+                "SELECT id FROM clips WHERE video_id = ? AND state = 'selected' "
+                "ORDER BY score DESC",
+                (video_id,),
+            )
+        ]
+        if ids:
+            with contextlib.suppress(LLMAuthError):
+                self.router  # noqa: B018  one shared router for all workers
             # All clips are made at once, then all are checked at once: the clips
             # exist as early as possible, and the checks' AI calls overlap.
             n = workers or max(1, min(len(ids), 4))
@@ -975,11 +1140,43 @@ class Pipeline:
                 ok = [cid for cid, r in zip(ids, made, strict=True) if r == "rendered"]
                 self.review_safety(ok)  # one AI request for all clips' safety reviews
                 seen += [r for r in ex.map(lambda cid: self._in_worker(cid, "qa"), ok) if r]
-            seen += self.process(video_id)  # checks that had to wait, then "done"
-            return seen
-        finally:
-            with db.tx(self.conn):
-                db.kv_set(self.conn, key, None)
+        seen += self.process(video_id)  # checks that had to wait, then "done"
+        return seen
+
+    def _roll_back(self, video_id: str, err: Exception) -> None:
+        """Undo a half-finished stage after an unexpected error: the video goes back
+        to where the stage started and is tried again in a minute (failed after 3
+        such errors in a row). Clips caught mid-render go back to the queue."""
+        now = self.now()
+        reason = f"interrupted, trying again: {type(err).__name__}: {err}"[:500]
+        with db.tx(self.conn):
+            row = self.conn.execute(
+                "SELECT state, prev_state, attempts FROM videos WHERE id = ?", (video_id,)
+            ).fetchone()
+            if row and row["state"] in db.VIDEO_TRANSIENT and row["prev_state"]:
+                tries = (row["attempts"] or 0) + 1
+                give_up = tries >= 3
+                self.conn.execute(
+                    "UPDATE videos SET state = ?, prev_state = ?, state_reason = ?, "
+                    "attempts = ?, next_attempt_at = ?, state_changed_at = ?, updated_at = ? "
+                    "WHERE id = ?",
+                    (
+                        "failed" if give_up else row["prev_state"],
+                        row["state"],
+                        reason.replace("trying again", "gave up") if give_up else reason,
+                        tries,
+                        None if give_up else db.iso(now + timedelta(minutes=1)),
+                        db.iso(now),
+                        db.iso(now),
+                        video_id,
+                    ),
+                )
+            self.conn.execute(
+                "UPDATE clips SET state = prev_state, prev_state = state, state_reason = ?, "
+                "state_changed_at = ?, updated_at = ? "
+                "WHERE video_id = ? AND state = 'rendering' AND prev_state IS NOT NULL",
+                (reason, db.iso(now), db.iso(now), video_id),
+            )
 
     def _in_worker(self, clip_id: str, stage: str) -> str | None:
         """Run `render` or `qa` for one clip on its own database connection, so
@@ -1000,6 +1197,16 @@ class Pipeline:
                 return worker.render(clip_id) if stage == "render" else worker.qa(clip_id)
             except db.StateConflict:
                 return None  # another worker got there first
+            except Exception as e:  # never leave a clip stuck in "rendering"
+                log.exception("clip_worker_failed", clip_id=clip_id, error=str(e)[:300])
+                with db.tx(conn):
+                    conn.execute(
+                        "UPDATE clips SET state = 'failed', prev_state = state, "
+                        "state_reason = ?, updated_at = ? WHERE id = ? AND state = 'rendering'",
+                        (f"{stage} failed: {type(e).__name__}: {e}"[:500], db.iso(self.now()),
+                         clip_id),
+                    )  # fmt: skip
+                return "failed"
         finally:
             conn.close()
 

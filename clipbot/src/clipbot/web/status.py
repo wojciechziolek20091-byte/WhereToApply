@@ -304,9 +304,14 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
         (since, limit),
     ).fetchall()
     out = []
+    paused = db.get_pause(conn, now).paused
     for r in rows:
+        meta = json.loads(r["meta_json"] or "{}")
+        # A re-sent link starts a new round: count only that round's clips.
         clips = conn.execute(
-            "SELECT state, COUNT(*) AS n FROM clips WHERE video_id = ? GROUP BY state", (r["id"],)
+            "SELECT state, COUNT(*) AS n FROM clips WHERE video_id = ? AND created_at >= ? "
+            "GROUP BY state",
+            (r["id"], meta.get("round_since", "")),
         ).fetchall()
         by = {c["state"]: c["n"] for c in clips}
         total = sum(by.values())
@@ -314,12 +319,12 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
         checked = total - sum(by.get(s, 0) for s in _UNCHECKED)
         good = sum(by.get(s, 0) for s in _GOOD)
         state, reason = r["state"], r["state_reason"] or ""
-        meta = json.loads(r["meta_json"] or "{}")
         item: dict[str, Any] = {
             "id": r["id"],
             "title": r["title"] or r["id"],
             "channel": r["channel_title"] or "",
             "requested": meta.get("clip_count"),
+            "round": int(meta.get("round", 1)),
             "total": total,
             "good": good,
             "outcome": None,
@@ -337,6 +342,8 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
                 item["detail"] = (
                     f"No clip passed the checks ({total} made)"
                     if total
+                    else "No new moment worth clipping was found"
+                    if item["round"] > 1
                     else "The AI found no moment worth clipping"
                 )
             else:
@@ -351,9 +358,14 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
                 item["detail"] = f"{checked} of {total} checked"
         else:
             item["stage"] = _STAGE_OF.get(state, 0)
+            if state == "transcribing":
+                pct = db.kv_get(conn, f"progress:{r['id']}")
+                item["detail"] = f"{pct}% done" if pct else ""
         retry = db.parse_iso(r["next_attempt_at"]) if r["next_attempt_at"] else None
         if state not in FINISHED and retry is not None and retry > now:
             item["wait"] = _friendly_wait(state, reason)
             item["retry_at"] = retry
+        elif state not in FINISHED and paused:
+            item["wait"] = "The bot is paused. Press Resume to continue"
         out.append(item)
     return out

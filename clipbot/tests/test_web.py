@@ -533,13 +533,13 @@ def test_clip_count_and_live_progress(config_dir: Path) -> None:
     frag = c.get("/progress").text
     assert "A CC talk" in frag and 'aria-current="step">Queued' in frag
     assert "Aiming for 5 clips" in frag
-    # Changing the number while it is still queued takes effect.
+    # Pasting it again while it is queued keeps it going (new number applies).
     r = c.post(
         "/clip",
         data={"csrf": token(c), "url": "https://youtu.be/bbbbbbbbbbb", "count": "2"},
         follow_redirects=True,
     )
-    assert "new number of clips will be used" in r.text
+    assert "being clipped right now" in r.text
     # Out-of-range numbers are clamped.
     c.post(
         "/clip",

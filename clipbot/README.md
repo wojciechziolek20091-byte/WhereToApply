@@ -180,7 +180,8 @@ In dry run, what would have been posted is in `data/dryrun/`.
 (`clipbot web` opens just the dashboard). From there you can:
 
 - see whether the bot is running, and pause or resume it
-- paste a YouTube link to clip, and choose how many clips to make from it (1-10)
+- paste a YouTube link to clip, and choose how many clips to make from it (1-10);
+  paste the same link again for more clips from other moments of the video
 - follow each pasted video live under **Clipping Now**: queued, downloading,
   transcribing, picking clips, making clips (2 of 3 made), checking, ready or failed
   with the reason

@@ -24,6 +24,7 @@ from clipbot.tools import ffmpeg_exe
 log = get_logger(__name__)
 
 FORMAT = "bv*[height<=1080]+ba/b[height<=1080]"
+AUDIO_FORMAT = "ba[ext=m4a]/ba"  # for transcribing when a video has no captions
 # YouTube's bot check: never worked around, retried later (brief 4.2).
 _BLOCKED = re.compile(
     r"(Sign in to confirm|not a bot|confirm your age|HTTP Error 429|"
@@ -218,12 +219,14 @@ class YtDlpProvider:
             return [str(binary_path(self.tools_dir))]
         return [sys.executable, "-m", "yt_dlp"]
 
-    def command(self, url: str, out_template: str, clients: str | None = None) -> list[str]:
+    def command(
+        self, url: str, out_template: str, clients: str | None = None, fmt: str = FORMAT
+    ) -> list[str]:
         client_args = ["--extractor-args", f"youtube:player_client={clients}"] if clients else []
         return [
             *self.base_command(),
             "--format",
-            FORMAT,
+            fmt,
             "--merge-output-format",
             "mp4",
             "--no-playlist",
@@ -250,7 +253,7 @@ class YtDlpProvider:
         url = os.environ.get("CLIPBOT_POT_URL")
         return ["--extractor-args", f"youtubepot-bgutilhttp:base_url={url}"] if url else []
 
-    def acquire(self, video_id: str, url: str, dest: Path) -> Path:
+    def acquire(self, video_id: str, url: str, dest: Path, fmt: str = FORMAT) -> Path:
         dest.parent.mkdir(parents=True, exist_ok=True)
         work = dest.parent / f".{video_id}.ytdlp"
         work.mkdir(exist_ok=True)
@@ -268,7 +271,7 @@ class YtDlpProvider:
                 )
                 try:
                     p = self._run(
-                        self.command(url, out_template, clients),
+                        self.command(url, out_template, clients, fmt),
                         capture_output=True,
                         text=True,
                         timeout=self.timeout_s,

@@ -125,7 +125,9 @@ def transcribe(
     ws: WhisperSettings,
     language_hint: str | None = None,
     models_dir: Path | None = None,
+    progress: Any = None,
 ) -> Transcript:
+    """`progress(fraction)` is called now and then with how much is done (0-1)."""
     device, model_name, compute_type = resolve_device(ws, models_dir)
     out = transcript_path(work_dir, model_name)
     if out.is_file():
@@ -135,7 +137,7 @@ def transcribe(
     t0 = time.monotonic()
     try:
         segments, info = _run(
-            media, ws, device, model_name, compute_type, language_hint, models_dir, t0
+            media, ws, device, model_name, compute_type, language_hint, models_dir, t0, progress
         )
     except Exception as e:
         if device != "cuda" or ws.device == "cuda":
@@ -146,7 +148,7 @@ def transcribe(
         device, model_name, compute_type = resolve_device(ws, models_dir)
         out = transcript_path(work_dir, model_name)
         segments, info = _run(
-            media, ws, device, model_name, compute_type, language_hint, models_dir, t0
+            media, ws, device, model_name, compute_type, language_hint, models_dir, t0, progress
         )
     tr = Transcript(
         model=model_name,
@@ -178,6 +180,7 @@ def _run(
     language_hint: str | None,
     models_dir: Path | None,
     t0: float,
+    progress: Any = None,
 ):
     from faster_whisper import WhisperModel
 
@@ -210,6 +213,11 @@ def _run(
             if w.word.strip()
         ]
         segments.append(Segment(round(s.start, 3), round(s.end, 3), s.text.strip(), words))
+        if progress and info.duration:
+            try:
+                progress(min(s.end / info.duration, 1.0))
+            except Exception as e:  # progress is cosmetic: never stop the work
+                log.warning("progress_failed", error=str(e))
         if time.monotonic() - last_log > 30:
             last_log = time.monotonic()
             log.info("transcribe_progress", at_sec=round(s.end), of_sec=round(info.duration))

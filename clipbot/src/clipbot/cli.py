@@ -301,10 +301,14 @@ def clip(
     if reg.state == "skipped":
         typer.echo(f"refused {label}\n  reason: {reg.reason}")
         raise typer.Exit(1)
-    typer.echo(
-        f"{'accepted' if reg.new else 'already known'}: {label}  [{reg.video_id}]\n"
-        f"  state: {reg.state} ({reg.reason})"
+    verb = (
+        "accepted"
+        if reg.new
+        else {"more": "making more clips from", "retry": "trying again"}.get(
+            reg.again, "already known"
+        )
     )
+    typer.echo(f"{verb}: {label}  [{reg.video_id}]\n  state: {reg.state} ({reg.reason})")
     if queue_only:
         return
     raise typer.Exit(_run_stages(ctx, conn, pipe, reg.video_id))

@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from clipbot import db
+from clipbot import db, runner
 from clipbot.config import POSTS_PER_DAY_CEILING, AppConfig
 from clipbot.logging import get_logger
 from clipbot.notify import Notifier
@@ -38,7 +38,7 @@ APPROVAL_EXPIRY = timedelta(hours=24)
 DIGEST_HOUR = 20
 QA_WINDOW_VIDEOS = 10
 QA_REJECT_LIMIT = 0.80
-BUSY_FOR = timedelta(minutes=15)  # a fast worker's busy mark counts for this long
+MAX_PARALLEL_VIDEOS = 2  # videos clipped at the same time by the bot
 RESUME = "Run `clipbot resume` when it is fixed."
 POSTED = ("publishing", "published")
 
@@ -69,6 +69,9 @@ class Scheduler:
         # Tests hand in fake posters and notifiers; keep those on reload.
         self._fixed_poster = fixed_poster
         self._settings_mtime = self._watched()
+        # True in the long-running bot: videos are clipped in background threads
+        # (runner.py) so ticks keep coming. False (tests, `clipbot tick`): inline.
+        self.background = False
 
     @property
     def cfg(self) -> AppConfig:
@@ -289,18 +292,18 @@ class Scheduler:
         """The next video to move, skipping ones a fast worker (e.g. the dashboard,
         right after a link was pasted) is busy with."""
         now = db.iso(self.now)
-        busy_since = db.iso(self.now - BUSY_FOR)
-        row = self.conn.execute(
+        skip = db.claimed_videos(self.conn) | runner.running()
+        for row in self.conn.execute(
             "SELECT id FROM videos WHERE (state IN ('discovered', 'acquired', 'selected') OR "
             "(state IN ('acquire_failed', 'transcribed') AND "
             "(next_attempt_at IS NULL OR next_attempt_at <= ?))) "
-            "AND id NOT IN (SELECT substr(key, 6) FROM kv WHERE key LIKE 'busy:%' "
-            "AND updated_at >= ?) "
             "ORDER BY CASE state WHEN 'selected' THEN 0 WHEN 'transcribed' THEN 1 "
-            "WHEN 'acquired' THEN 2 ELSE 3 END, created_at LIMIT 1",
-            (now, busy_since),
-        ).fetchone()
-        return row["id"] if row else None
+            "WHEN 'acquired' THEN 2 ELSE 3 END, created_at",
+            (now,),
+        ):
+            if row["id"] not in skip:
+                return row["id"]
+        return None
 
     def work_one(self, r: TickReport) -> None:
         for cid in self.pipe.revive_soft_rejections():
@@ -309,15 +312,31 @@ class Scheduler:
         if cid:
             r.add(f"clip {cid}: caption rewritten in {self.cfg.settings.post.language}")
             return
+        for table, rid in db.recover_stuck(self.conn, self.now):
+            r.add(f"{table} {rid}: recovered from a stuck stage")
         vid = self.next_video()
-        if vid:
-            if self.conn.execute(
-                "SELECT 1 FROM videos WHERE id = ? AND state = 'discovered'", (vid,)
-            ).fetchone():
-                # A new video goes from link to clips in one go.
-                r.add(f"video {vid}: {' > '.join(self.pipe.fast_process(vid)) or 'waiting'}")
-            else:
-                r.add(f"video {vid}: {self.pipe.step(vid)}")
+        if vid and self.background:
+            if len(runner.running()) < MAX_PARALLEL_VIDEOS:
+                p = self.pipe
+                runner.start(
+                    self.cfg,
+                    vid,
+                    factory=lambda conn, cfg, paths: Pipeline(
+                        conn,
+                        cfg,
+                        paths,
+                        youtube=p._yt,
+                        providers=p._providers,
+                        router=p._router,
+                        transcriber=p._transcribe,
+                    ),
+                    respect_pause=False,  # this tick already checked
+                )
+                r.add(f"video {vid}: clipping in the background")
+                return
+        elif vid:
+            # A video goes from link to clips in one go.
+            r.add(f"video {vid}: {' > '.join(self.pipe.fast_process(vid)) or 'waiting'}")
             return
         due = self.pipe.clips_due_for_qa()  # safety checks that waited for a free model
         if due:
@@ -489,7 +508,8 @@ def run_forever(sched: Scheduler, interval_s: float = 30.0) -> None:
 
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
-    recovered = db.recover_stuck(sched.conn)
+    sched.background = True
+    recovered = db.recover_stuck(sched.conn, after=timedelta(0))  # nothing runs yet
     if recovered:
         log.warning("recovered_stuck_rows", rows=recovered)
     log.info(

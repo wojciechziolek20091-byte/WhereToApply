@@ -1,7 +1,7 @@
 {% for p in jobs %}
 <article class="job{% if p.outcome %} job-{{ p.outcome }}{% endif %}" aria-label="{{ p.title }}">
   <div class="job-head">
-    <p class="job-title"><b>{{ p.title }}</b>{% if p.channel %} <span class="muted">· {{ p.channel }}</span>{% endif %}</p>
+    <p class="job-title"><b>{{ p.title }}</b>{% if p.round > 1 %} <span class="tag">round {{ p.round }}</span>{% endif %}{% if p.channel %} <span class="muted">· {{ p.channel }}</span>{% endif %}</p>
     {% if p.outcome == 'ready' %}<a class="btn" href="/clips?tab=ready">See Clips</a>{% endif %}
   </div>
   <ol class="stages" aria-label="Stage">
@@ -12,7 +12,8 @@
     <li class="{{ 'past' if p.outcome == 'ready' else ('bad' if p.outcome else '') }}"{% if p.outcome %} aria-current="step"{% endif %}>{{ 'Failed' if p.outcome == 'failed' else 'Ready' }}</li>
   </ol>
   <p class="job-detail small{% if p.outcome in ('failed', 'none') %} bad-text{% elif p.wait %} warn-text{% else %} muted{% endif %}" role="status">
-    {% if p.wait %}{{ p.wait }}. Trying again <time datetime="{{ p.retry_at.isoformat() }}" data-fmt="relative">{{ ago(p.retry_at, now) }}</time>
+    {% if p.wait and p.retry_at %}{{ p.wait }}. Trying again <time datetime="{{ p.retry_at.isoformat() }}" data-fmt="relative">{{ ago(p.retry_at, now) }}</time>
+    {% elif p.wait %}{{ p.wait }}.
     {% elif p.outcome %}{{ p.detail }}{% if p.requested and p.outcome == 'ready' %} (you asked for {{ p.requested }}){% endif %}.
     {% else %}{{ p.detail or stages[p.stage] }}…{% if p.requested and p.stage < 4 %} Aiming for {{ p.requested }} clip{{ '' if p.requested == 1 else 's' }}.{% endif %}{% endif %}
   </p>

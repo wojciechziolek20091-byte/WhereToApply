@@ -251,7 +251,10 @@ def plan_clips(
     words: Sequence[Word],
     duration: float,
     rules: SnapRules,
+    taken: Sequence[tuple[float, float]] = (),
 ) -> Plan:
+    """`taken`: (start, end) of this video's clips from earlier rounds; new clips
+    must be different moments (a re-sent link asks for more clips)."""
     plan = Plan()
     placed: list[PlannedClip] = []
     for c in candidates:
@@ -270,6 +273,9 @@ def plan_clips(
             plan.dropped.append(Dropped(c, where))
             continue
         start, end = where
+        if any(overlap_ratio((start, end), t) > rules.max_overlap for t in taken):
+            plan.dropped.append(Dropped(c, "same moment as an earlier clip"))
+            continue
         clip_id = make_clip_id(video_id, round(start * 1000), round(end * 1000))
         placed.append(PlannedClip(clip_id, video_id, start, end, c))
 

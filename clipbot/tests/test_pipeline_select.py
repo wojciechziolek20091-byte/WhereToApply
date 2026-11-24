@@ -30,7 +30,7 @@ class FakeTranscriber:
     def __init__(self, tr: Transcript) -> None:
         self.tr = tr
 
-    def __call__(self, media, work_dir, ws, hint, models_dir):
+    def __call__(self, media, work_dir, ws, hint, models_dir, progress=None):
         assert Path(media).is_file()
         self.tr.save(work_dir / f"transcript.{self.tr.model}.json")
         return self.tr

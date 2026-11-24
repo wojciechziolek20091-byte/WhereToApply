@@ -228,12 +228,14 @@ def pick_formats(info: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] |
 def _input(f: dict[str, Any], start: float, dur: float) -> list[str]:
     headers = f.get("http_headers") or {}
     h = ["-headers", "".join(f"{k}: {v}\r\n" for k, v in headers.items())] if headers else []
-    return [*h, "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(f["url"])]
+    # Give up on a stalled connection after 20 s instead of waiting forever.
+    net = ["-rw_timeout", "20000000"] if str(f["url"]).startswith("http") else []
+    return [*h, *net, "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(f["url"])]
 
 
 def fetch_section(
     info: dict[str, Any], start: float, end: float, out: Path, pad: float = 1.5,
-    timeout: float = 120,
+    timeout: float = 90,
 ) -> float:  # fmt: skip
     """Write [start - pad, end + pad] of the video to `out` (mp4). Returns the
     source time that `out` begins at (the keyframe at or before start - pad)."""

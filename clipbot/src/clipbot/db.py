@@ -59,7 +59,10 @@ CLIP_STATES = frozenset(
 # absent: see module docstring.
 VIDEO_TRANSIENT = frozenset({"acquiring", "transcribing", "selecting"})
 CLIP_TRANSIENT = frozenset({"rendering"})
-STUCK_AFTER = timedelta(minutes=30)
+STUCK_AFTER = timedelta(minutes=10)
+# A worker's claim on a video counts while it keeps refreshing it (every 20 s).
+CLAIM_TTL = timedelta(minutes=2)
+CLAIM_PREFIX = "busy:"
 
 Table = Literal["videos", "clips"]
 
@@ -277,23 +280,60 @@ def transition(
         raise StateConflict(f"{table}/{row_id}: expected {sorted(expected)}, found {actual}")
 
 
-def recover_stuck(conn: sqlite3.Connection, now: datetime | None = None) -> list[tuple[str, str]]:
-    """Roll rows stuck in transient states back to their previous state.
-    Returns [(table, id)] of recovered rows."""
+def claimed_videos(conn: sqlite3.Connection, now: datetime | None = None) -> set[str]:
+    """Videos a live worker is busy with (its claim was refreshed recently)."""
+    since = iso((now or utcnow()) - CLAIM_TTL)
+    rows = conn.execute(
+        "SELECT key FROM kv WHERE key LIKE ? AND updated_at >= ?", (CLAIM_PREFIX + "%", since)
+    ).fetchall()
+    return {r["key"][len(CLAIM_PREFIX) :] for r in rows}
+
+
+def claim_video(conn: sqlite3.Connection, video_id: str, owner: str) -> bool:
+    """Atomically take a video for one worker. False if another live worker has it."""
+    key = CLAIM_PREFIX + video_id
+    with tx(conn):
+        row = conn.execute("SELECT value, updated_at FROM kv WHERE key = ?", (key,)).fetchone()
+        if row and row["value"] != owner and parse_iso(row["updated_at"]) >= utcnow() - CLAIM_TTL:
+            return False
+        kv_set(conn, key, owner)
+    return True
+
+
+def refresh_claim(conn: sqlite3.Connection, video_id: str, owner: str) -> None:
+    with tx(conn):
+        conn.execute(
+            "UPDATE kv SET updated_at = ? WHERE key = ? AND value = ?",
+            (iso(utcnow()), CLAIM_PREFIX + video_id, owner),
+        )
+
+
+def release_video(conn: sqlite3.Connection, video_id: str, owner: str) -> None:
+    with tx(conn):
+        conn.execute("DELETE FROM kv WHERE key = ? AND value = ?", (CLAIM_PREFIX + video_id, owner))
+
+
+def recover_stuck(
+    conn: sqlite3.Connection, now: datetime | None = None, after: timedelta = STUCK_AFTER
+) -> list[tuple[str, str]]:
+    """Roll rows stuck in transient states back to their previous state, unless a
+    live worker has claimed their video. Returns [(table, id)] of recovered rows."""
     now = now or utcnow()
-    cutoff = iso(now - STUCK_AFTER)
+    cutoff = iso(now - after)
+    busy = claimed_videos(conn)
     recovered: list[tuple[str, str]] = []
     with tx(conn):
         for table, states in (("videos", VIDEO_TRANSIENT), ("clips", CLIP_TRANSIENT)):
             marks = ",".join("?" * len(states))
+            vid = "id" if table == "videos" else "video_id"
             rows = conn.execute(
-                f"SELECT id, state, prev_state FROM {table} "
+                f"SELECT id, {vid} AS vid, state, prev_state FROM {table} "
                 f"WHERE state IN ({marks}) AND state_changed_at < ?",
                 (*sorted(states), cutoff),
             ).fetchall()
             for r in rows:
                 back = r["prev_state"]
-                if not back:
+                if not back or r["vid"] in busy:
                     continue
                 conn.execute(
                     f"UPDATE {table} SET state = ?, prev_state = ?, state_reason = ?, "

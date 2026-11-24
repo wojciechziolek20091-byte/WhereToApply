@@ -194,7 +194,7 @@ class BatchRouter(FakeRouter):
 
         self.calls.append(messages)
         ids = re.findall(r"^Clip (\w+)$", messages[1]["content"], re.M)
-        answer = {"verdicts": [{"id": i, **ALLOW} for i in ids]}
+        answer = {"verdicts": [{"id": i, **ALLOW} for i in ids]} if ids else ALLOW
         return LLMResult(validate(answer), "free/model", "", 1, 1, 0.0, [Attempt("m", "ok")])
 
 

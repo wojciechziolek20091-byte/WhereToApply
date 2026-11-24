@@ -56,7 +56,7 @@ def test_unusable_gpu_falls_back_to_cpu_and_is_remembered(
     class Info:
         language, language_probability, duration = "en", 0.99, 2.0
 
-    def fake_run(media, ws, device, model, compute, hint, models_dir, t0):
+    def fake_run(media, ws, device, model, compute, hint, models_dir, t0, progress=None):
         calls.append((device, model))
         if device == "cuda":
             raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")

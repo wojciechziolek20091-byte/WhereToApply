@@ -62,6 +62,8 @@ class _Strict(BaseModel):
 class WhisperSettings(_Strict):
     model: str = "large-v3-turbo"  # used with an NVIDIA GPU
     cpu_model: str | None = "small"  # used without one; null = always use `model`
+    # Without a GPU, for YouTube videos that have no captions (fast path): quicker.
+    fast_cpu_model: str | None = "base"
     device: Literal["auto", "cpu", "cuda"] = "auto"
     compute_type: str = "int8"  # CPU
     gpu_compute_type: str = "float16"

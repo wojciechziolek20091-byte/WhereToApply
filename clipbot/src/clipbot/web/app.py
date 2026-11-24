@@ -369,34 +369,24 @@ def create_app(
             except (LookupError, YouTubeError) as e:
                 return back("/", f"Could not look up the video: {e}", error=True)
         label = f"“{reg.title}” by {reg.channel}" if reg.title else reg.video_id
-        if reg.new and reg.state == "discovered" and clip_now:
-            start_clipping(cfg, reg.video_id)
         if reg.state == "skipped":
             return back("/", f"Refused {label}: {reg.reason}", error=True)
-        if not reg.new:
-            more = " The new number of clips will be used." if reg.count_updated else ""
-            return back("/", f"Already known: {label} ({st.STATE_LABEL.get(reg.state)}).{more}")
+        if clip_now:
+            start_clipping(cfg, reg.video_id)  # also restarts anything that was stuck
+        if reg.again == "more":
+            return back("/", f"Making more clips from {label}, different moments from last time.")
+        if reg.again == "retry":
+            return back("/", f"Trying {label} again now.")
+        if reg.again == "busy":
+            return back("/", f"{label} is being clipped right now. Follow it under Clipping Now.")
         return back("/", f"Accepted {label}. Follow it under Clipping Now.")
 
     def start_clipping(cfg: AppConfig, video_id: str) -> None:
         """Run the pasted video from link to clips in a background thread, unless
         the bot is paused (then it waits for Resume like everything else)."""
-        from clipbot.pipeline import Pipeline
+        from clipbot import runner
 
-        def run() -> None:
-            paths = DataPaths(cfg.settings.data_dir)
-            conn = db.connect(paths.db)
-            try:
-                if db.get_pause(conn).paused or paths.pause_file.exists():
-                    return
-                pipe = (pipeline_factory or Pipeline)(conn, cfg, paths)
-                pipe.fast_process(video_id)
-            except Exception as e:  # shown in the progress panel via the video's state
-                log.warning("fast_clip_failed", video_id=video_id, error=str(e)[:300])
-            finally:
-                conn.close()
-
-        threading.Thread(target=run, name=f"clip-{video_id}", daemon=True).start()
+        runner.start(cfg, video_id, factory=pipeline_factory)
 
     def clip_action(clip_id: str, expect: set[str], to: str, reason: str) -> None:
         cfg = config()
@@ -849,7 +839,6 @@ def urls_for(host: str, port: int) -> list[str]:
 
 def serve_in_thread(app: FastAPI, host: str, port: int) -> Any:
     """Run the dashboard next to the bot loop (which keeps the main thread)."""
-    import threading
 
     import uvicorn
 

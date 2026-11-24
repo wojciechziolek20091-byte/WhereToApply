@@ -160,6 +160,7 @@ def build_messages(
     n: int,
     window: tuple[float, float] | None = None,
     language: str | None = None,
+    taken: Sequence[tuple[float, float]] = (),
 ) -> list[dict[str, str]]:
     """`language`: a language name (e.g. "Polish") to also get the TikTok caption."""
     caption_rules = ""
@@ -181,7 +182,14 @@ def build_messages(
     if window:
         where = f"\nThis is the part of the video from {fmt_ts(window[0])} to {fmt_ts(window[1])}."
     about = f"\nThe channel is about: {topics_hint}" if topics_hint else ""
-    user = f"{rules}{about}{where}\n\nTranscript:\n{lines}"
+    done = ""
+    if taken:
+        spans = ", ".join(f"{a:.1f}-{b:.1f}" for a, b in sorted(taken))
+        done = (
+            f"\nThese moments are already clipped; pick different ones that do not "
+            f"overlap them: {spans}."
+        )
+    user = f"{rules}{about}{where}{done}\n\nTranscript:\n{lines}"
     return [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
 
