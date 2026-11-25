@@ -68,7 +68,7 @@
     <div class="reel-row">
       {% for c in recent %}
       <a class="reel" href="/clips?video={{ c.video_id }}#clip-{{ c.id }}" data-preview="/clips/{{ c.id }}/video">
-        <span class="reel-frame">{% if c.has_video %}<img src="/clips/{{ c.id }}/poster" alt="" loading="lazy">{% endif %}</span>
+        <span class="reel-frame">{% if c.has_video %}<img src="/clips/{{ c.id }}/poster" alt="" width="270" height="480" loading="lazy" decoding="async">{% endif %}</span>
         <span class="reel-hook">{{ c.hook }}</span>
         <span class="reel-meta">{% if c.views is not none %}{{ compact(c.views) }} views{% else %}{{ c.label|capitalize }}{% endif %}</span>
       </a>

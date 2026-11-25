@@ -30,7 +30,7 @@
   <div class="notices" aria-live="polite">
     {% if msg %}<p class="notice ok" role="status">{{ msg }}</p>{% endif %}
     {% if err %}<p class="notice bad" role="alert">{{ err }}</p>{% endif %}
-    {% if s.dry_run and request.url.path != '/setup' and not request.url.path.startswith('/setup/') %}<p class="notice plain">Practice mode: clips are made and checked but never posted. <a href="/settings">Change in Settings</a></p>{% endif %}
+    {% if s.dry_run and request.url.path != '/setup' and not request.url.path.startswith('/setup/') %}<p class="notice plain" id="practice-note">Practice mode: clips are made and checked but never posted. <a href="/settings">Change in Settings</a></p>{% endif %}
   </div>
   {% block content %}{% endblock %}
 </main>

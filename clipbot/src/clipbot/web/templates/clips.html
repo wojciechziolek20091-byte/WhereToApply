@@ -4,8 +4,9 @@
 {% if video %}
 <div class="page-head">
   <div><h1>Clips from “{{ video.title or video.id }}”</h1><p class="muted small">Edit a clip to trim it, change its text or framing. Reject the ones you do not want.</p></div>
-  <a class="btn" href="/clips"><i class="ph ph-arrow-left" aria-hidden="true"></i>All clips</a>
+  <a class="btn" href="/clips"><i class="ph ph-arrow-left" aria-hidden="true"></i>All Clips</a>
 </div>
+<h2 class="sr-only">{{ items|length }} clips</h2>
 {% else %}
 <h1>Clips</h1>
 <nav class="tabs" aria-label="Clip status">

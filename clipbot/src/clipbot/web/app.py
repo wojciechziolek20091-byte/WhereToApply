@@ -91,7 +91,9 @@ def create_app(
     password = pw.get_secret_value() if pw else None
     csrf = secrets.token_urlsafe(24)
     templates = Jinja2Templates(directory=str(HERE / "templates"))
-    templates.env.globals.update(csrf=csrf, tabs=st.CLIP_TABS, privacy_levels=PRIVACY_LEVELS)
+    templates.env.globals.update(
+        csrf=csrf, tabs=st.CLIP_TABS, privacy_levels=PRIVACY_LEVELS, compact=stats_mod.compact
+    )
     templates.env.filters["mmss"] = lambda s: f"{int(s // 60):02d}:{s % 60:04.1f}"
 
     app = FastAPI(title="clip mob", docs_url=None, redoc_url=None, openapi_url=None)

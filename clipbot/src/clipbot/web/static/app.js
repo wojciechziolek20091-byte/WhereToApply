@@ -132,3 +132,15 @@ if (window.matchMedia("(hover: hover)").matches) {
 }
 document.addEventListener("focusin", (e) => { const r = e.target.closest && e.target.closest(".reel"); if (r) startPreview(r); });
 document.addEventListener("focusout", (e) => { const r = e.target.closest && e.target.closest(".reel"); if (r) stopPreview(r); });
+
+// Clip cards: the thumbnail is a link to the video; with JS it plays in place.
+document.addEventListener("click", (e) => {
+  const a = e.target.closest && e.target.closest(".clip-play");
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+  e.preventDefault();
+  const v = document.createElement("video");
+  Object.assign(v, { controls: true, autoplay: true, playsInline: true, src: a.dataset.video });
+  v.setAttribute("aria-label", a.getAttribute("aria-label").replace(/^Play clip: /, "Clip: "));
+  a.replaceWith(v);
+  v.focus();
+});

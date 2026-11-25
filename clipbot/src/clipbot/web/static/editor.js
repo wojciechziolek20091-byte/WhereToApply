@@ -56,10 +56,11 @@
     e.append(msg + " ");
     if (retry) {
       const b = document.createElement("button");
-      b.className = "btn"; b.type = "button"; b.textContent = "Try again";
+      b.className = "btn"; b.type = "button"; b.textContent = "Try Again";
       b.onclick = load; e.append(b);
     }
     e.hidden = false;
+    e.focus();
     $("ed-loading").hidden = true;
   }
 
@@ -156,6 +157,8 @@
     const first = Math.ceil(data.source.offset / step) * step;
     for (let t = first; t <= data.source.offset + d; t += step) {
       const m = document.createElement("span");
+      const at = (t - data.source.offset) / data.source.duration;
+      if (at < 0.025 || at > 0.975) continue;  // a label at the very edge would be cut off
       m.style.left = pct(t);
       m.textContent = fmt(t).replace(/\.0$/, "");
       ruler.append(m);
@@ -176,12 +179,27 @@
   }
 
   // ---------------------------------------------------------------- panels
-  function showTool(name) {
-    document.querySelectorAll(".ed-rail [role=tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tool === name)));
+  function showTool(name, focus) {
+    document.querySelectorAll(".ed-rail [role=tab]").forEach((b) => {
+      const on = b.dataset.tool === name;
+      b.setAttribute("aria-selected", String(on));
+      b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    });
     document.querySelectorAll(".ed-pane").forEach((p) => { p.hidden = p.id !== { trim: "p-trim", text: "p-text", subs: "p-subs", frame: "p-frame", cap: "p-cap" }[name]; });
     if (name === "subs") fillSubs();
   }
-  document.querySelectorAll(".ed-rail [role=tab]").forEach((b) => { b.onclick = () => showTool(b.dataset.tool); });
+  const tabs = [...document.querySelectorAll(".ed-rail [role=tab]")];
+  tabs.forEach((b, i) => {
+    b.onclick = () => showTool(b.dataset.tool);
+    // Arrow keys move between tools (WAI-ARIA tabs pattern); Home/End jump.
+    b.onkeydown = (e) => {
+      const n = { ArrowDown: i + 1, ArrowRight: i + 1, ArrowUp: i - 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (n === undefined) return;
+      e.preventDefault(); e.stopPropagation();
+      showTool(tabs[(n + tabs.length) % tabs.length].dataset.tool, true);
+    };
+  });
 
   function fillForm() {
     $("f-hook").value = st.hook; $("c-hook").textContent = st.hook.length;
@@ -279,7 +297,10 @@
   });
 
   // ---------------------------------------------------------------- saving
-  $("ed-reset").onclick = () => { st = JSON.parse(saved); fillForm(); render(); seek(st.start); };
+  $("ed-reset").onclick = () => {
+    if (!confirm("Undo all changes since the editor opened?")) return;
+    st = JSON.parse(saved); fillForm(); render(); seek(st.start);
+  };
   $("ed-save").onclick = async () => {
     const b = $("ed-save");
     b.disabled = true; b.setAttribute("aria-busy", "true"); b.lastChild.textContent = "Saving…";
@@ -299,7 +320,7 @@
       if (r.ok && out.ok) { saved = snapshot(); location.href = out.redirect; return; }
       fail(out.error || out.detail || "Could not save the changes.");
     } catch (_) { fail("Could not reach clip mob. Is it still running?"); }
-    b.removeAttribute("aria-busy"); b.lastChild.textContent = "Save changes"; render();
+    b.removeAttribute("aria-busy"); b.lastChild.textContent = "Save Changes"; render();
   };
   window.addEventListener("beforeunload", (e) => { if (st && snapshot() !== saved) { e.preventDefault(); e.returnValue = ""; } });
 

@@ -20,7 +20,7 @@
   <div class="showcase" data-key="{{ p.id }}-{{ p.round }}-{{ p.clips|length }}" style="--n: {{ p.clips|length }}" aria-label="Finished clips">
     {% for c in p.clips %}
     <a class="reel" style="--i: {{ loop.index0 }}" href="/clips?video={{ p.id }}#clip-{{ c.id }}" data-preview="/clips/{{ c.id }}/video">
-      <span class="reel-frame"><img src="/clips/{{ c.id }}/poster" alt="" loading="lazy"></span>
+      <span class="reel-frame"><img src="/clips/{{ c.id }}/poster" alt="" width="270" height="480" loading="lazy" decoding="async"></span>
       <span class="reel-hook">{{ c.hook }}</span>
       <span class="reel-meta">{{ '%.0f'|format(c.length) }} s{% if c.state in ('scheduled', 'publishing') %}, queued{% elif c.state == 'published' %}, posted{% endif %}</span>
     </a>

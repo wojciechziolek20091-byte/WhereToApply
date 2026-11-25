@@ -1,8 +1,11 @@
-{# One clip. Expects `c` (ClipView). #}
-<article class="clip" id="clip-{{ c.id }}">
-  <div class="player">
+{# One clip. Expects `c` (ClipView). A 9:16 thumbnail (click to play) beside its text. #}
+<article class="clip" id="clip-{{ c.id }}" aria-labelledby="h-{{ c.id }}">
+  <div class="clip-media">
     {% if c.has_video %}
-    <video controls preload="none" playsinline poster="/clips/{{ c.id }}/poster" src="/clips/{{ c.id }}/video" aria-label="Clip: {{ c.hook }}"></video>
+    <a class="clip-play" href="/clips/{{ c.id }}/video" data-video="/clips/{{ c.id }}/video" aria-label="Play clip: {{ c.hook }}">
+      <img src="/clips/{{ c.id }}/poster" alt="" width="270" height="480" loading="lazy" decoding="async">
+      <span class="play-badge"><i class="ph ph-play" aria-hidden="true"></i><span class="num">{{ '%.0f'|format(c.length) }}&nbsp;s</span></span>
+    </a>
     {% else %}
     <p class="noplayer">{{ c.label|capitalize }}</p>
     {% endif %}
@@ -10,12 +13,12 @@
   <div class="clip-body">
     <div class="clip-meta">
       <span class="tag st-{{ c.state }}">{{ c.label }}</span>
-      {% if c.views is not none %}<span class="views-chip" title="TikTok views">{{ c.views }} views</span>{% else %}<span class="num muted" title="How likely a viewer watches to the end, according to the AI">Score {{ c.score }}</span>{% endif %}
+      {% if c.views is not none %}<span class="num" title="TikTok views"><i class="ph ph-eye" aria-hidden="true"></i> {{ compact(c.views) }}</span>{% else %}<span class="num muted" title="How likely a viewer watches to the end, according to the AI">Score {{ c.score }}</span>{% endif %}
     </div>
-    <h3>{{ c.hook }}</h3>
-    <p class="muted small clamp">{{ c.video_title }} · {{ c.start|mmss }}-{{ c.end|mmss }} ({{ '%.0f'|format(c.length) }}&nbsp;s)</p>
+    <h3 id="h-{{ c.id }}" class="clip-hook">{{ c.hook }}</h3>
+    <p class="muted small clamp">{{ c.video_title }}, {{ c.start|mmss }}-{{ c.end|mmss }}</p>
     {% if c.caption %}
-    <details><summary>Caption</summary><pre class="caption">{{ c.caption }}</pre></details>
+    <p class="caption-preview">{{ c.caption }}</p>
     {% endif %}
     {% if c.qa %}
     {% set ns = namespace(failed=0, warned=0) %}
@@ -29,17 +32,17 @@
     </details>
     {% endif %}
     {% if c.reason and c.state not in ('qa_passed', 'published', 'awaiting_approval', 'scheduled') %}<p class="small muted clamp">{{ c.reason }}</p>{% endif %}
-    {% if c.post_url %}<p class="small"><a href="{{ c.post_url }}" target="_blank" rel="noopener">Open on TikTok</a></p>{% endif %}
-    {% if c.state not in ('publishing', 'published', 'rendering') %}
     <div class="clip-actions">
+      {% if c.state not in ('publishing', 'published', 'rendering') %}
       <a class="btn" href="/clips/{{ c.id }}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i>Edit</a>
+      {% endif %}
       {% if c.state == 'awaiting_approval' %}
-      <form method="post" action="/clips/{{ c.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Approving…">Approve</button></form>
+      <form method="post" action="/clips/{{ c.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Approving…"><i class="ph ph-check" aria-hidden="true"></i>Approve</button></form>
       {% endif %}
       {% if c.state in ('awaiting_approval', 'qa_passed', 'scheduled') %}
-      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Remove this clip? It will never be posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Removing…"><i class="ph ph-x" aria-hidden="true"></i>{{ 'Reject' if c.state == 'awaiting_approval' else "Don't Post" }}</button></form>
+      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Remove this clip? It will never be posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" data-busy="Removing…"><i class="ph ph-x" aria-hidden="true"></i>{{ 'Reject' if c.state == 'awaiting_approval' else "Don't Post" }}</button></form>
       {% endif %}
+      {% if c.post_url %}<a class="btn ghost" href="{{ c.post_url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open on TikTok</a>{% endif %}
     </div>
-    {% endif %}
   </div>
 </article>
