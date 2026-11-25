@@ -5,6 +5,7 @@
   where TikTok draws its own buttons and caption.
 - Hook text box: the clip's hook in a white box in the top third for the first
   seconds, then it fades out.
+- End card: the animated "full video on YouTube" panel in the last seconds.
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from clipbot.models import Word
+from clipbot.render.endcard import STYLE as ENDCARD_STYLE
+from clipbot.render.endcard import EndCard, end_card_events
 from clipbot.select.snap import ends_sentence
 
 CAPTION_STYLE = "Caption"
@@ -95,8 +98,15 @@ def _page_text(page: Sequence[Word], active: int, per_line: int, hl: str) -> str
     return "\\N".join(lines)
 
 
-def build_ass(words: Sequence[Word], duration: float, hook: str, layout: CaptionLayout) -> str:
-    """`words` are already in clip time."""
+def build_ass(
+    words: Sequence[Word],
+    duration: float,
+    hook: str,
+    layout: CaptionLayout,
+    end_card: EndCard | None = None,
+) -> str:
+    """`words` are already in clip time. `end_card`: the "full video on YouTube"
+    panel for the last seconds (endcard.py)."""
     L = layout
     bottom = round(L.height * L.bottom_margin_pct / 100)
     right = round(L.width * L.right_margin_pct / 100)
@@ -118,6 +128,8 @@ Style: {CAPTION_STYLE},{FONT_NAME},{L.font_size},&H00FFFFFF,&H00FFFFFF,&H0000000
 0,0,0,0,100,100,1,0,1,4.5,1,2,{left},{right},{bottom},1
 Style: {HOOK_STYLE},{FONT_NAME},{L.hook_font_size},&H00141414,&H00141414,&H00FFFFFF,\
 &H00FFFFFF,0,0,0,0,100,100,0,0,3,22,0,8,90,90,{hook_top},1
+Style: {ENDCARD_STYLE},Montserrat,40,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,\
+-1,0,0,0,100,100,0,0,1,0,0,5,0,0,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -142,6 +154,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 f"Dialogue: 0,{ass_time(s)},{ass_time(e)},{CAPTION_STYLE},,0,0,0,,"
                 f"{_page_text(page, wi, L.words_per_line, L.highlight_bgr)}"
             )
+    if end_card is not None:
+        events += end_card_events(end_card, duration, ass_time, L.width, L.height)
     return header + "\n".join(events) + "\n"
 
 

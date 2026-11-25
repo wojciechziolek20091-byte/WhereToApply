@@ -242,7 +242,7 @@ def test_link_to_checked_clips_without_a_full_download(env, monkeypatch, tmp_pat
     assert not paths.raw_video("abcdefghijk").exists()  # never downloaded in full
     prompts = [m[1]["content"] for m in router.calls]
     assert sum("Translate these spoken subtitle lines" in t for t in prompts) == 1
-    assert sum("Judge each clip below" in t for t in prompts) == 1
+    assert not any("Judge each clip" in t for t in prompts)  # no safety review
     # Subtitles burned into the video are the translated ones.
     ass = (paths.work_dir("abcdefghijk") / "render").glob("*/clip.ass")
     assert all("PL" in a.read_text() for a in ass)

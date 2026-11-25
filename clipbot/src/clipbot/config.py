@@ -109,14 +109,8 @@ class ClipSettings(_Strict):
     # Clips the model flags with any of these are never made.
     blocked_risk_flags: list[str] = Field(
         default_factory=lambda: [
-            "hate",
-            "sexual",
-            "violence",
-            "personal_data",
             "sponsor_read",
             "copyrighted_music",
-            "medical_claim",
-            "financial_claim",
         ]
     )
 
@@ -265,6 +259,21 @@ class PostSettings(_Strict):
         return v
 
 
+class EndCardSettings(_Strict):
+    # The animated panel at the end of each clip: "full video on YouTube @channel".
+    enabled: bool = True
+    channel: str = Field("franiu78", max_length=60)  # YouTube handle, without "@"
+    seconds: float = Field(3.2, ge=2, le=6)
+
+    @field_validator("channel")
+    @classmethod
+    def _handle(cls, v: str) -> str:
+        v = v.strip().lstrip("@")
+        if v and not re.fullmatch(r"[\w.\-]{1,60}", v):
+            raise ValueError(f"not a YouTube handle: {v!r}")
+        return v
+
+
 class RightsSettings(_Strict):
     # A link pasted with `clipbot clip` from a channel that is not in sources.yaml
     # is accepted only when YouTube reports the video as Creative Commons.
@@ -298,7 +307,7 @@ class SafetySettings(_Strict):
     min_free_disk_gb: float = Field(5, ge=0)
     # false (default): technical checks (speech share, loudness, black or frozen
     # video, caption word count) only warn, so more clips get posted. The content
-    # safety review, credit line, duplicate check and file check always block.
+    # credit line, duplicate check, language check and file check always block.
     strict_qa: bool = False
 
 
@@ -317,6 +326,7 @@ class Settings(_Strict):
     publish: PublishSettings = PublishSettings(windows=["12:00-14:00", "17:00-21:00"])  # type: ignore[list-item]
     rights: RightsSettings = RightsSettings()
     post: PostSettings = PostSettings()
+    end_card: EndCardSettings = EndCardSettings()
     acquire: AcquireSettings = AcquireSettings()
     retention: RetentionSettings = RetentionSettings()
     safety: SafetySettings = SafetySettings()

@@ -133,3 +133,37 @@ def test_filtergraph() -> None:
     assert "[v0][v1]concat=n=2:v=1:a=0[vc]" in g
     assert "subtitles=clip.ass:fontsdir=fonts" in g
     assert "loudnorm=I=-14.0:TP=-1.5" in g and "measured_I=-20.1" in g and "linear=true" in g
+
+
+# ---------------------------------------------------------------- end card
+
+
+def test_springs_settle_with_little_overshoot() -> None:
+    from clipbot.render.endcard import press, spring
+
+    assert spring(0) == 0 and abs(spring(2.0) - 1) < 1e-3
+    peak = max(spring(i / 100) for i in range(200))
+    assert 1.0 < peak < 1.03  # damping 0.8: a hint of overshoot, no wobble
+    assert max(spring(i / 100, damping=0.62) for i in range(200)) > peak  # the icon pops more
+    assert press(0) == 1 and min(press(i / 100) for i in range(60)) < 0.95
+    assert abs(press(1.5) - 1) < 1e-3
+
+
+def test_end_card_in_the_last_seconds() -> None:
+    from clipbot.render.endcard import STYLE, EndCard
+
+    ass = build_ass([], 30.0, "Hook", CaptionLayout(), EndCard("franiu78", "pl", 3.2))
+    lines = [ln for ln in ass.splitlines() if f",{STYLE}," in ln and ln.startswith("Dialogue")]
+    assert lines and f"Style: {STYLE}," in ass
+    starts = sorted(ln.split(",")[1] for ln in lines)
+    assert starts[0] == "0:00:26.80"  # 30 - 3.2
+    assert all(ln.split(",")[2] <= "0:00:30.00" for ln in lines)
+    body = " ".join(lines)
+    assert "@franiu78" in body and "Cały film na YouTube" in body and "Oglądaj" in body
+    assert "\\p1" in body  # vector shapes, not text, for the card
+    # Captions and the hook are unaffected; no card when off or too short.
+    assert count_caption_words(ass) == 0 and has_hook(ass)
+    assert f",{STYLE}," not in build_ass([], 30.0, "Hook", CaptionLayout(), EndCard("", "pl"))
+    assert f",{STYLE}," not in build_ass([], 0.8, "Hook", CaptionLayout(), EndCard("x", "pl"))
+    en = build_ass([], 10.0, "", CaptionLayout(), EndCard("@franiu78", "en"))
+    assert "Full video on YouTube" in en and "@@" not in en

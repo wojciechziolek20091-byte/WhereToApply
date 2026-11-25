@@ -142,20 +142,20 @@ def test_duplicates() -> None:
 # ---------------------------------------------------------------- safety parsing
 
 
-def test_parse_safety() -> None:
-    v = qa.parse_safety({"decision": "Block", "category": "harassment", "reason": "x"})
-    assert v.decision == "block" and v.category == "harassment"
-    assert qa.parse_safety({"decision": "block", "category": "weird"}).category == "other"
-    with pytest.raises(InvalidOutput):
-        qa.parse_safety({"decision": "maybe"})
-    with pytest.raises(InvalidOutput):
-        qa.parse_safety(["allow"])
-    assert not qa.gate_safety(qa.SafetyVerdict("block", "hate", "r"), "m").ok
+def test_language_detection() -> None:
+    assert qa.text_language("Nie uwierzysz, co się stało dalej") == "pl"
+    assert qa.text_language("You will not believe what happened next") == "en"
+    assert qa.text_language("Miód starszy niż cywilizacje") == "pl"  # diacritics
+    assert qa.text_language("SZOK") is None  # too short to tell: not held against it
 
 
-def test_safety_prompt_contains_both_texts() -> None:
-    m = qa.safety_messages("spoken words", "the caption")
-    assert "spoken words" in m[1]["content"] and "the caption" in m[1]["content"]
+def test_language_gate() -> None:
+    ok = qa.gate_language("pl", {"hook": "Nowy hook", "subtitles": "to jest to"}, True)
+    assert ok.ok
+    bad = qa.gate_language("pl", {"subtitles": "this is what it was"}, True)
+    assert not bad.ok and bad.detail == "not in pl: subtitles is in en"
+    assert not qa.gate_language("pl", {}, False).ok  # no caption generated
+    assert qa.gate_language("uk", {"subtitles": "anything"}, True).ok  # not checked
 
 
 # ---------------------------------------------------------------- post text

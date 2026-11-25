@@ -14,7 +14,8 @@ your TikTok account, with nobody in the loop:
    YouTube, then face-centred crop (or the full frame over a blurred background),
    word-by-word captions and a hook text box. All clips are made at once. From a
    pasted link to finished clips takes about 45 seconds on a typical 4-core PC.
-5. **Check** each clip with eight automatic QA gates, including an AI safety review.
+5. **Check** each clip with eight automatic checks: file, captions, credit, duplicates
+   and that its text is in your language. Whether to post it is up to you.
 6. **Post** it to TikTok through Upload-Post, inside your time windows, with a
    caption that credits the original creator and adds hashtags.
 
@@ -34,7 +35,7 @@ It only processes content you have rights to: your own videos, Creative Commons
 | | Cost | Needed for |
 |---|---|---|
 | A computer that stays on (Windows, macOS or Linux) | | everything |
-| [OpenRouter](https://openrouter.ai) account and key | free (only $0 models are used) | picking clips, safety check |
+| [OpenRouter](https://openrouter.ai) account and key | free (only $0 models are used) | picking clips, writing captions, translating subtitles |
 | [YouTube Data API](https://console.cloud.google.com) key | free | reading video licence and details |
 | Your TikTok login (through autotok) | free | posting to TikTok |
 | or an [Upload-Post](https://www.upload-post.com) plan | about $16-24/month | posting through TikTok's official route instead |
@@ -278,8 +279,8 @@ connection, or have the creator send you the files and use `acquire: local_folde
 
 **"Today's free AI requests are used up"**: an OpenRouter key on the free tier may
 make 50 free-model requests a day, shared by everyone using that key. clipbot needs
-about 3 per video (one to pick clips and write captions, one to translate the
-subtitles, one safety review for all of its clips). It waits for the daily reset (midnight UTC) and carries on by itself.
+about 2 per video (one to pick clips and write captions, one to translate the
+subtitles). It waits for the daily reset (midnight UTC) and carries on by itself.
 Adding $10 of credit to the OpenRouter account raises the limit to 1000 a day;
 clipbot still only uses free models.
 
@@ -292,22 +293,28 @@ models that insist on thinking last, and skips music and image models.
 
 ---
 
-## How the safety rules work
+## How the rules work
 
 - **Rights**: checked when a video is found and again right before posting (a video
   that went private, or a Creative Commons licence that was removed, stops the post).
 - **Credit**: for anything that is not your own, the caption ends with
   `Source: <channel> <link> (CC BY)`. Nothing is drawn over the video except
   captions and the hook: no logos, no watermarks.
-- **QA gates**: four always block a clip: a playable file of the right size and
-  length, captions + hook + credit present, not a duplicate of another clip, and an
-  AI safety review that blocks hate, harassment, sexual content, graphic violence,
-  dangerous acts, medical or financial advice stated as fact, private people's
-  personal data and sponsor reads. If the safety review cannot run, the clip waits;
-  it is never posted unchecked. Four technical checks (at least 70% speech,
+- **What makes a clip finished**: a playable file of the right size and length,
+  captions + hook + credit present, not a duplicate of another clip, and its text
+  in your caption language: the TikTok caption was written (first line and
+  hashtags) and the hook, subtitles and caption read as Polish (or whichever
+  language you chose; checked without an AI request). Whether a clip's content is
+  right to post is your decision: approve, reject or edit it in the dashboard.
+  clipbot does not judge what is said. Four technical checks (at least 70% speech,
   loudness -16 to -12 LUFS, no black or stuck frames over 1 s, every word
-  captioned) only show a warning, so the clip still posts; turn on **Strict
-  checks** in Settings (`safety.strict_qa: true`) to have them block too.
+  captioned) only show a warning; turn on **Strict checks** in Settings to have
+  them block too.
+- **End card**: the last 3.2 seconds of every clip show a small animated panel
+  (a dark card with a red play tile, "Cały film na YouTube", "@franiu78" and an
+  "Oglądaj" button) that rises in on a spring, its parts following one after
+  another, and the button presses once. Change the channel or turn it off in
+  Settings (`end_card`).
 - **Caption language**: when a clip is finished, a free AI writes its TikTok
   caption (hook line, summary, hashtags) in Polish by default, and the credit line
   reads `Źródło: <channel> <link> (CC BY)`. The hook box and the word-by-word

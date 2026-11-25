@@ -135,13 +135,8 @@ def test_partial_answers_are_kept() -> None:
     import pytest
 
     from clipbot.post.localize import parse_subtitles
-    from clipbot.qa import parse_safety_batch
     from clipbot.select.llm import InvalidOutput
 
-    got = parse_safety_batch(["a", "b"])(
-        {"verdicts": [{"id": "a", "decision": "allow", "category": "none", "reason": "ok"}]}
-    )
-    assert list(got) == ["a"]
     subs = parse_subtitles({"a": 2, "b": 1})(
         {"clips": [{"id": "a", "lines": ["jeden", "dwa"]}, {"id": "b", "lines": ["x", "y"]}]}
     )

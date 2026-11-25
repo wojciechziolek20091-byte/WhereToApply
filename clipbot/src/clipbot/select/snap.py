@@ -287,7 +287,7 @@ def plan_clips(
     if len(kept) < rules.per_video:
         # Fewer than asked for: take the best of the ones held back only for a
         # low score or a cautious flag (health or money talk, politics, swearing).
-        # The safety review still checks each one before it can be posted.
+        # The user still sees each one before it is posted.
         for d in sorted(plan.dropped, key=lambda d: -d.candidate.score):
             if len(kept) >= rules.per_video:
                 break

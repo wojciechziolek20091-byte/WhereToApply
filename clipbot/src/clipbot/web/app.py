@@ -1000,6 +1000,9 @@ def save_settings_form(path: Path, form: dict[str, Any]) -> bool:
         ("clips", "max_seconds"): num("max_seconds", float),
         ("captions", "hook_seconds"): num("hook_seconds", float),
     }
+    if "end_card_channel" in form:  # the settings page sends both together
+        changes[("end_card", "enabled")] = form.get("end_card") == "on"
+        changes[("end_card", "channel")] = str(form["end_card_channel"]).strip().lstrip("@")
     if form.get("name") is not None and str(form.get("name")).strip():
         changes[("web", "name")] = " ".join(str(form["name"]).split())[:40]
     changed = False

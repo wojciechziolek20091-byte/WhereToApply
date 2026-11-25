@@ -1,8 +1,8 @@
 """Automated QA gates (brief 4.6). Every gate must pass before a clip can post.
 
 Measurements come from the rendered file itself (stream info, ebur128, blackdetect,
-freezedetect) and from the clip's transcript. The safety gate asks a free model
-and fails closed: if no model answers, the clip waits; it is never waved through.
+freezedetect) and from the clip's text. Whether the content is suitable to post
+is the user's decision (approve, reject or edit in the dashboard), not a gate.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from typing import Any
 from clipbot.media import MediaInfo, ProbeError, probe
 from clipbot.models import Word
 from clipbot.render.captions import count_caption_words, has_hook
-from clipbot.select.llm import InvalidOutput
 from clipbot.tools import ffmpeg_exe
 
 MAX_SIZE = 500 * 1024 * 1024
@@ -259,134 +258,64 @@ def gate_caption_sync(ass_text: str, transcript_words: int) -> Gate:
     return Gate(True, f"{cap}/{transcript_words} words captioned", data)
 
 
-# --------------------------------------------------------------------------- 6 safety
+# --------------------------------------------------------------------------- 6 language
 
-SAFETY_CATEGORIES = (
-    "none",
-    "hate",
-    "harassment",
-    "sexual",
-    "graphic_violence",
-    "dangerous_acts",
-    "medical_advice",
-    "financial_advice",
-    "personal_data",
-    "sponsor_read",
+# The commonest short words of each language: enough to tell which language a
+# caption, hook or subtitle text is in, without a model call.
+_PL_WORDS = (
+    "i w na z nie się to że jest do jak co czy a o ten ta tak po ale dla od za już "
+    "jego jej może są tylko by być był była było mi mnie ci go mu nas was im ich "
+    "który która które gdy kiedy więc bo też jeszcze tu tam teraz bardzo wszystko "
+    "nic coś ktoś mam masz ma mamy jak dlaczego gdzie czym tym tego tej przez przy "
+    "pod nad bez oraz albo lub jeśli żeby aby sam sobie siebie"
 )
-
-SAFETY_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["decision", "category", "reason"],
-    "properties": {
-        "decision": {"type": "string", "enum": ["allow", "block"]},
-        "category": {"type": "string", "enum": list(SAFETY_CATEGORIES)},
-        "reason": {"type": "string"},
-    },
-}
-
-SAFETY_SYSTEM = """You review short video clips before they are posted to TikTok. You \
-read the spoken transcript and the caption and decide allow or block. Answer with JSON \
-only."""
-
-SAFETY_RULES = """Block the clip if it contains any of:
-- hate: attacks on people for a protected trait
-- harassment: insults or threats aimed at a real person
-- sexual: sexual content
-- graphic_violence: graphic violence or gore
-- dangerous_acts: instructions or encouragement for dangerous or illegal acts
-- medical_advice: medical advice stated as fact (diagnosis, treatment, dosing)
-- financial_advice: telling people what to buy, sell or invest in, stated as fact
-- personal_data: personal data of private people (phone, address, email, ID)
-- sponsor_read: an ad or sponsor mention
-General facts, stories and opinions are fine. Neutral education about health or \
-money with clear caveats is fine.
-
-Return {"decision": "allow" | "block", "category": one of the categories above or \
-"none", "reason": one short sentence}."""
+_EN_WORDS = (
+    "the and of to a in is it that you i was for on are with as be this have at "
+    "or not but what all were we when your can there an they he she his her my "
+    "if will do so about how why who which just from by one had has been would "
+    "could should them then than more"
+)
+COMMON_WORDS = {"pl": set(_PL_WORDS.split()), "en": set(_EN_WORDS.split())}
+DIACRITICS = {"pl": set("ąćęłńóśźż")}
 
 
-@dataclass(frozen=True)
-class SafetyVerdict:
-    decision: str
-    category: str
-    reason: str
+def text_language(text: str, candidates: Sequence[str] = ("pl", "en")) -> str | None:
+    """The most likely of `candidates` for `text`, or None when there is too
+    little to tell (a short hook with no common words)."""
+    words = re.findall(r"[^\W\d_]+", text.lower())
+    if not words:
+        return None
+    score = {}
+    for lang in candidates:
+        common = sum(1 for w in words if w in COMMON_WORDS.get(lang, ()))
+        marked = sum(1 for w in words if set(w) & DIACRITICS.get(lang, set()))
+        score[lang] = common + 0.7 * marked
+    best = max(score, key=lambda k: score[k])
+    others = [v for k, v in score.items() if k != best]
+    if score[best] < 1 or (others and score[best] <= max(others)):
+        return None
+    return best
 
 
-def parse_safety(data: Any) -> SafetyVerdict:
-    if not isinstance(data, dict):
-        raise InvalidOutput("expected an object")
-    d = str(data.get("decision", "")).strip().lower()
-    c = str(data.get("category", "none")).strip().lower()
-    if d not in ("allow", "block"):
-        raise InvalidOutput(f"bad decision {d!r}")
-    if c not in SAFETY_CATEGORIES:
-        c = "other" if d == "block" else "none"
-    return SafetyVerdict(d, c, str(data.get("reason", ""))[:300])
-
-
-def safety_messages(transcript: str, post_text: str) -> list[dict[str, str]]:
-    user = (
-        f'{SAFETY_RULES}\n\nTranscript of the clip:\n"""\n{transcript}\n"""\n\n'
-        f'Caption:\n"""\n{post_text}\n"""'
-    )
-    return [{"role": "system", "content": SAFETY_SYSTEM}, {"role": "user", "content": user}]
-
-
-SAFETY_BATCH_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["verdicts"],
-    "properties": {
-        "verdicts": {
-            "type": "array",
-            "items": {
-                **SAFETY_SCHEMA,
-                "required": ["id", *SAFETY_SCHEMA["required"]],
-                "properties": {"id": {"type": "string"}, **SAFETY_SCHEMA["properties"]},
-            },
-        }
-    },
-}
-
-
-def safety_batch_messages(items: Sequence[tuple[str, str, str]]) -> list[dict[str, str]]:
-    """One review for several clips: (id, transcript, caption) each. Saves free AI
-    requests (the free tier allows 50 a day)."""
-    clips = "\n\n".join(
-        f'Clip {cid}\nTranscript:\n"""\n{spoken}\n"""\nCaption:\n"""\n{caption}\n"""'
-        for cid, spoken, caption in items
-    )
-    user = (
-        f"{SAFETY_RULES}\n\nJudge each clip below on its own. Return "
-        '{"verdicts": [{"id": clip id, "decision": ..., "category": ..., "reason": ...}]} '
-        f"with one verdict per clip.\n\n{clips}"
-    )
-    return [{"role": "system", "content": SAFETY_SYSTEM}, {"role": "user", "content": user}]
-
-
-def parse_safety_batch(ids: Sequence[str]) -> Any:
-    """Validator for a batch answer: every clip id must have a verdict."""
-
-    def parse(data: Any) -> dict[str, SafetyVerdict]:
-        if not isinstance(data, dict) or not isinstance(data.get("verdicts"), list):
-            raise InvalidOutput('expected {"verdicts": [...]}')
-        out = {}
-        for v in data["verdicts"]:
-            if isinstance(v, dict) and str(v.get("id", "")).strip() in ids:
-                out[str(v["id"]).strip()] = parse_safety(v)
-        if not out:  # some verdicts are kept; clips without one are asked alone
-            raise InvalidOutput(f"no verdict for any of {sorted(ids)}")
-        return out
-
-    return parse
-
-
-def gate_safety(v: SafetyVerdict, model: str) -> Gate:
-    data = {"category": v.category, "model": model, "reason": v.reason}
-    if v.decision == "block":
-        return Gate(False, f"blocked ({v.category}): {v.reason}", data)
-    return Gate(True, f"allowed by {model}", data)
+def gate_language(language: str, texts: dict[str, str], caption_ok: bool) -> Gate:
+    """The clip's text was generated and is in the chosen language: the TikTok
+    caption exists (first line and hashtags), and the hook, subtitles and caption
+    read as `language`. A part too short to tell passes; a part clearly in another
+    language fails."""
+    data: dict[str, Any] = {"language": language}
+    if not caption_ok:
+        return Gate(False, "the TikTok caption was not generated", data)
+    if language not in COMMON_WORDS:
+        return Gate(True, "caption generated", data)
+    wrong = []
+    for part, text in texts.items():
+        found = text_language(text, tuple(COMMON_WORDS))
+        data[part] = found
+        if found and found != language:
+            wrong.append(f"{part} is in {found}")
+    if wrong:
+        return Gate(False, f"not in {language}: " + ", ".join(wrong), data)
+    return Gate(True, f"caption generated; text in {language}", data)
 
 
 # --------------------------------------------------------------------------- 7 & 8

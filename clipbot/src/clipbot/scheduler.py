@@ -350,7 +350,7 @@ class Scheduler:
             # A video goes from link to clips in one go.
             r.add(f"video {vid}: {' > '.join(self.pipe.fast_process(vid)) or 'waiting'}")
             return
-        due = self.pipe.clips_due_for_qa()  # safety checks that waited for a free model
+        due = self.pipe.clips_due_for_qa()  # checks that waited for a free model
         if due:
             r.add(f"clip {due[0]}: {self.pipe.qa(due[0])}")
 

@@ -39,6 +39,7 @@ from clipbot.post.localize import (
 from clipbot.post.text import build_post_text, credit_word, youtube_url
 from clipbot.render.captions import CaptionLayout, build_ass, clip_words, count_caption_words
 from clipbot.render.encode import EncodeSettings, RenderError, contact_sheet, render_clip
+from clipbot.render.endcard import EndCard
 from clipbot.render.reframe import FaceDetector, plan_clip
 from clipbot.select.llm import (
     DailyLimitReached,
@@ -78,6 +79,7 @@ ACQUIRE_RETRY_DELAYS = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=
 SELECT_RETRY_DELAY = timedelta(minutes=30)
 HEARTBEAT_S = 20  # how often a fast worker refreshes its claim on a video
 _subs_lock = threading.Lock()
+NON_CONTENT_FLAGS = frozenset({"sponsor_read", "copyrighted_music"})
 
 _download_locks: dict[str, threading.Lock] = {}
 _download_locks_guard = threading.Lock()
@@ -838,7 +840,9 @@ class Pipeline:
             post_roll=c.post_roll,
             min_score=c.min_score,
             per_video=count or c.per_video,
-            blocked_flags=frozenset(c.blocked_risk_flags),
+            # Content judgement is the user's: only ads and copyrighted music
+            # (quality and rights, not safety) keep a moment out.
+            blocked_flags=frozenset(c.blocked_risk_flags) & NON_CONTENT_FLAGS,
         )
 
     def select(self, video_id: str) -> str:
@@ -1190,7 +1194,6 @@ class Pipeline:
                 made = list(ex.map(lambda cid: self._in_worker(cid, "render"), ids))
                 seen += [r for r in made if r]
                 ok = [cid for cid, r in zip(ids, made, strict=True) if r == "rendered"]
-                self.review_safety(ok)  # one AI request for all clips' safety reviews
                 seen += [r for r in ex.map(lambda cid: self._in_worker(cid, "qa"), ok) if r]
         seen += self.process(video_id)  # checks that had to wait, then "done"
         return seen
@@ -1269,6 +1272,13 @@ class Pipeline:
             self._faces = FaceDetector(face_model(self.paths.models))
         return self._faces
 
+    def end_card(self) -> EndCard | None:
+        ec = self.cfg.settings.end_card
+        if not ec.enabled or not ec.channel:
+            return None
+        lang = self.cfg.settings.post.language
+        return EndCard(ec.channel, "en" if lang == "original" else lang, ec.seconds)
+
     def caption_layout(self, hook_seconds: float | None = None) -> CaptionLayout:
         c, r = self.cfg.settings.captions, self.cfg.settings.render
         return CaptionLayout(
@@ -1329,7 +1339,11 @@ class Pipeline:
                 scenes=self.cfg.settings.render.scene_detect,
             )
             ass = build_ass(
-                words, end - start, c["hook"], self.caption_layout(edit.get("hook_seconds"))
+                words,
+                end - start,
+                c["hook"],
+                self.caption_layout(edit.get("hook_seconds")),
+                self.end_card(),
             )
             render_clip(src, s0, s1, scenes, ass, font_files(), out, work, self.encode_settings())
             contact_sheet(out, sheet, end - start)
@@ -1500,48 +1514,16 @@ class Pipeline:
         ]
         gates["duplicates"] = qa_mod.gate_duplicates(clip_id, start, end, others)
 
-        # Only spend a model call when everything that blocks has passed.
-        if all(g.ok for n, g in gates.items() if qa_mod.blocking(n, strict)):
-            spoken = " ".join(w.w for w in words)
-            cached = self._cached_safety(c, spoken, text)
-            try:
-                res = cached or self.router.complete_json(
-                    purpose="safety",
-                    messages=qa_mod.safety_messages(spoken, text),
-                    validate=qa_mod.parse_safety,
-                    schema=qa_mod.SAFETY_SCHEMA,
-                    schema_name="safety",
-                    max_tokens=1500,
-                    min_context=0,
-                )
-            except NoFreeModelAvailable as e:
-                self._wait_for_model(clip_id, f"safety check waiting: {e}", e)
-                return "rendered"
-            except LLMAuthError as e:
-                db.set_pause(self.conn, f"OpenRouter auth error: {e}")
-                self.alert(
-                    "llm_auth",
-                    f"Paused: OpenRouter refused the key ({e}). Fix "
-                    "OPENROUTER_API_KEY, then run `clipbot resume`.",
-                )
-                return "rendered"
-            gates["safety"] = qa_mod.gate_safety(res.value, res.model)
-            db.log_event(
-                self.conn,
-                "llm_call",
-                f"safety: {res.model}",
-                clip_id=clip_id,
-                video_id=v["id"],
-                data={
-                    "model": res.model,
-                    "input_tokens": res.input_tokens,
-                    "output_tokens": res.output_tokens,
-                    "cost_usd": res.cost_usd,
-                    "decision": res.value.decision,
-                },
-            )
-        else:
-            gates["safety"] = qa_mod.Gate(False, "not checked: an earlier gate failed")
+        shown_text = " ".join(w.w for w in shown)
+        gates["language"] = qa_mod.gate_language(
+            self.cfg.settings.post.language,
+            {
+                "hook": c["hook"],
+                "subtitles": shown_text,
+                "caption": f"{cap.hook} {cap.summary}",
+            },
+            caption_ok=bool(cap.hook.strip() and cap.hashtags),
+        )
 
         result = qa_mod.QAResult(gates, strict=strict)
         to = "qa_passed" if result.passed else "qa_rejected"
@@ -1904,69 +1886,6 @@ class Pipeline:
                     )
         return out
 
-    def _safety_file(self, clip: sqlite3.Row) -> Path:
-        return self.paths.work_dir(clip["video_id"]) / "render" / clip["id"] / "safety.json"
-
-    @staticmethod
-    def _safety_key(spoken: str, text: str) -> str:
-        return hashlib.sha1(f"{spoken}\n{text}".encode()).hexdigest()  # noqa: S324
-
-    def _cached_safety(self, clip: sqlite3.Row, spoken: str, text: str) -> Any:
-        """A verdict from the batch review, if it covered exactly this text."""
-        from clipbot.select.llm import LLMResult
-
-        f = self._safety_file(clip)
-        if not f.is_file():
-            return None
-        d = json.loads(f.read_text(encoding="utf-8"))
-        if d.get("key") != self._safety_key(spoken, text):
-            return None
-        v = qa_mod.SafetyVerdict(**d["verdict"])
-        return LLMResult(v, d["model"], "", 0, 0, 0.0)
-
-    def review_safety(self, clip_ids: list[str]) -> int:
-        """Review several finished clips in one free AI request and keep the
-        verdicts for their checks. Returns how many were reviewed (0 if the AI
-        could not answer: each clip's check then asks on its own)."""
-        items, keys, rows = [], {}, {}
-        for cid in clip_ids:
-            c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (cid,)).fetchone()
-            if c is None:
-                continue
-            v = self._row(c["video_id"])
-            cap = self.caption(c, v)
-            if cap is None:
-                continue
-            tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
-            spoken = " ".join(
-                w.w for w in clip_words(tr.words, c["start_ms"] / 1000, c["end_ms"] / 1000)
-            )
-            text = self.post_text(c, v, cap)
-            items.append((cid, spoken, text))
-            keys[cid], rows[cid] = self._safety_key(spoken, text), c
-        if len(items) < 2:
-            return 0
-        try:
-            res = self.router.complete_json(
-                purpose="safety",
-                messages=qa_mod.safety_batch_messages(items),
-                validate=qa_mod.parse_safety_batch([i[0] for i in items]),
-                schema=qa_mod.SAFETY_BATCH_SCHEMA,
-                schema_name="safety",
-                max_tokens=600 + 300 * len(items),
-                min_context=0,
-            )
-        except NoFreeModelAvailable:
-            return 0
-        for cid, verdict in res.value.items():
-            f = self._safety_file(rows[cid])
-            f.parent.mkdir(parents=True, exist_ok=True)
-            f.write_text(
-                json.dumps({"key": keys[cid], "model": res.model, "verdict": asdict(verdict)}),
-                encoding="utf-8",
-            )
-        return len(res.value)
-
     def _retry_at(self, e: Exception | None = None) -> datetime:
         """When to ask the free models again: after the daily reset when the free
         tier's daily limit is used up, else in 30 minutes."""
@@ -1984,8 +1903,9 @@ class Pipeline:
             )
 
     def revive_soft_rejections(self) -> list[str]:
-        """Clips held back only by technical checks go back for checking, now that
-        those checks only warn. Their content still gets the safety review."""
+        """Clips held back only by technical checks or by the old safety review go
+        back for checking: technical checks now only warn, and there is no safety
+        review any more (posting is the user's decision)."""
         if self.cfg.settings.safety.strict_qa:
             return []
         revived = []
@@ -1993,13 +1913,8 @@ class Pipeline:
             "SELECT id, qa_json, render_path FROM clips WHERE state = 'qa_rejected'"
         ).fetchall():
             gates = json.loads(r["qa_json"] or "{}")
-            failed = [
-                n
-                for n, g in gates.items()
-                if not g.get("ok")
-                and not (n == "safety" and str(g.get("detail", "")).startswith("not checked"))
-            ]
-            if not failed or not all(n in qa_mod.SOFT_GATES for n in failed):
+            failed = [n for n, g in gates.items() if not g.get("ok")]
+            if not failed or not all(n in qa_mod.SOFT_GATES or n == "safety" for n in failed):
                 continue
             if not r["render_path"] or not Path(r["render_path"]).is_file():
                 continue
