@@ -79,7 +79,6 @@ ACQUIRE_RETRY_DELAYS = (timedelta(hours=1), timedelta(hours=6), timedelta(hours=
 SELECT_RETRY_DELAY = timedelta(minutes=30)
 HEARTBEAT_S = 20  # how often a fast worker refreshes its claim on a video
 _subs_lock = threading.Lock()
-NON_CONTENT_FLAGS = frozenset({"sponsor_read", "copyrighted_music"})
 
 _download_locks: dict[str, threading.Lock] = {}
 _download_locks_guard = threading.Lock()
@@ -840,9 +839,8 @@ class Pipeline:
             post_roll=c.post_roll,
             min_score=c.min_score,
             per_video=count or c.per_video,
-            # Content judgement is the user's: only ads and copyrighted music
-            # (quality and rights, not safety) keep a moment out.
-            blocked_flags=frozenset(c.blocked_risk_flags) & NON_CONTENT_FLAGS,
+            # No moment is kept out for what is in it: that is the user's call.
+            blocked_flags=frozenset(),
         )
 
     def select(self, video_id: str) -> str:

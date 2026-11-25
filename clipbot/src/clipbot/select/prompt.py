@@ -34,7 +34,6 @@ CLIP_SCHEMA: dict[str, Any] = {
                     "title",
                     "summary",
                     "hashtags",
-                    "risk_flags",
                 ],
                 "properties": {
                     "start_sec": {"type": "number"},
@@ -44,10 +43,6 @@ CLIP_SCHEMA: dict[str, Any] = {
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
                     "hashtags": {"type": "array", "items": {"type": "string"}},
-                    "risk_flags": {
-                        "type": "array",
-                        "items": {"type": "string", "enum": sorted(RISK_FLAGS)},
-                    },
                 },
             },
         }
@@ -76,9 +71,7 @@ For each clip:
 - hook: at most {hook_words} words shown on screen at the start, in {hook_language}. \
 Punchy, full of tension, true to what is said, no emoji or hashtags.
 - title: at most {title_len} characters. summary: one sentence.
-- hashtags: 3 to 5 topic tags, lower case, no '#'.
-- risk_flags: any of {flags} that apply, or ["none"]. Use sponsor_read if any \
-sponsor or product is mentioned.{caption_rules}
+- hashtags: 3 to 5 topic tags, lower case, no '#'.{caption_rules}
 
 Return {{"clips": [...]}}, best first. Return {{"clips": []}} if nothing qualifies."""
 
@@ -237,13 +230,11 @@ def parse_candidate(d: Any) -> Candidate:
     standalone = d.get("standalone", True)
     if not isinstance(standalone, bool):
         standalone = True
-    flags_raw = d.get("risk_flags")
+    flags_raw = d.get("risk_flags") or []  # no longer asked for; kept if a model sends it
     if not isinstance(flags_raw, list):
-        raise ValueError("risk_flags is not a list")
+        flags_raw = []
     flags = tuple(sorted({str(f).strip().lower() for f in flags_raw} - {"none"}))
-    unknown = set(flags) - RISK_FLAGS
-    if unknown:
-        raise ValueError(f"unknown risk flags {sorted(unknown)}")
+    flags = tuple(f for f in flags if f in RISK_FLAGS)
     return Candidate(
         start,
         end,

@@ -308,8 +308,6 @@ def test_malformed_responses_raise(bad: object) -> None:
     ("patch", "reason"),
     [
         ({"hook": "one two three four five six seven eight nine ten"}, "hook must be"),
-        ({"risk_flags": ["weird"]}, "unknown risk flags"),
-        ({"risk_flags": "none"}, "risk_flags is not a list"),
         ({"score": 140}, "out of range"),
         ({"hashtags": ["a"]}, "fewer than 3"),
         ({"summary": " "}, "empty summary"),

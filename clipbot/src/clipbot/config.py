@@ -106,13 +106,9 @@ class ClipSettings(_Strict):
     min_score: int = Field(70, ge=0, le=100)
     pre_roll: float = Field(0.2, ge=0)
     post_roll: float = Field(0.4, ge=0)
-    # Clips the model flags with any of these are never made.
-    blocked_risk_flags: list[str] = Field(
-        default_factory=lambda: [
-            "sponsor_read",
-            "copyrighted_music",
-        ]
-    )
+    # No longer used (moments are not kept out for their content). Kept so that
+    # settings files from earlier versions still load.
+    blocked_risk_flags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _range(self) -> ClipSettings:

@@ -102,13 +102,11 @@ def test_full_select_flow(env) -> None:
     rows = conn.execute(
         "SELECT start_ms, end_ms, score, state FROM clips ORDER BY score DESC"
     ).fetchall()
-    assert [(r["start_ms"], r["end_ms"], r["score"]) for r in rows] == [
-        (9800, 44300, 90),
-        (49800, 79300, 88),
-    ]
+    # A flagged moment (here: a sponsor mention) is kept: content is the user's call.
+    assert [r["score"] for r in rows] == [95, 90, 88]
+    assert [(r["start_ms"], r["end_ms"]) for r in rows[1:]] == [(9800, 44300), (49800, 79300)]
     plan = json.loads((p.paths.work_dir(vid) / "select" / "plan.json").read_text())
     assert sorted(d["reason"] for d in plan["dropped"]) == [
-        "blocked risk flag: sponsor_read",
         "not standalone",
         "overlaps a higher-scoring clip",
     ]
