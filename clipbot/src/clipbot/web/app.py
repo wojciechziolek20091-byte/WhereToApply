@@ -94,7 +94,7 @@ def create_app(
     templates.env.globals.update(csrf=csrf, tabs=st.CLIP_TABS, privacy_levels=PRIVACY_LEVELS)
     templates.env.filters["mmss"] = lambda s: f"{int(s // 60):02d}:{s % 60:04.1f}"
 
-    app = FastAPI(title="clipbot", docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="clip mob", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
     basic = HTTPBasic(auto_error=False)
 
@@ -113,7 +113,7 @@ def create_app(
         )
         if not ok:
             raise HTTPException(
-                401, "password required", headers={"WWW-Authenticate": 'Basic realm="clipbot"'}
+                401, "password required", headers={"WWW-Authenticate": 'Basic realm="clip mob"'}
             )
 
     def same_origin(request: Request) -> None:

@@ -115,6 +115,7 @@ def test_every_page_renders(config_dir: Path) -> None:
     home = c.get("/")
     assert home.status_code == 200
     assert "not running" in home.text and ", Franiu</h1>" in home.text
+    assert "- clip mob</title>" in home.text and 'class="name">clip mob<' in home.text
     assert "Net views in" in home.text and "Clips posted in" in home.text
     assert 'href="/upload"' in home.text and "Upload clips" in home.text
     assert "Practice mode:" in home.text and "Waiting for your approval" in home.text
@@ -403,7 +404,7 @@ def test_unconfigured_bot_goes_to_setup(config_dir: Path) -> None:
     r = c.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/setup"
     page = c.get("/setup").text
-    assert "Welcome to clipbot" in page and "Start Setup" in page
+    assert "Welcome to clip mob" in page and "Start Setup" in page
     for step in ("ai", "youtube", "channels", "tiktok", "done"):
         assert c.get(f"/setup/{step}").status_code == 200, step
     assert c.get("/setup/nonsense").status_code == 404

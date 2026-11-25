@@ -5,16 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#0c100e">
-<title>{% block title %}Home{% endblock %} - clipbot</title>
+<title>{% block title %}Home{% endblock %} - clip mob</title>
 <link rel="preload" href="/static/vendor/Geist-Variable.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/static/vendor/phosphor.css">
 <link rel="stylesheet" href="/static/style.css">{% block head %}{% endblock %}
+<meta name="application-name" content="clip mob">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect x='4' y='4' width='24' height='24' rx='6' fill='%233ecf8e'/></svg>">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="top">
-  <a class="brand" href="/" translate="no"><span class="mark" aria-hidden="true"></span><span class="name">clipbot</span></a>
+  <a class="brand" href="/" translate="no"><span class="mark" aria-hidden="true"></span><span class="name">clip mob</span></a>
   <nav aria-label="Main">
     {% set here = request.url.path %}
     <a href="/" {% if here == '/' %}aria-current="page"{% endif %}>Home</a>

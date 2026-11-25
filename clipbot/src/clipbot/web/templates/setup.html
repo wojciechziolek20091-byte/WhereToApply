@@ -14,8 +14,8 @@
 
 {% if step == 'welcome' %}
 <section class="panel setup">
-  <h1>Welcome to clipbot</h1>
-  <p class="lead">clipbot turns long YouTube videos into short TikTok clips with captions, and can post them for you.</p>
+  <h1>Welcome to clip mob</h1>
+  <p class="lead">clip mob turns long YouTube videos into short TikTok clips with captions, and can post them for you.</p>
   <p>Setup takes about 10 minutes. You will need:</p>
   <ul class="needs">
     {% if accounts.ai_source == 'shared' %}
@@ -29,7 +29,7 @@
   <p class="muted small">Nothing is posted until you say so. Everything stays on this computer.</p>
   <form method="post" action="/setup/name" class="key-form">
     <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next" value="{{ first_step }}">
-    <label for="name">What should clipbot call you?</label>
+    <label for="name">What should clip mob call you?</label>
     <input id="name" name="name" type="text" maxlength="40" autocomplete="given-name" placeholder="Your first name…">
     <div class="setup-actions"><button class="btn primary">Start Setup</button></div>
   </form>
@@ -39,12 +39,12 @@
 <section class="panel setup">
   <h1>Connect the AI</h1>
   <p class="lead">A free AI reads each video's transcript and picks the moments worth clipping.</p>
-  {% if accounts.ai_source == 'shared' %}<p class="have">clipbot came with an AI key from whoever shared it. Add your own only if clips often wait for the AI.</p>
+  {% if accounts.ai_source == 'shared' %}<p class="have">clip mob came with an AI key from whoever shared it. Add your own only if clips often wait for the AI.</p>
   {% elif accounts.ai %}<p class="have">A key is already saved ({{ accounts.ai }}). Paste a new one only to replace it.</p>{% endif %}
   <ol class="guide">
     <li>Open <a href="https://openrouter.ai" target="_blank" rel="noopener">openrouter.ai</a> and sign in. Signing in with Google works.</li>
     <li>Open <a href="https://openrouter.ai/settings/keys" target="_blank" rel="noopener">Keys</a> and press <b>Create Key</b>.</li>
-    <li>Name it <b>clipbot</b> and set the credit limit to <b>0</b>. That way it can only use free AI and never costs money.</li>
+    <li>Name it <b>clip mob</b> and set the credit limit to <b>0</b>. That way it can only use free AI and never costs money.</li>
     <li>Copy the key and paste it here.</li>
   </ol>
   <form method="post" action="/setup/ai" class="key-form">
@@ -61,10 +61,10 @@
 {% elif step == 'youtube' %}
 <section class="panel setup">
   <h1>Connect YouTube</h1>
-  <p class="lead">A free YouTube key lets clipbot check who owns a video and whether it may be reused.</p>
+  <p class="lead">A free YouTube key lets clip mob check who owns a video and whether it may be reused.</p>
   {% if accounts.youtube %}<p class="have">A key is already saved ({{ accounts.youtube }}). Paste a new one only to replace it.</p>{% endif %}
   <ol class="guide">
-    <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a>, sign in, and create a project called <b>clipbot</b>.</li>
+    <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud</a>, sign in, and create a project called <b>clip mob</b>.</li>
     <li>Open the <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3</a> page and press <b>Enable</b>.</li>
     <li>Open <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a>, press <b>Create credentials</b>, then <b>API key</b>.</li>
     <li>Copy the key and paste it here. It is free; you will not be charged.</li>
@@ -83,7 +83,7 @@
 {% elif step == 'channels' %}
 <section class="panel setup">
   <h1>Add Your Channels</h1>
-  <p class="lead">clipbot watches these channels and clips their new videos. You can also skip this and paste single video links later.</p>
+  <p class="lead">clip mob watches these channels and clips their new videos. You can also skip this and paste single video links later.</p>
   {% if channels %}
   <ul class="channel-list">
     {% for c in channels %}
@@ -108,12 +108,12 @@
   <p class="lead">{{ login.message }}</p>
   <p class="muted small">This page updates by itself. Come back here when you have logged in.</p>
   {% else %}
-  <p class="lead">clipbot posts your clips with your own TikTok login. It is free.</p>
+  <p class="lead">clip mob posts your clips with your own TikTok login. It is free.</p>
   {% if accounts.tiktok %}<p class="have">Connected through {{ accounts.tiktok }}.</p>{% endif %}
   {% if login and login.state == 'error' %}<p class="notice bad">{{ login.message }} Try again.</p>{% endif %}
   <div class="warning-box">
     <p><b>Please read before connecting.</b> This posts through TikTok's website, not TikTok's official way for apps. TikTok can limit or ban accounts that post like this.</p>
-    <p>clipbot posts at most {{ [s.publish.posts_per_day, 8]|min }} times a day, spread out, to lower that risk. Use an account you can afford to lose.</p>
+    <p>clip mob posts at most {{ [s.publish.posts_per_day, 8]|min }} times a day, spread out, to lower that risk. Use an account you can afford to lose.</p>
   </div>
   <form method="post" action="/setup/tiktok/login" class="key-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
@@ -135,7 +135,7 @@
       <label for="key">Upload-Post key</label>
       <input id="key" name="key" type="password" required autocomplete="off" spellcheck="false" placeholder="Paste the key…">
       <label for="profile">Profile name</label>
-      <input id="profile" name="profile" type="text" required autocomplete="off" spellcheck="false" placeholder="clipbot…">
+      <input id="profile" name="profile" type="text" required autocomplete="off" spellcheck="false" placeholder="clipmob…">
       <div class="setup-actions"><button class="btn" data-busy="Checking…">Check and Use Upload-Post</button></div>
     </form>
   </details>
@@ -151,8 +151,8 @@
     <li class="{{ 'ok' if accounts.channels else 'skip' }}">{{ accounts.channels }} channel{{ '' if accounts.channels == 1 else 's' }} watched</li>
     <li class="{{ 'ok' if accounts.tiktok else 'skip' }}">TikTok {{ 'connected' if accounts.tiktok else 'not connected yet' }}</li>
   </ul>
-  <p class="lead">clipbot starts in <b>practice mode</b>: it makes clips and checks them, but does not post. Watch a few clips first. When you like them, turn practice mode off in Settings.</p>
-  {% if not accounts.ready %}<p class="notice bad">The AI and YouTube keys are both needed before clipbot can work. <a href="/setup/{{ 'ai' if not accounts.ai else 'youtube' }}">Add the missing key</a></p>{% endif %}
+  <p class="lead">clip mob starts in <b>practice mode</b>: it makes clips and checks them, but does not post. Watch a few clips first. When you like them, turn practice mode off in Settings.</p>
+  {% if not accounts.ready %}<p class="notice bad">The AI and YouTube keys are both needed before clip mob can work. <a href="/setup/{{ 'ai' if not accounts.ai else 'youtube' }}">Add the missing key</a></p>{% endif %}
   <div class="setup-actions"><a class="btn primary" href="/">Go to Overview</a></div>
 </section>
 {% endif %}

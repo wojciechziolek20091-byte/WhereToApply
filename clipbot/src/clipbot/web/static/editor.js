@@ -30,7 +30,7 @@
     let r;
     try {
       r = await fetch(`/clips/${id}/editor.json`, { credentials: "same-origin" });
-    } catch (_) { return fail("Could not reach clipbot. Is it still running?"); }
+    } catch (_) { return fail("Could not reach clip mob. Is it still running?"); }
     if (!r.ok) {
       let msg = "Could not load this clip for editing.";
       try { msg = (await r.json()).detail || msg; } catch (_) {}
@@ -298,7 +298,7 @@
       const out = await r.json().catch(() => ({}));
       if (r.ok && out.ok) { saved = snapshot(); location.href = out.redirect; return; }
       fail(out.error || out.detail || "Could not save the changes.");
-    } catch (_) { fail("Could not reach clipbot. Is it still running?"); }
+    } catch (_) { fail("Could not reach clip mob. Is it still running?"); }
     b.removeAttribute("aria-busy"); b.lastChild.textContent = "Save changes"; render();
   };
   window.addEventListener("beforeunload", (e) => { if (st && snapshot() !== saved) { e.preventDefault(); e.returnValue = ""; } });
