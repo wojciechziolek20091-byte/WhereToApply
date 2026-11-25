@@ -200,6 +200,20 @@ class BatchRouter(FakeRouter):
                 ]
             }
             return LLMResult(validate(answer), "free/model", "", 1, 1, 0.0, [Attempt("m", "ok")])
+        if purpose == "captions":  # a hook and caption for every clip it is shown
+            import re
+
+            from clipbot.select.llm import Attempt, LLMResult
+
+            self.calls.append(messages)
+            ids = re.findall(r"^Clip (\w+)$", messages[1]["content"], re.M)
+            answer = {"clips": [
+                {"id": i, "open_question": "co dalej", "answer": "x", "hook": "nowy hook",
+                 "title": "Franiu78 robi coś niesamowitego…", "text": "Co się stanie?",
+                 "hashtags": ["#Nauka", "fyp"]}
+                for i in ids
+            ]}  # fmt: skip
+            return LLMResult(validate(answer), "free/model", "", 1, 1, 0.0, [Attempt("m", "ok")])
         if purpose != "safety":
             return super().complete_json(purpose=purpose, messages=messages, validate=validate)
         import re
@@ -237,12 +251,20 @@ def test_link_to_checked_clips_without_a_full_download(env, monkeypatch, tmp_pat
     assert seen[0] == "transcribed" and seen[-1] == "done"
     rows = conn.execute("SELECT state, post_text, render_path FROM clips").fetchall()
     assert [r["state"] for r in rows] == ["qa_passed", "qa_passed"]
-    assert all(r["post_text"].startswith("SZOK! Tego się nie spodziewasz") for r in rows)
+    # The caption pass rewrote hook and caption from what each clip says.
+    assert all(
+        r["post_text"].startswith("Franiu78 robi coś niesamowitego…\n\nCo się stanie?")
+        for r in rows
+    )
+    hooks = {h for (h,) in conn.execute("SELECT hook FROM clips")}
+    assert hooks == {"Nowy hook"}
     assert all(Path(r["render_path"]).is_file() for r in rows)
     assert not paths.raw_video("abcdefghijk").exists()  # never downloaded in full
     prompts = [m[1]["content"] for m in router.calls]
     assert sum("Translate these spoken subtitle lines" in t for t in prompts) == 1
     assert not any("Judge each clip" in t for t in prompts)  # no safety review
+    cap_prompt = next(t for t in prompts if "open_question" in t)
+    assert "It ends on:" in cap_prompt and "Opening of the video:" in cap_prompt
     # Subtitles burned into the video are the translated ones.
     ass = (paths.work_dir("abcdefghijk") / "render").glob("*/clip.ass")
     assert all("PL" in a.read_text() for a in ass)

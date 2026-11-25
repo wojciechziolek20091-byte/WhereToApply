@@ -268,3 +268,61 @@ def test_parse_caption() -> None:
     assert c.hook == "Hej" and c.hashtags == ("dlaciebie", "fyp")
     with pytest.raises(InvalidOutput):
         parse_caption({"summary": "x", "hashtags": []})
+
+
+def test_parse_clip_captions() -> None:
+    from clipbot.post.localize import parse_clip_captions
+
+    got = parse_clip_captions(["a", "b", "c"])(
+        {
+            "clips": [
+                {"id": "a", "hook": "zszywacz na stole", "title": "40 sekund…", "text": "I wtedy…",
+                 "hashtags": ["#Praca", "praca", "fyp"]},
+                {"id": "b", "hook": "", "title": "x", "text": "", "hashtags": []},
+                {"id": "zz", "hook": "x", "title": "y", "text": "", "hashtags": []},
+            ]
+        }
+    )  # fmt: skip
+    assert list(got) == ["a"]  # empty hook and unknown id are left out
+    assert got["a"].hook == "Zszywacz na stole" and got["a"].hashtags == ("praca", "fyp")
+    with pytest.raises(InvalidOutput):
+        parse_clip_captions(["a"])({"clips": [{"id": "a", "hook": "", "title": ""}]})
+
+
+def test_caption_prompt_holds_the_answer_back() -> None:
+    from clipbot.post.localize import clip_caption_messages
+
+    m = clip_caption_messages("T", "Chan", "intro", [("a", "words", "and then")], "pl")
+    u = m[1]["content"]
+    assert "answer" in u and "never the outcome" in u and "Clip a" in u and "Polish" in u
+    assert '"Nie uwierzysz"' in u  # the empty openers are named as such
+
+
+def test_captions_with_stray_scripts_or_long_hooks_are_dropped() -> None:
+    from clipbot.post.localize import parse_clip_captions
+
+    base = {"title": "Franiu78 zgubił się…", "text": "Co dalej?", "hashtags": ["tokio"]}
+    got = parse_clip_captions(["a", "b", "c"], "pl")(
+        {
+            "clips": [
+                {"id": "a", "hook": "Północ w Tokio. Telefon padł", **base},
+                {"id": "b", "hook": "Rozmówca sprzedaje 액сесуар biurowy", **base},
+                {"id": "c", "hook": " ".join(["słowo"] * 11), **base},
+            ]
+        }
+    )
+    assert list(got) == ["a"]
+
+
+def test_captions_always_name_the_author(env, monkeypatch, tmp_path) -> None:
+    from tests.test_pipeline_select import clip
+    from tests.test_resend import VID, setup
+    from tests.test_youtube_fast import POLISH
+
+    p, router = setup(env, monkeypatch, tmp_path, [{"clips": [clip(10.4, 43.5, 90) | POLISH]}])
+    p.fast_process(VID)
+    prompt = next(m[1]["content"] for m in router.calls if "open_question" in m[1]["content"])
+    # Own channel: the captions talk about the user, by their channel name.
+    assert "The someone is Franiu78" in prompt and "third person" in prompt
+    row = p._row(VID)
+    assert p.caption_author(row) == "Franiu78"

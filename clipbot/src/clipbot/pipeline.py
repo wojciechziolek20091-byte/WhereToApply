@@ -15,7 +15,7 @@ import shutil
 import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -29,10 +29,13 @@ from clipbot.media import ProbeError, probe
 from clipbot.models import DataPaths, Word
 from clipbot.post.localize import (
     CAPTION_SCHEMA,
+    CLIP_CAPTIONS_SCHEMA,
     SUBTITLE_SCHEMA,
     Caption,
     caption_messages,
+    clip_caption_messages,
     parse_caption,
+    parse_clip_captions,
     parse_subtitles,
     subtitle_messages,
 )
@@ -1184,7 +1187,12 @@ class Pipeline:
         if ids:
             with contextlib.suppress(LLMAuthError):
                 self.router  # noqa: B018  one shared router for all workers
-                self.translate_subtitles(ids)  # one AI request for all clips' subtitles
+                # One AI request for all clips' subtitles and one for their hooks
+                # and captions, at the same time.
+                with ThreadPoolExecutor(max_workers=2) as pre:
+                    subs = pre.submit(self._in_worker_call, "translate_subtitles", ids)
+                    caps = pre.submit(self._in_worker_call, "write_captions", ids)
+                    subs.result(), caps.result()
             # All clips are made at once, then all are checked at once: the clips
             # exist as early as possible, and the checks' AI calls overlap.
             n = workers or max(1, min(len(ids), 4))
@@ -1230,6 +1238,103 @@ class Pipeline:
                 "WHERE video_id = ? AND state = 'rendering' AND prev_state IS NOT NULL",
                 (reason, db.iso(now), db.iso(now), video_id),
             )
+
+    def _in_worker_call(self, method: str, ids: list[str]) -> Any:
+        """Call a Pipeline method on its own database connection (thread-safe)."""
+        conn = db.connect(self.paths.db)
+        try:
+            worker = Pipeline(
+                conn,
+                self.cfg,
+                self.paths,
+                youtube=self._yt,
+                providers=self._providers,
+                clock=self.now,
+                router=self._router,
+                transcriber=self._transcribe,
+            )
+            return getattr(worker, method)(ids)
+        finally:
+            conn.close()
+
+    def caption_author(self, video: sqlite3.Row) -> str:
+        """Who the captions talk about, in the third person: the user (by their
+        YouTube channel name) for their own videos; the real creator otherwise,
+        so a caption never says the user did what someone else did."""
+        source = self.source_by_id(video["source_id"])
+        channel = self.cfg.settings.end_card.channel
+        if source.rights == "own" and channel:
+            return channel[:1].upper() + channel[1:]
+        return source.attribution or video["channel_title"] or source.name
+
+    def write_captions(self, clip_ids: list[str]) -> int:
+        """Write each clip's on-screen hook and TikTok caption in one free AI
+        request, from what the clip says and how it ends (the video's opening for
+        context). Clips whose caption was edited by hand are left as they are.
+        Returns how many clips got new text; 0 keeps the text from clip picking."""
+        lang = self.cfg.settings.post.language
+        if lang == "original" or not clip_ids:
+            return 0
+        rows = []
+        for cid in clip_ids:
+            c = self.conn.execute("SELECT * FROM clips WHERE id = ?", (cid,)).fetchone()
+            if c is None:
+                continue
+            f = self.caption_file(c, lang)
+            if f.is_file() and json.loads(f.read_text(encoding="utf-8")).get("edited"):
+                continue
+            rows.append(c)
+        if not rows:
+            return 0
+        v = self._row(rows[0]["video_id"])
+        tr = Transcript.from_json(Path(v["transcript_path"]).read_text(encoding="utf-8"))
+        words = tr.words
+        gist = " ".join(w.w for w in words[:140])
+        author = self.caption_author(v)
+        clips = []
+        for c in rows:
+            a, b = c["start_ms"] / 1000, c["end_ms"] / 1000
+            said = [w.w for w in words if a - 0.05 <= w.start <= b]
+            text = " ".join(said)
+            if len(text) > 1800:  # keep the start and, above all, the end
+                text = " ".join(said[:160]) + " … " + " ".join(said[-90:])
+            clips.append((c["id"], text, " ".join(said[-45:])))
+        try:
+            res = self.router.complete_json(
+                purpose="captions",
+                messages=clip_caption_messages(
+                    v["title"] or "", v["channel_title"] or "", gist, clips, lang, author
+                ),
+                validate=parse_clip_captions([c["id"] for c in rows], lang),
+                schema=CLIP_CAPTIONS_SCHEMA,
+                schema_name="captions",
+                max_tokens=1200 + 450 * len(rows),
+                min_context=0,
+            )
+        except NoFreeModelAvailable as e:
+            log.warning("captions_waiting", video_id=v["id"], error=str(e)[:300])
+            return 0
+        by_id = {c["id"]: c for c in rows}
+        now = db.iso(self.now())
+        for cid, cap in res.value.items():
+            if author.lower() not in cap.title.lower():  # always names the author
+                cap = replace(cap, title=f"{author}: {cap.title[:1].lower()}{cap.title[1:]}")
+            f = self.caption_file(by_id[cid], lang)
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(
+                json.dumps(
+                    {"hook": cap.title, "summary": cap.text, "hashtags": list(cap.hashtags),
+                     "model": res.model},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )  # fmt: skip
+            with db.tx(self.conn):
+                self.conn.execute(
+                    "UPDATE clips SET hook = ?, updated_at = ? WHERE id = ? AND state = 'selected'",
+                    (cap.hook, now, cid),
+                )
+        return len(res.value)
 
     def _in_worker(self, clip_id: str, stage: str) -> str | None:
         """Run `render` or `qa` for one clip on its own database connection, so
@@ -1614,6 +1719,7 @@ class Pipeline:
             f.write_text(
                 json.dumps(
                     {
+                        "edited": True,  # never rewritten by the caption writer
                         "hook": " ".join(str(cap["title"]).split())[:150],
                         "summary": " ".join(str(cap.get("text") or "").split())[:600],
                         "hashtags": [t for t in tags if t][:8],
