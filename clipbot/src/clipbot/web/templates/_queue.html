@@ -7,8 +7,8 @@
       <h2 id="queue-h">{{ timed|length }} clip{{ '' if timed|length == 1 else 's' }} queued</h2>
       <p class="muted small">
         {% if timed %}The last one posts <time datetime="{{ timed[-1].eta.isoformat() }}" data-fmt="weekday-time">{{ timed[-1].eta.astimezone(s.tz).strftime('%a %H:%M') }}</time>. {% endif %}
-        Up to {{ [pub.posts_per_day, 8]|min }} a day, at least {{ pub.min_gap_minutes }}&nbsp;min apart, in {% for w in pub.windows %}{{ w.start.strftime('%H:%M') }}-{{ w.end.strftime('%H:%M') }}{{ ', ' if not loop.last }}{% endfor %}.
-        A window takes more clips when many are queued (1 for up to 3, 2 for up to 8, then 3). Times are estimates. <a href="/settings">Change in Settings</a>
+        {% if pub.posts_per_day %}Up to {{ pub.posts_per_day }} a day{% else %}No daily limit{% endif %}, at least {{ pub.min_gap_minutes }}&nbsp;min apart, in {% for w in pub.windows %}{{ w.start.strftime('%H:%M') }}-{{ w.end.strftime('%H:%M') }}{{ ', ' if not loop.last }}{% endfor %}.
+        A window takes more clips when many are queued (1 for up to 3, 2 for up to 8, 3 for up to 15, 5 for up to 30, then 8). Times are estimates. <a href="/settings">Change in Settings</a>
       </p>
     </div>
     {% if queue|selectattr('deployed')|list %}

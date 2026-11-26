@@ -28,7 +28,7 @@
   </div>
   <div class="quick-menu">
     {% if p.deployable %}
-    <form method="post" action="/videos/{{ p.id }}/deploy" data-confirm="Send {{ p.deployable }} clip{{ '' if p.deployable == 1 else 's' }} to TikTok? They post one at a time, within the daily limit.">
+    <form method="post" action="/videos/{{ p.id }}/deploy" data-confirm="Send {{ p.deployable }} clip{{ '' if p.deployable == 1 else 's' }} to TikTok? They post one at a time, the usual gap apart.">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="btn primary" data-busy="Deploying…"><i class="ph ph-rocket-launch" aria-hidden="true"></i>Deploy all ({{ p.deployable }})</button>
     </form>

@@ -163,12 +163,25 @@ def test_windows_daily_cap_and_gap_over_three_days(env) -> None:
     assert len(poster.submits) == len(times)  # one submit per post, no duplicates
 
 
-def test_hard_ceiling_of_8_even_if_configured_higher(env) -> None:
-    from clipbot.config import POSTS_PER_DAY_CEILING
+def test_no_daily_limit_lets_a_long_queue_post_many_a_day(env) -> None:
+    from clipbot import posting
 
-    assert POSTS_PER_DAY_CEILING == 8
-    with pytest.raises(ValueError):
-        env[0].settings.publish.model_validate({"posts_per_day": 9, "windows": ["12:00-13:00"]})
+    assert [posting.per_window(n) for n in (3, 8, 15, 30, 31, 200)] == [1, 2, 3, 5, 8, 8]
+    s = env[0].settings.model_copy(
+        update={"publish": env[0].settings.publish.model_copy(update={"posts_per_day": None})}
+    )
+    t = DAY1.replace(hour=12)
+    posts: list = []
+    queued = 40
+    while queued and t.date() == DAY1.date():
+        at, _ = posting.earliest(s, t, posts, queued)
+        if at is None or at.date() != DAY1.date():
+            break
+        posts.append(at)
+        queued -= 1
+        t = at
+    assert len(posts) == 16  # 8 in each of the two windows, 10 minutes apart
+    assert posts[1] - posts[0] == timedelta(minutes=10)
 
 
 def test_nothing_posts_outside_windows(env) -> None:

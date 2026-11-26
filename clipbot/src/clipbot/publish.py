@@ -80,7 +80,7 @@ def tiktok_url(post_id: str | None) -> str | None:
 
 def deploy(conn: sqlite3.Connection, video_id: str, now: datetime) -> int:
     """ "Deploy all": queue every finished clip of a video to post next, without
-    waiting for a posting window. The daily cap and the gap between posts still
+    waiting for a posting window. The gap between posts (and a daily limit, if set) still
     apply. Returns how many clips were queued."""
     with db.tx(conn):
         cur = conn.execute(
@@ -102,7 +102,7 @@ SENDABLE = ("qa_passed", "awaiting_approval", "scheduled", "qa_rejected", "rejec
 def send_now(conn: sqlite3.Connection, clip_id: str, now: datetime) -> bool:
     """ "Send to TikTok now": this clip posts at the bot's next step, before
     everything else, skipping the posting window and the gap between posts. The
-    daily limit still applies. False if the clip cannot be sent from its state."""
+    daily limit, if set, still applies. False if the clip cannot be sent from its state."""
     with db.tx(conn):
         cur = conn.execute(
             "UPDATE clips SET prev_state = CASE WHEN state = 'scheduled' THEN prev_state "

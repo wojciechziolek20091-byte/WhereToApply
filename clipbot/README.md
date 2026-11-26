@@ -45,8 +45,8 @@ It only processes content you have rights to: your own videos, Creative Commons
 [autotok](https://github.com/makiisthenes/TiktokAutoUploader), which uses TikTok's
 website. It is free, but it is not TikTok's official API: **TikTok can limit or ban
 accounts that post this way**, and the setup wizard asks you to confirm you accept
-that before connecting. clipbot keeps posting gentle (at most 8 a day, 3 by default,
-spaced out). For the official route, choose Upload-Post in the TikTok step instead:
+that before connecting. Posts are spaced out, but there is no daily limit unless
+you set one in Settings; posting a lot raises the risk. For the official route, choose Upload-Post in the TikTok step instead:
 TikTok only lets audited apps post, and Upload-Post's app is audited.
 
 An NVIDIA GPU makes transcription faster but is not required: on a 4-core CPU a
@@ -240,8 +240,8 @@ is not reachable; that is deliberate.
   for everything in the Queue) sends them back to waiting for the windows.
 - **Send Now** on a clip posts it at the bot's next step, ahead of everything else,
   without waiting for a window or a gap.
-- Every post counts against **posts per day** (at most 8 in any 24 hours), whatever
-  route it takes. Raise it in Settings to let bigger bursts through.
+- There is no daily limit by default. Set a **daily limit** in Settings to cap how
+  many posts go out in any 24 hours, whatever route they take.
 - The **Queue** tab shows the order and the expected time of every queued clip.
 
 ## Going live

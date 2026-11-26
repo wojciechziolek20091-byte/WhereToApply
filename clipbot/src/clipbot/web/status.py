@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from clipbot import db
-from clipbot.config import POSTS_PER_DAY_CEILING, Settings
+from clipbot.config import Settings
 from clipbot.models import DataPaths
 
 POSTED = ("publishing", "published")
@@ -77,7 +77,7 @@ def in_window(s: Settings, t: datetime) -> bool:
 
 def next_post_time(conn: sqlite3.Connection, s: Settings, now: datetime) -> tuple[datetime, str]:
     """Earliest moment the scheduler may post again, and what it is waiting for."""
-    limit = min(s.publish.posts_per_day, POSTS_PER_DAY_CEILING)
+    limit = s.publish.posts_per_day
     since = db.iso(now - timedelta(hours=24))
     recent = [
         db.parse_iso(r[0])
@@ -88,7 +88,7 @@ def next_post_time(conn: sqlite3.Connection, s: Settings, now: datetime) -> tupl
         )
     ]
     t, why = now, "a posting window"
-    if len(recent) >= limit:
+    if limit is not None and len(recent) >= limit:
         free_at = recent[len(recent) - limit] + timedelta(hours=24, seconds=1)
         if free_at > t:
             t, why = free_at, f"the daily limit of {limit}"

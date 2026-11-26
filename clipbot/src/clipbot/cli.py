@@ -51,8 +51,34 @@ def enter_home(app_dir: Path | None = None) -> Path | None:
         # If it is in use, clipbot starts fresh and downloads the models again.
         with contextlib.suppress(OSError):
             shutil.move(str(app_dir / "data"), str(home / "data"))
+    _drop_daily_limit(home)
     os.chdir(home)
     return home
+
+
+def _drop_daily_limit(home: Path) -> None:
+    """Once per install (0.2.10): the daily limit is gone by default, so clear the
+    limit older versions saved (3 unless changed). A limit set again later stays."""
+    import contextlib
+
+    marker = home / "config" / ".daily-limit-removed"
+    path = home / "config" / "settings.yaml"
+    if marker.exists() or not path.is_file():
+        return
+    with contextlib.suppress(Exception):  # never block starting over this
+        from ruamel.yaml import YAML
+
+        y = YAML()
+        y.preserve_quotes = True
+        doc = y.load(path.read_text(encoding="utf-8")) or {}
+        pub = doc.get("publish") or {}
+        if pub.get("posts_per_day") is not None:
+            pub["posts_per_day"] = None
+            tmp = path.with_suffix(".yaml.tmp")
+            with tmp.open("w", encoding="utf-8") as f:
+                y.dump(doc, f)
+            os.replace(tmp, path)
+        marker.write_text("1", encoding="utf-8")
 
 
 def _previous_install(app_dir: Path) -> Path | None:

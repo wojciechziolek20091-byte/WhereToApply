@@ -284,7 +284,7 @@ def test_settings_save_keeps_comments_and_validates(config_dir: Path) -> None:
 @pytest.mark.parametrize(
     ("patch", "msg"),
     [
-        ({"posts_per_day": "9"}, "hard ceiling"),
+        ({"posts_per_day": "0"}, "greater than or equal"),
         ({"windows": "14:00-12:00"}, "window"),
         ({"posts_per_day": "lots"}, "must be a number"),
         ({"language": "klingon"}, "caption language"),
@@ -310,10 +310,10 @@ def test_settings_page_round_trip(config_dir: Path) -> None:
     assert "Saved" in r.text
     r = c.post(
         "/settings",
-        data={**FORM, "csrf": token(c, "/settings"), "posts_per_day": "20"},
+        data={**FORM, "csrf": token(c, "/settings"), "posts_per_day": ""},
         follow_redirects=True,
     )
-    assert "hard ceiling" in r.text
+    assert "Saved" in r.text and 'placeholder="No limit" value=""' in r.text
 
 
 def test_running_bot_picks_up_settings(env, config_dir: Path) -> None:

@@ -1,12 +1,12 @@
 """When a clip may post: the rules shared by the scheduler (which posts) and the
 dashboard's Queue tab (which shows the order and times ahead of time).
 
-- Posting windows: a few clips per window, more when many are queued
+- Posting windows: a few clips per window, many more when a lot are queued
   (`per_window`), 10 minutes apart; the first post of a window keeps the usual
   gap from the previous post.
 - "Deploy all" clips skip the windows and post one at a time, the usual gap apart.
 - "Send now" clips skip windows and gaps.
-- Every post counts against the daily limit (at most 8 in any 24 hours).
+- An optional daily limit (`posts_per_day`); none by default.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import datetime, timedelta
 
-from clipbot.config import POSTS_PER_DAY_CEILING, Settings
+from clipbot.config import Settings
 
 BURST_GAP = timedelta(minutes=10)  # between posts inside one window
 
@@ -26,7 +26,11 @@ def per_window(queued: int) -> int:
         return 1
     if queued <= 8:
         return 2
-    return 3
+    if queued <= 15:
+        return 3
+    if queued <= 30:
+        return 5
+    return 8
 
 
 def window_at(s: Settings, t: datetime) -> tuple[datetime, datetime] | None:
@@ -63,12 +67,12 @@ def earliest(
     `posts`: when earlier posts went out, oldest first. `queued`: clips waiting to
     post. `kind`: "window" (normal), "deployed" (Deploy all) or "now" (Send now).
     None when no window is ever open."""
-    limit = min(s.publish.posts_per_day, POSTS_PER_DAY_CEILING)
+    limit = s.publish.posts_per_day  # None: no daily limit
     gap = timedelta(minutes=s.publish.min_gap_minutes)
     x, why = t, "next in line"
     for _ in range(100):  # move x forward until every rule allows a post
         recent = [q for q in posts if q > x - timedelta(hours=24)]
-        if len(recent) >= limit:
+        if limit is not None and len(recent) >= limit:
             x, why = recent[-limit] + timedelta(hours=24, seconds=1), f"daily limit of {limit}"
             continue
         if kind == "now":

@@ -45,7 +45,7 @@ post:
 publish:
   poster: autotok          # autotok (free, unofficial) | uploadpost (official, paid)
   privacy: account_default # or PUBLIC_TO_EVERYONE, FOLLOWER_OF_CREATOR, SELF_ONLY, ...
-  posts_per_day: 3         # hard ceiling 8
+  posts_per_day: null      # daily limit; null = no limit
   min_gap_minutes: 120
   windows: ["12:00-14:00", "17:00-21:00"]
 retention: {raw_days: 3, render_days: 14}

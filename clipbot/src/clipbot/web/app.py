@@ -487,8 +487,8 @@ def create_app(
         how = (
             "Practice mode is on, so they are saved as practice posts, not sent to TikTok."
             if cfg.settings.dry_run
-            else f"They post one at a time, at least {p.min_gap_minutes} min apart, "
-            f"at most {min(p.posts_per_day, 8)} a day."
+            else f"They post one at a time, at least {p.min_gap_minutes} min apart"
+            + (f", at most {p.posts_per_day} a day." if p.posts_per_day else ".")
         )
         return back("/upload", f"Deployed {n} clip{'' if n == 1 else 's'}. {how}")
 
@@ -680,13 +680,17 @@ def create_app(
             if not send_now(conn, clip_id, clock()):
                 return back(to, "This clip is already posting or posted.", error=True)
         WAKE.set()
-        limit = min(cfg.settings.publish.posts_per_day, 8)
+        limit = cfg.settings.publish.posts_per_day
         how = (
             "It is saved as a practice post (practice mode is on)"
             if cfg.settings.dry_run
             else "It goes to TikTok within a few seconds"
         )
-        return back(to, f"Sending now. {how}, unless the daily limit of {limit} is reached.")
+        return back(
+            to,
+            f"Sending now. {how}"
+            + (f", unless your daily limit of {limit} is reached." if limit else "."),
+        )
 
     @app.post("/videos/{video_id}/undeploy", dependencies=post_deps)
     def undeploy_video(video_id: str, request: Request) -> RedirectResponse:
@@ -1172,7 +1176,9 @@ def save_settings_form(path: Path, form: dict[str, Any]) -> bool:
     changes = {
         ("dry_run",): form.get("dry_run") == "on",
         ("review_mode",): "hold" if form.get("review_mode") == "hold" else "auto",
-        ("publish", "posts_per_day"): num("posts_per_day"),
+        ("publish", "posts_per_day"): (
+            num("posts_per_day") if str(form.get("posts_per_day", "")).strip() else None
+        ),
         ("publish", "min_gap_minutes"): num("min_gap_minutes"),
         ("publish", "privacy"): str(form.get("privacy", "account_default")),
         ("publish", "windows"): flow(windows),

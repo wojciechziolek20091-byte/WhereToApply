@@ -25,7 +25,6 @@ from pydantic import (
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-POSTS_PER_DAY_CEILING = 8
 MAX_CLIPS = 10  # most clips one video can be asked for
 
 Rights = Literal["own", "cc_by", "permission"]
@@ -170,18 +169,9 @@ class PublishSettings(_Strict):
     # restrict accounts). uploadpost: official, paid. tiktok_direct: sandbox only.
     poster: Literal["autotok", "uploadpost", "tiktok_direct"] = "autotok"
     privacy: Literal[PRIVACY_LEVELS] = "account_default"  # type: ignore[valid-type]
-    posts_per_day: int = Field(3, ge=1)
+    posts_per_day: int | None = Field(None, ge=1)  # None: no daily limit
     min_gap_minutes: int = Field(120, ge=0)
     windows: list[PublishWindow]
-
-    @field_validator("posts_per_day")
-    @classmethod
-    def _ceiling(cls, v: int) -> int:
-        if v > POSTS_PER_DAY_CEILING:
-            raise ValueError(
-                f"posts_per_day {v} is above the hard ceiling of {POSTS_PER_DAY_CEILING}"
-            )
-        return v
 
     @field_validator("windows", mode="before")
     @classmethod

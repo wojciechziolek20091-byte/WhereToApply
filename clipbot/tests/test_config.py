@@ -30,7 +30,7 @@ BASE = {
 def test_shipped_config_files_are_valid() -> None:
     cfg = load_config(REPO_CONFIG, env_file=None)
     assert cfg.settings.dry_run is True
-    assert cfg.settings.publish.posts_per_day == 3
+    assert cfg.settings.publish.posts_per_day is None  # no daily limit
     assert cfg.settings.llm.provider == "openrouter" and cfg.settings.llm.free_only is True
     assert [w.start for w in cfg.settings.publish.windows] == [time(12), time(17)]
 
@@ -91,15 +91,12 @@ def test_mention_is_normalised() -> None:
     assert s.tiktok_mention == "some.creator"
 
 
-def test_posts_per_day_ceiling() -> None:
-    with pytest.raises(ValidationError, match="hard ceiling"):
-        PublishSettings.model_validate({"posts_per_day": 9, "windows": ["12:00-14:00"]})
-    assert (
-        PublishSettings.model_validate(
-            {"posts_per_day": 8, "windows": ["12:00-14:00"]}
-        ).posts_per_day
-        == 8
-    )
+def test_daily_limit_is_optional_and_uncapped() -> None:
+    w = {"windows": ["12:00-14:00"]}
+    assert PublishSettings.model_validate(w).posts_per_day is None
+    assert PublishSettings.model_validate({**w, "posts_per_day": 40}).posts_per_day == 40
+    with pytest.raises(ValidationError):
+        PublishSettings.model_validate({**w, "posts_per_day": 0})
 
 
 @pytest.mark.parametrize("w", ["12-14", "14:00-12:00", "25:00-26:00", "12:00-12:00"])
@@ -164,3 +161,21 @@ def test_timezone_names_work_without_a_system_database(monkeypatch: pytest.Monke
     finally:
         zoneinfo.reset_tzpath()
         zoneinfo.ZoneInfo.clear_cache()
+
+
+def test_old_saved_daily_limit_is_cleared_once(tmp_path: Path) -> None:
+    from clipbot.cli import _drop_daily_limit
+    from clipbot.config import load_settings
+
+    (tmp_path / "config").mkdir()
+    path = tmp_path / "config" / "settings.yaml"
+    path.write_text((REPO_CONFIG / "settings.yaml").read_text().replace(
+        "posts_per_day: null", "posts_per_day: 3"))  # fmt: skip
+    _drop_daily_limit(tmp_path)
+    assert load_settings(path).publish.posts_per_day is None
+    assert "# daily limit" in path.read_text()  # comments kept
+    import re
+
+    path.write_text(re.sub(r"posts_per_day:[^#\n]*", "posts_per_day: 20 ", path.read_text()))
+    _drop_daily_limit(tmp_path)  # a limit set again later is left alone
+    assert load_settings(path).publish.posts_per_day == 20

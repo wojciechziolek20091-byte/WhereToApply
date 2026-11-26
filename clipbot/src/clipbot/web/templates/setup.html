@@ -119,7 +119,7 @@
   {% if login and login.state == 'error' %}<p class="notice bad">{{ login.message }} Try again.</p>{% endif %}
   <div class="warning-box">
     <p><b>Please read before connecting.</b> This posts through TikTok's website, not TikTok's official way for apps. TikTok can limit or ban accounts that post like this.</p>
-    <p>clip mob posts at most {{ [s.publish.posts_per_day, 8]|min }} times a day, spread out, to lower that risk. Use an account you can afford to lose.</p>
+    <p>{% if s.publish.posts_per_day %}clip mob posts at most {{ s.publish.posts_per_day }} times a day.{% else %}There is no daily limit: posting a lot raises that risk.{% endif %} Use an account you can afford to lose.</p>
   </div>
   <form method="post" action="/setup/tiktok/login" class="key-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
