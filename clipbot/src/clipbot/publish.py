@@ -14,6 +14,7 @@ vendor says it has never seen it.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -352,6 +353,11 @@ class Publisher:
         return "publishing"
 
     def _published(self, clip_id: str, st: PostStatus) -> str:
+        posts = [
+            {"account": p.get("account", ""), "label": p.get("label", ""),
+             "url": tiktok_url(p.get("video_id"))}
+            for p in (st.raw or {}).get("posts", [])
+        ]  # fmt: skip
         with db.tx(self.conn):
             db.transition(
                 self.conn,
@@ -362,15 +368,17 @@ class Publisher:
                 reason="published",
                 now=self.now(),
                 post_url=st.post_url or tiktok_url(st.post_id),
+                post_urls=json.dumps(posts, ensure_ascii=False) if len(posts) > 1 else None,
                 published_at=db.iso(self.now()),
             )
             db.kv_set(self.conn, "consecutive_failures", "0")
             db.log_event(
                 self.conn,
                 "published",
-                st.post_url or "published",
+                st.post_url
+                or "published" + (f" to {len(posts)} TikTok accounts" if len(posts) > 1 else ""),
                 clip_id=clip_id,
-                data={"post_id": st.post_id},
+                data={"post_id": st.post_id, "posts": posts},
             )
         return "published"
 

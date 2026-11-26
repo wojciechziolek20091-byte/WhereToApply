@@ -8,9 +8,20 @@
   <ul class="accounts">
     <li><span><b>AI</b><br><span class="muted small">{% if accounts.ai_source == 'shared' %}Provided with this copy of clip mob{% elif accounts.ai %}Connected with your own key{% else %}Not connected{% endif %}</span></span><a class="btn" href="/setup/ai?from=settings">{% if accounts.ai_source == 'shared' %}Use My Own Key{% elif accounts.ai %}Change{% else %}Connect{% endif %}</a></li>
     <li><span><b>YouTube</b><br><span class="muted small">{{ 'Connected' if accounts.youtube else 'Not connected' }}</span></span><a class="btn" href="/setup/youtube?from=settings">{{ 'Change' if accounts.youtube else 'Connect' }}</a></li>
+    {% if accounts.tiktok_method == 'autotok' and accounts.tiktok_accounts %}
+    <li class="tt-head"><span><b>TikTok</b><br><span class="muted small">{% if accounts.tiktok_accounts|length == 1 %}Clips post to this account{% else %}Every clip posts to all {{ accounts.tiktok_accounts|length }} accounts{% endif %}</span></span>
+      <a class="btn primary" href="/setup/tiktok?from=settings&amp;add=1"><i class="ph ph-plus" aria-hidden="true"></i>Add Account</a></li>
+    {% for a in accounts.tiktok_accounts %}
+    <li class="tt-account"><span><i class="ph ph-tiktok-logo" aria-hidden="true"></i> <b>{{ a.label }}</b><br><span class="small {{ 'bad-text' if a.problem else 'muted' }}">{{ a.problem or 'Connected' }}</span></span>
+      <span class="row-actions">
+        <form method="post" action="/setup/tiktok/login"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="from" value="settings"><input type="hidden" name="account" value="{{ a.name }}"><button class="btn {{ 'primary' if a.problem }}" data-busy="Opening…">Log In Again</button></form>
+        <form method="post" action="/setup/tiktok/disconnect" data-confirm="Remove {{ a.label }}? {{ 'Clips keep posting to the other accounts.' if accounts.tiktok_accounts|length > 1 else 'Clips will be made but not posted.' }}"><input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="account" value="{{ a.name }}"><button class="btn" data-busy="Removing…">Remove</button></form>
+      </span></li>
+    {% endfor %}
+    {% else %}
     <li><span><b>TikTok</b><br><span class="muted small">{{ 'Connected through ' ~ accounts.tiktok if accounts.tiktok else 'Not connected: clips are made but not posted' }}</span></span>
-      <span class="row-actions"><a class="btn" href="/setup/tiktok?from=settings">{{ 'Change' if accounts.tiktok else 'Connect' }}</a>
-      {% if accounts.tiktok and accounts.tiktok_method == 'autotok' %}<form method="post" action="/setup/tiktok/disconnect" data-confirm="Disconnect TikTok? Clips will be made but not posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Disconnecting…">Disconnect</button></form>{% endif %}</span></li>
+      <span class="row-actions"><a class="btn" href="/setup/tiktok?from=settings">{{ 'Change' if accounts.tiktok else 'Connect' }}</a></span></li>
+    {% endif %}
   </ul>
   <form method="post" action="/setup/notify" class="notify-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">

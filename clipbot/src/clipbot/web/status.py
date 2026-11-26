@@ -261,6 +261,7 @@ class ClipView:
     edited: bool = False
     deployed: bool = False
     post_now: bool = False
+    posts: tuple[tuple[str, str], ...] = ()  # (account label, url) when on several
 
     @property
     def length(self) -> float:
@@ -307,9 +308,22 @@ def clip_views(
                 edited=bool(r["edit_json"]),
                 deployed=bool(r["deploy_at"]),
                 post_now=bool(r["post_now"]),
+                posts=_posts(r["post_urls"]),
             )
         )
     return out
+
+
+def _posts(raw: str | None) -> tuple[tuple[str, str], ...]:
+    try:
+        items = json.loads(raw or "[]")
+    except ValueError:
+        return ()
+    return tuple(
+        (str(p.get("label") or "TikTok"), str(p["url"]))
+        for p in items
+        if isinstance(p, dict) and str(p.get("url") or "").startswith("https://")
+    )
 
 
 def video_rows(conn: sqlite3.Connection, limit: int = 100) -> list[dict[str, Any]]:

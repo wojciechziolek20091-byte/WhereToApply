@@ -550,3 +550,11 @@ body.wide #practice-note { display: none; }
   .q-when { grid-column: 3 / 4; grid-row: 2; }
   .q-actions { grid-column: 4; grid-row: 1 / 3; }
 }
+
+/* TikTok accounts: one row each under the TikTok heading */
+.accounts li.tt-account { padding-left: 14px; border-top-style: dashed; }
+.accounts li.tt-account .ph { color: var(--muted); }
+@media (max-width: 560px) {
+  .accounts li.tt-account, .accounts li.tt-head { flex-wrap: wrap; }
+  .accounts li.tt-account .row-actions { width: 100%; }
+}

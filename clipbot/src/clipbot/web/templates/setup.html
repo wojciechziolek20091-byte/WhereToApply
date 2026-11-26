@@ -102,14 +102,20 @@
 
 {% elif step == 'tiktok' %}
 <section class="panel setup">
-  <h1>Connect TikTok</h1>
+  <h1>{{ 'Add a TikTok Account' if adding else 'Connect TikTok' }}</h1>
   {% if login and login.state in ('preparing', 'waiting') %}
   <meta http-equiv="refresh" content="3">
   <p class="lead">{{ login.message }}</p>
   <p class="muted small">This page updates by itself. Come back here when you have logged in.</p>
   {% else %}
+  {% if adding %}
+  <p class="lead">Log in to one more TikTok account. Every clip then posts to all your accounts at the same time.</p>
+  {% if accounts.tiktok_accounts %}<p class="have">Connected now: {{ accounts.tiktok_accounts|map(attribute='label')|join(', ') }}.</p>{% endif %}
+  {% else %}
   <p class="lead">clip mob posts your clips with your own TikTok login. It is free.</p>
   {% if accounts.tiktok %}<p class="have">Connected through {{ accounts.tiktok }}.</p>{% endif %}
+  {% endif %}
+  {% if login and login.state == 'done' and login.message %}<p class="notice">{{ login.message }}</p>{% endif %}
   {% if login and login.state == 'error' %}<p class="notice bad">{{ login.message }} Try again.</p>{% endif %}
   <div class="warning-box">
     <p><b>Please read before connecting.</b> This posts through TikTok's website, not TikTok's official way for apps. TikTok can limit or ban accounts that post like this.</p>
@@ -117,13 +123,18 @@
   </div>
   <form method="post" action="/setup/tiktok/login" class="key-form">
     <input type="hidden" name="csrf" value="{{ csrf }}">{% if returning %}<input type="hidden" name="from" value="settings">{% endif %}
+    {% if adding %}<input type="hidden" name="add" value="1">
+    <label for="tt-label">Name for this account <span class="muted">(optional)</span></label>
+    <input id="tt-label" name="label" type="text" maxlength="60" autocomplete="off" spellcheck="false" placeholder="@your_second_account…">
+    <p class="muted small">Only shown here in clip mob, so you can tell your accounts apart.</p>{% endif %}
     <label class="toggle"><input type="checkbox" name="consent" required><span><span class="toggle-title">I understand TikTok may limit or ban this account</span><span class="muted small">A browser window opens next. Log in to TikTok there; scanning the QR code with the TikTok app is quickest.</span></span></label>
     <div class="setup-actions">
-      <button class="btn primary" data-busy="Opening…">{{ 'Log In Again' if accounts.tiktok else 'Log In to TikTok' }}</button>
+      <button class="btn primary" data-busy="Opening…">{{ 'Log In to the New Account' if adding else ('Log In Again' if accounts.tiktok else 'Log In to TikTok') }}</button>
+      {% if returning and not adding and accounts.tiktok_accounts %}<a class="btn" href="/setup/tiktok?from=settings&amp;add=1">Add Another Account</a>{% endif %}
       {% if not returning %}<a class="btn" href="/setup/done">{{ 'Continue' if accounts.tiktok else 'Skip for Now' }}</a>{% endif %}
     </div>
   </form>
-  <details class="alt-method"><summary>Use Upload-Post instead (official, paid)</summary>
+{% if not adding %}  <details class="alt-method"><summary>Use Upload-Post instead (official, paid)</summary>
     <p class="muted small">Upload-Post is a paid service that TikTok allows to post for you, with no ban risk from the posting method.</p>
     <ol class="guide">
       <li>Sign up at <a href="https://www.upload-post.com" target="_blank" rel="noopener">upload-post.com</a> and choose a plan that includes TikTok.</li>
@@ -138,7 +149,7 @@
       <input id="profile" name="profile" type="text" required autocomplete="off" spellcheck="false" placeholder="clipmob…">
       <div class="setup-actions"><button class="btn" data-busy="Checking…">Check and Use Upload-Post</button></div>
     </form>
-  </details>
+  </details>{% endif %}
   {% endif %}
 </section>
 

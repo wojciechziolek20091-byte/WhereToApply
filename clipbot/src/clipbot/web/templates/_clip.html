@@ -16,7 +16,7 @@
       {% if c.views is not none %}<span class="num" title="TikTok views"><i class="ph ph-eye" aria-hidden="true"></i> {{ compact(c.views) }}</span>{% else %}<span class="num muted" title="How likely a viewer watches to the end, according to the AI">Score {{ c.score }}</span>{% endif %}
     </div>
     <h3 id="h-{{ c.id }}" class="clip-hook">{{ c.hook }}</h3>
-    <p class="muted small clamp">{{ c.video_title }}, {{ c.start|mmss }}-{{ c.end|mmss }}</p>
+    <p class="muted small clamp">{{ c.video_title }}, {{ c.start|mmss }}-{{ c.end|mmss }}{% if c.posts %} · posted to {{ c.posts|length }} accounts{% endif %}</p>
     {% if c.caption %}
     <p class="caption-preview">{{ c.caption }}</p>
     {% endif %}
@@ -48,7 +48,9 @@
       {% if c.state in ('qa_rejected', 'rejected', 'skipped') and c.has_video %}
       <form method="post" action="/clips/{{ c.id }}/post-anyway" data-confirm="Post this clip after all? It joins the posting queue like an approved clip."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Queuing…"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Post Anyway</button></form>
       {% endif %}
-      {% if c.post_url %}<a class="btn ghost" href="{{ c.post_url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open on TikTok</a>{% endif %}
+      {% if c.posts %}
+      {% for label, url in c.posts %}<a class="btn ghost" href="{{ url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>{{ label }}</a>{% endfor %}
+      {% elif c.post_url %}<a class="btn ghost" href="{{ c.post_url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open on TikTok</a>{% endif %}
     </div>
   </div>
 </article>

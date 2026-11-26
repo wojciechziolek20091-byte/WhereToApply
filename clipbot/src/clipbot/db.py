@@ -199,6 +199,10 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE clips ADD COLUMN post_now INTEGER NOT NULL DEFAULT 0;
     """,
+    # 5: one clip posted to several TikTok accounts: [{"label", "url"}, ...]
+    """
+    ALTER TABLE clips ADD COLUMN post_urls TEXT;
+    """,
 ]
 
 

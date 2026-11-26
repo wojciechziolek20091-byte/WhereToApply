@@ -165,7 +165,7 @@ def test_login_needs_consent(config_dir: Path, monkeypatch: pytest.MonkeyPatch) 
     from tests.test_web import client, token
 
     started = []
-    monkeypatch.setattr(at, "start_login", lambda home, timeout=600: started.append(home))
+    monkeypatch.setattr(at, "start_login", lambda home, **k: started.append(home) or True)
     c = client(config_dir)
     r = c.post(
         "/setup/tiktok/login", data={"csrf": token(c, "/setup/tiktok")}, follow_redirects=True

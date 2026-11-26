@@ -791,6 +791,7 @@ def create_app(
             steps=steps,
             in_steps=step in order,
             login=_login_view() if step == "tiktok" else None,
+            adding=request.query_params.get("add") == "1",
             accounts=account_status(cfg),
             channels=cfg.sources,
             rights=acc.RIGHTS_CHOICES,
@@ -901,19 +902,33 @@ def create_app(
 
     @app.post("/setup/tiktok/login", dependencies=post_deps)
     async def tiktok_login(request: Request) -> RedirectResponse:
+        """Log in to TikTok: the first account, one more account (`add`), or an
+        existing account again (`account`)."""
         from clipbot.post import autotok_poster as at
 
         form = await request.form()
-        if form.get("consent") != "on":
+        home = at.autotok_home(DataPaths(config().settings.data_dir).root)
+        existing = {a.name for a in at.accounts(home)}
+        again = str(form.get("account", ""))
+        adding = form.get("add") == "1"
+        if again and again not in existing:
+            return back("/settings", "That TikTok account is no longer connected.", error=True)
+        if form.get("consent") != "on" and not (again and at.consented(home)):
             return back(
-                "/setup/tiktok" + _from(form),
+                "/setup/tiktok" + _from(form) + ("&add=1" if adding and _from(form) else
+                                                 "?add=1" if adding else ""),
                 "Tick the box to confirm you understand the risk first.",
                 error=True,
-            )
-        home = at.autotok_home(DataPaths(config().settings.data_dir).root)
+            )  # fmt: skip
+        name = again or (at.new_account_name(home) if adding else at.ACCOUNT)
         at.record_consent(home)
         set_poster(config_dir, "autotok")
-        at.start_login(home)
+        if not at.start_login(home, account=name, label=str(form.get("label", ""))[:60]):
+            return back(
+                "/setup/tiktok?waiting=1" + ("&from=settings" if form.get("from") else ""),
+                "A TikTok login is already open. Finish that one first.",
+                error=True,
+            )
         return RedirectResponse(
             "/setup/tiktok?waiting=1"
             + ("&from=settings" if form.get("from") == "settings" else ""),
@@ -921,10 +936,22 @@ def create_app(
         )
 
     @app.post("/setup/tiktok/disconnect", dependencies=post_deps)
-    def tiktok_disconnect() -> RedirectResponse:
+    async def tiktok_disconnect(request: Request) -> RedirectResponse:
         from clipbot.post import autotok_poster as at
 
-        at.disconnect(at.autotok_home(DataPaths(config().settings.data_dir).root))
+        form = await request.form()
+        home = at.autotok_home(DataPaths(config().settings.data_dir).root)
+        name = str(form.get("account", "")) or None
+        if name and not at.valid_account_name(name):
+            raise HTTPException(400, "bad account")
+        at.disconnect(home, name)
+        left = len(at.accounts(home))
+        if left:
+            return back(
+                "/settings",
+                f"Account removed. Clips keep posting to the other "
+                f"{'account' if left == 1 else f'{left} accounts'}.",
+            )
         return back("/settings", "TikTok disconnected. Clips are made but not posted.")
 
     @app.post("/setup/notify", dependencies=post_deps)
@@ -966,12 +993,26 @@ def tiktok_label(cfg: AppConfig) -> str:
     from clipbot.post.autotok_poster import autotok_home, connected, consented
 
     if cfg.settings.publish.poster == "autotok":
+        from clipbot.post.autotok_poster import accounts
+
         home = autotok_home(DataPaths(cfg.settings.data_dir).root)
-        return "your TikTok login" if consented(home) and connected(home) else ""
+        if not (consented(home) and connected(home)):
+            return ""
+        n = len(accounts(home))
+        return "your TikTok login" if n == 1 else f"{n} TikTok accounts"
     key = cfg.secrets.upload_post_api_key
     if cfg.settings.publish.poster == "uploadpost" and key and key.get_secret_value():
         return f"Upload-Post profile {cfg.secrets.upload_post_profile}"
     return ""
+
+
+def tiktok_accounts(cfg: AppConfig) -> list[Any]:
+    """The TikTok accounts clips post to (posting with your own login)."""
+    from clipbot.post.autotok_poster import accounts, autotok_home
+
+    if cfg.settings.publish.poster != "autotok":
+        return []
+    return accounts(autotok_home(DataPaths(cfg.settings.data_dir).root))
 
 
 def set_poster(config_dir: Path, poster: str) -> None:
@@ -1006,7 +1047,7 @@ def _login_view() -> dict[str, str]:
     from clipbot.post.autotok_poster import login_state
 
     st_ = login_state()
-    return {"state": st_.state, "message": st_.message}
+    return {"state": st_.state, "message": st_.message, "account": st_.account}
 
 
 def _from(form: Any) -> str:
@@ -1038,6 +1079,7 @@ def account_status(cfg: AppConfig) -> dict[str, Any]:
         "youtube": acc.mask(val(s.youtube_api_key)),
         "tiktok": tiktok_label(cfg),
         "tiktok_method": cfg.settings.publish.poster,
+        "tiktok_accounts": tiktok_accounts(cfg),
         "notify": bool(val(s.notify_url)),
         "channels": sum(1 for c in cfg.sources if c.enabled),
         "ready": is_configured(cfg),

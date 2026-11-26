@@ -63,6 +63,29 @@ def fetch_views(video_id: str, http: Any = None) -> int | None:
     return parse_play_count(r.text)
 
 
+def clip_ids(row: Any) -> list[str]:
+    """TikTok video ids of one clip: one per account it was posted to."""
+    ids = []
+    try:
+        for p in json.loads(row["post_urls"] or "[]"):
+            vid = tiktok_video_id(p.get("url"))
+            if vid and vid not in ids:
+                ids.append(vid)
+    except (ValueError, TypeError, AttributeError, IndexError, KeyError):
+        pass
+    first = tiktok_video_id(row["post_url"])
+    if first and first not in ids:
+        ids.insert(0, first)
+    return ids
+
+
+def clip_views_now(row: Any, fetch: Any = None) -> int | None:
+    """A clip's views summed over every account, or None if none could be read."""
+    counts = [(fetch or fetch_views)(v) for v in clip_ids(row)]
+    known = [c for c in counts if c is not None]
+    return sum(known) if known else None
+
+
 def refresh_views(
     conn: sqlite3.Connection,
     now: datetime,
@@ -72,7 +95,7 @@ def refresh_views(
 ) -> int:
     """Read the views of up to `limit` posted clips whose reading is oldest."""
     rows = conn.execute(
-        "SELECT id, post_url FROM clips WHERE state = 'published' AND post_url LIKE "
+        "SELECT id, post_url, post_urls FROM clips WHERE state = 'published' AND post_url LIKE "
         "'%tiktok.com/%/video/%' AND published_at >= ? AND (views_at IS NULL OR views_at < ?) "
         "ORDER BY views_at IS NOT NULL, views_at LIMIT ?",
         (db.iso(now - TRACK_FOR), db.iso(now - STALE_AFTER), limit),
@@ -81,7 +104,7 @@ def refresh_views(
     for i, r in enumerate(rows):
         if i:
             time.sleep(pause_s)
-        views = fetch(tiktok_video_id(r["post_url"]))
+        views = clip_views_now(r, fetch)
         with db.tx(conn):
             conn.execute(
                 "UPDATE clips SET views_at = ?"
