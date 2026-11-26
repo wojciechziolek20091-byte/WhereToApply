@@ -572,6 +572,22 @@ def _unlock_fd(fd: int) -> None:
         fcntl.flock(fd, fcntl.LOCK_UN)
 
 
+def lock_owner(path: Path) -> int | None:
+    """The pid recorded by whoever holds (or last held) the lock at `path`."""
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return None
+    try:
+        os.lseek(fd, 1, os.SEEK_SET)  # byte 0 is the (possibly locked) lock byte
+        raw = os.read(fd, 16).decode("ascii", "ignore").strip()
+    except OSError:
+        return None
+    finally:
+        os.close(fd)
+    return int(raw) if raw.isdigit() and int(raw) > 0 else None
+
+
 class ProcessLock:
     """One clipbot process at a time, on Linux, macOS and Windows."""
 

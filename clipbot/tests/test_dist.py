@@ -12,7 +12,7 @@ def test_dist_zip_has_what_users_need_and_nothing_private(tmp_path: Path) -> Non
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     mod.ROOT = ROOT
-    out = mod.main()
+    out = mod.main(tmp_path)  # never overwrite a zip already sent to users
     with zipfile.ZipFile(out) as z:
         names = z.namelist()
         mode = {n: (z.getinfo(n).external_attr >> 16) & 0o777 for n in names}
@@ -43,3 +43,34 @@ def test_default_config_has_no_channels() -> None:
     from clipbot.config import load_sources
 
     assert load_sources(ROOT / "config" / "sources.yaml") == []
+
+
+def test_lock_owner_names_the_running_process(tmp_path: Path) -> None:
+    """`clipbot start` finds (and closes) an older clip mob through this pid."""
+    import os
+    import subprocess
+    import sys
+    import time
+
+    from clipbot import db
+
+    lock = tmp_path / "clipbot.lock"
+    child = subprocess.Popen(
+        [sys.executable, "-c",
+         "import sys, time; from pathlib import Path; from clipbot import db; "
+         "db.ProcessLock(Path(sys.argv[1])).acquire(); print('held', flush=True); "
+         "time.sleep(60)", str(lock)],
+        stdout=subprocess.PIPE, text=True,
+    )  # fmt: skip
+    try:
+        assert child.stdout.readline().strip() == "held"
+        assert db.lock_owner(lock) == child.pid
+        with __import__("pytest").raises(db.LockHeld):
+            db.ProcessLock(lock).acquire()
+    finally:
+        child.kill()
+        child.wait()
+    time.sleep(0.2)
+    with db.ProcessLock(lock):  # free again once that process is gone
+        assert db.lock_owner(lock) == os.getpid()
+    assert db.lock_owner(tmp_path / "missing") is None

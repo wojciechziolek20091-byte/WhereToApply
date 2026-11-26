@@ -20,8 +20,8 @@ def files() -> list[Path]:
     return app_files(ROOT)
 
 
-def main() -> Path:
-    out = build_zip(ROOT, ROOT / "dist" / f"clipbot-{app_version(ROOT)}.zip")
+def main(out_dir: Path | None = None) -> Path:
+    out = build_zip(ROOT, (out_dir or ROOT / "dist") / f"clipbot-{app_version(ROOT)}.zip")
     print(f"{out}  ({out.stat().st_size / 1024:.0f} KB, {len(files())} files)")
     return out
 

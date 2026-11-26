@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
-from clipbot import db
+from clipbot import __version__, db
 from clipbot import logging as clog
 from clipbot.config import AppConfig, ConfigError, load_config
 from clipbot.models import DataPaths
@@ -547,6 +548,36 @@ def _wait_until_up(url: str, seconds: float = 15) -> bool:
     return False
 
 
+def _stop_running(ctx: Ctx, wait_s: float = 15.0) -> bool:
+    """Stop the clip mob process holding the lock. True once the lock is free."""
+    import signal
+    import subprocess
+
+    pid = db.lock_owner(ctx.paths.lock)
+    if pid is None or pid == os.getpid():
+        return False
+    try:
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T", "/F"],
+                capture_output=True,
+                timeout=20,
+                check=False,
+            )
+        else:
+            os.kill(pid, signal.SIGTERM)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    end = time.monotonic() + wait_s
+    while time.monotonic() < end:
+        lock = _try_lock(ctx)
+        if lock is not None:
+            lock.release()
+            return True
+        time.sleep(0.3)
+    return False
+
+
 @app.command()
 def start(
     config_dir: ConfigDirOpt = Path("config"),
@@ -561,8 +592,22 @@ def start(
 
     ctx = _load(config_dir, env_file)
     clog.configure(log_dir=ctx.paths.logs, secrets=ctx.cfg.secrets.values(), console=False)
+    # Read before opening (and so upgrading) the database: which version is running.
     conn = _open_db(ctx)
     lock = _try_lock(ctx)
+    if lock is None and db.kv_get(conn, "running_version") != __version__:
+        # An older clip mob is still open (or one that predates this check). It
+        # cannot read the database this version upgraded, so every page it
+        # serves would be "Internal Server Error": close it and take over.
+        typer.echo("  An older clip mob is still running. Closing it…")
+        if _stop_running(ctx):
+            lock = _try_lock(ctx)
+        if lock is None:
+            typer.echo(
+                "  Could not close the older clip mob. Close every clip mob window "
+                "(or restart the computer), then start clip mob again."
+            )
+            raise typer.Exit(1)
     if lock is None:
         port = db.kv_get(conn, "dashboard_port") or str(ctx.cfg.settings.web.port)
         url = f"http://127.0.0.1:{port}"
@@ -584,6 +629,7 @@ def start(
         _wait_until_up(url + "/static/style.css")
         with db.tx(conn):
             db.kv_set(conn, "dashboard_port", str(port))
+            db.kv_set(conn, "running_version", __version__)
         typer.echo("")
         typer.echo("  clipbot is running.")
         typer.echo(f"  Your dashboard: {url}")

@@ -111,14 +111,24 @@ def create_app(
             error=f"{type(exc).__name__}: {exc}",
             exc_info=exc,
         )
+        newer = "newer than this code" in str(exc)
+        if newer:
+            hint = (
+                "A newer clip mob has updated your data, but this window is an older "
+                "clip mob. Close every clip mob window, then start the newest one."
+            )
+        else:
+            hint = (
+                "This page hit an error. Reload it in a few seconds; if it keeps "
+                "happening, close clip mob and start it again."
+            )
         if request.headers.get("x-csrf-token") or request.url.path.endswith(".json"):
             return JSONResponse({"ok": False, "error": "Something went wrong. Try again."}, 500)
         body = (
             "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
             "<title>clip mob</title><body style='font:16px system-ui;max-width:34rem;"
             "margin:15vh auto;padding:0 16px;color:#222'><h1 style='font-size:1.4rem'>"
-            "Something went wrong</h1><p>This page hit an error. Reload it in a few seconds; "
-            "if it keeps happening, close clip mob and start it again.</p><p style='color:#666;"
+            f"Something went wrong</h1><p>{hint}</p><p style='color:#666;"
             "font-size:.9rem'>Details are saved in the log file in the <b>data/logs</b> folder: "
             f"{type(exc).__name__}.</p><p><a href='/'>Back to home</a></p></body>"
         )
