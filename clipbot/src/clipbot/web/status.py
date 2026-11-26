@@ -107,28 +107,16 @@ def next_post_time(conn: sqlite3.Connection, s: Settings, now: datetime) -> tupl
     return t, why
 
 
-def next_window_start(s: Settings, t: datetime) -> datetime | None:
-    """The first posting-window start after `t` (within a week), or None."""
-    local = t.astimezone(s.tz)
-    for day in range(0, 8):
-        base = (local + timedelta(days=day)).replace(hour=0, minute=0, second=0, microsecond=0)
-        for st in sorted(_window_starts(s, base)):
-            if st > local:
-                return st
-    return None
-
-
 def posting_queue(
     conn: sqlite3.Connection, s: Settings, now: datetime, paused_until: datetime | None = None
 ) -> list[dict[str, Any]]:
     """Every clip that will post, in the order the bot posts them, each with an
-    estimated time and what it waits for. Mirrors the scheduler: clips sent with
-    Deploy all first (they skip posting windows), then approved clips, then (unless
-    you approve each post) ready clips by score; every post respects the gap
-    between posts and the daily limit. `paused_until`: times start from then."""
-    p = s.publish
-    limit = min(p.posts_per_day, POSTS_PER_DAY_CEILING)
-    gap = timedelta(minutes=p.min_gap_minutes)
+    estimated time and what it waits for, from the same rules the bot uses
+    (posting.py): Send now first, then Deploy all, then approved clips, then
+    (unless every post needs approval) ready clips by score; windows take more
+    clips at once while the queue is long. `paused_until`: times start then."""
+    from clipbot import posting
+
     posts = [
         db.parse_iso(r[0])
         for r in conn.execute(
@@ -136,22 +124,23 @@ def posting_queue(
             "ORDER BY submitted_at"
         )
     ]
-    rows = conn.execute(
-        "SELECT c.*, v.title AS video_title FROM clips c JOIN videos v ON v.id = c.video_id "
-        "WHERE c.state = 'publishing'"
-    ).fetchall()
+    base = "SELECT c.*, v.title AS video_title FROM clips c JOIN videos v ON v.id = c.video_id "
+    rows = conn.execute(base + "WHERE c.state = 'publishing'").fetchall()
     rows += conn.execute(
-        "SELECT c.*, v.title AS video_title FROM clips c JOIN videos v ON v.id = c.video_id "
-        "WHERE c.state = 'scheduled' ORDER BY c.deploy_at IS NULL, c.deploy_at, c.score DESC"
+        base + "WHERE c.state = 'scheduled' "
+        "ORDER BY c.post_now DESC, c.deploy_at IS NULL, c.deploy_at, c.score DESC"
     ).fetchall()
     hold = s.review_mode == "hold"
     rows += conn.execute(
-        "SELECT c.*, v.title AS video_title FROM clips c JOIN videos v ON v.id = c.video_id "
-        "WHERE c.state = 'qa_passed' ORDER BY c.score DESC, c.created_at"
+        base + "WHERE c.state = 'qa_passed' ORDER BY c.score DESC, c.created_at"
     ).fetchall()
+    queued = sum(
+        1 for r in rows if r["state"] == "scheduled" or (r["state"] == "qa_passed" and not hold)
+    )
     t = max(now, paused_until) if paused_until else now
     out: list[dict[str, Any]] = []
     for r in rows:
+        kind = "now" if r["post_now"] else "deployed" if r["deploy_at"] else "window"
         item: dict[str, Any] = {
             "id": r["id"],
             "video_id": r["video_id"],
@@ -160,44 +149,32 @@ def posting_queue(
             "length": (r["end_ms"] - r["start_ms"]) / 1000,
             "score": r["score"],
             "state": r["state"],
+            "kind": kind,
             "deployed": bool(r["deploy_at"]),
             "has_video": bool(r["render_path"]) and Path(r["render_path"]).is_file(),
             "eta": None,
             "why": "",
         }
+        out.append(item)
         if r["state"] == "publishing":
             item["why"] = "posting now"
-            out.append(item)
             continue
         if r["state"] == "qa_passed" and hold:
             item["why"] = "waits for your approval first"
-            out.append(item)
             continue
-        x, why = t, "next in line" if not paused_until else "after the pause"
-        if r["next_attempt_at"] and db.parse_iso(r["next_attempt_at"]) > x:
-            x, why = db.parse_iso(r["next_attempt_at"]), "retrying after an error"
-        for _ in range(60):  # move x forward until every rule allows a post
-            recent = [q for q in posts if q > x - timedelta(hours=24)]
-            if len(recent) >= limit:
-                x, why = recent[-limit] + timedelta(hours=24, seconds=1), f"daily limit of {limit}"
-                continue
-            if posts and x < posts[-1] + gap:
-                x, why = posts[-1] + gap, f"{p.min_gap_minutes}-minute gap between posts"
-                continue
-            if not item["deployed"] and not in_window(s, x):
-                nxt = next_window_start(s, x)
-                if nxt is None:
-                    x = None
-                    why = "no posting windows set"
-                    break
-                x, why = nxt, "next posting window"
-                continue
-            break
+        start = t
+        if r["next_attempt_at"] and db.parse_iso(r["next_attempt_at"]) > start:
+            start = db.parse_iso(r["next_attempt_at"])
+        x, why = posting.earliest(s, start, posts, max(queued, 1), kind)
+        if paused_until and x == t:
+            why = "after the pause"
+        elif kind == "now" and x == t:
+            why = "sent now"
         item["eta"], item["why"] = x, why
         if x is not None:
             posts.append(x)
             t = x
-        out.append(item)
+            queued -= 1
     return out
 
 
@@ -282,6 +259,8 @@ class ClipView:
     updated: datetime
     views: int | None = None
     edited: bool = False
+    deployed: bool = False
+    post_now: bool = False
 
     @property
     def length(self) -> float:
@@ -326,6 +305,8 @@ def clip_views(
                 updated=db.parse_iso(r["updated_at"]),
                 views=r["views"],
                 edited=bool(r["edit_json"]),
+                deployed=bool(r["deploy_at"]),
+                post_now=bool(r["post_now"]),
             )
         )
     return out
@@ -453,6 +434,11 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
                 item["deployable"] = sum(
                     1 for c in item["clips"] if c["state"] in ("qa_passed", "awaiting_approval")
                 )
+                item["deployed"] = conn.execute(
+                    "SELECT COUNT(*) FROM clips WHERE video_id = ? AND state = 'scheduled' "
+                    "AND deploy_at IS NOT NULL",
+                    (r["id"],),
+                ).fetchone()[0]
             elif state == "done":
                 item["outcome"] = "none"
                 item["detail"] = (

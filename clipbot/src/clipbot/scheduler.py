@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import shutil
 import signal
+import threading
 import time
 from collections import Counter
 from dataclasses import dataclass
@@ -23,8 +24,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from clipbot import db, runner, stats
-from clipbot.config import POSTS_PER_DAY_CEILING, AppConfig
+from clipbot import db, posting, runner, stats
+from clipbot.config import AppConfig
 from clipbot.logging import get_logger
 from clipbot.notify import Notifier
 from clipbot.pipeline import Pipeline
@@ -39,6 +40,8 @@ DIGEST_HOUR = 20
 QA_WINDOW_VIDEOS = 10
 QA_REJECT_LIMIT = 0.80
 VIEWS_EVERY = timedelta(minutes=20)
+# Set by the dashboard (same process) to run the next tick at once.
+WAKE = threading.Event()
 MAX_PARALLEL_VIDEOS = 2  # videos clipped at the same time by the bot
 RESUME = "Run `clipbot resume` when it is fixed."
 POSTED = ("publishing", "published")
@@ -425,64 +428,71 @@ class Scheduler:
         t = self.local().time()
         return any(w.contains(t) for w in self.cfg.settings.publish.windows)
 
-    def deployed_waiting(self) -> bool:
-        """Clips sent with "Deploy all" post without waiting for a posting window
-        (the daily cap and the gap between posts still apply)."""
-        return bool(
-            self.conn.execute(
-                "SELECT 1 FROM clips WHERE state = 'scheduled' AND deploy_at IS NOT NULL"
-            ).fetchone()
+    # Posting order: "Send now" first, then "Deploy all" (oldest first), then
+    # approved clips, then (unless every post needs approval) ready clips by score.
+    QUEUE_ORDER = "post_now DESC, deploy_at IS NULL, deploy_at, score DESC"
+
+    def queued_count(self) -> int:
+        states = (
+            "('scheduled')"
+            if self.cfg.settings.review_mode == "hold"
+            else ("('scheduled', 'qa_passed')")
         )
+        return self.conn.execute(f"SELECT COUNT(*) FROM clips WHERE state IN {states}").fetchone()[
+            0
+        ]
+
+    def post_times(self) -> list[datetime]:
+        since = db.iso(self.now - timedelta(hours=48))
+        return [
+            db.parse_iso(r[0])
+            for r in self.conn.execute(
+                f"SELECT submitted_at FROM clips WHERE state IN {POSTED} AND submitted_at >= ? "
+                "ORDER BY submitted_at",
+                (since,),
+            )
+        ]
+
+    def next_clip(self) -> str | None:
+        """The clip to post next, if the posting rules allow one right now."""
+        ok, _ = self.can_publish()
+        return self._candidate()[0] if ok else None
+
+    def _candidate(self) -> tuple[str | None, str]:
+        now = db.iso(self.now)
+        row = self.conn.execute(
+            "SELECT id, post_now, deploy_at FROM clips WHERE state = 'scheduled' AND "
+            f"(next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY {self.QUEUE_ORDER} "
+            "LIMIT 1",
+            (now,),
+        ).fetchone()
+        if row is None and self.cfg.settings.review_mode != "hold":
+            row = self.conn.execute(
+                "SELECT id, post_now, deploy_at FROM clips WHERE state = 'qa_passed' "
+                "ORDER BY score DESC, created_at LIMIT 1"
+            ).fetchone()
+        if row is None:
+            return None, ""
+        kind = "now" if row["post_now"] else "deployed" if row["deploy_at"] else "window"
+        return row["id"], kind
 
     def can_publish(self) -> tuple[bool, str]:
         paused, why = self.paused()
         if paused:
             return False, f"paused ({why})"
-        if not self.in_window() and not self.deployed_waiting():
-            return False, "outside posting windows"
         if self.conn.execute("SELECT 1 FROM clips WHERE state = 'publishing'").fetchone():
             return False, "a post is in progress"
-        p = self.cfg.settings.publish
-        limit = min(p.posts_per_day, POSTS_PER_DAY_CEILING)
-        since = db.iso(self.now - timedelta(hours=24))
-        recent = self.conn.execute(
-            f"SELECT submitted_at FROM clips WHERE state IN {POSTED} AND submitted_at >= ? "
-            "ORDER BY submitted_at DESC",
-            (since,),
-        ).fetchall()
-        if len(recent) >= limit:
-            return False, f"{len(recent)}/{limit} posts in the last 24 h"
-        last = self.conn.execute(
-            f"SELECT MAX(submitted_at) FROM clips WHERE state IN {POSTED}"
-        ).fetchone()[0]
-        if last and self.now - db.parse_iso(last) < timedelta(minutes=p.min_gap_minutes):
-            return False, f"less than {p.min_gap_minutes} min since the last post"
+        cid, kind = self._candidate()
+        if cid is None:
+            return False, "nothing to post"
+        at, why = posting.earliest(
+            self.cfg.settings, self.now, self.post_times(), self.queued_count(), kind
+        )
+        if at is None or at > self.now:
+            return False, f"waiting for the {why}" if at else why
         return True, "ok"
 
-    def next_clip(self) -> str | None:
-        """Retries and approved clips first, then the best new clip."""
-        now = db.iso(self.now)
-        window = self.in_window()
-        row = self.conn.execute(
-            "SELECT id FROM clips WHERE state = 'scheduled' AND "
-            "(next_attempt_at IS NULL OR next_attempt_at <= ?) "
-            + ("" if window else "AND deploy_at IS NOT NULL ")
-            + "ORDER BY deploy_at IS NULL, deploy_at, score DESC LIMIT 1",
-            (now,),
-        ).fetchone()
-        if row:
-            return row["id"]
-        if self.cfg.settings.review_mode == "hold" or not window:
-            return None
-        row = self.conn.execute(
-            "SELECT id FROM clips WHERE state = 'qa_passed' ORDER BY score DESC, created_at LIMIT 1"
-        ).fetchone()
-        return row["id"] if row else None
-
     def maybe_publish(self, r: TickReport) -> None:
-        ok, _ = self.can_publish()
-        if not ok:
-            return
         cid = self.next_clip()
         if cid:
             r.add(f"publish {cid}: {self.pub.start(cid)}")
@@ -552,7 +562,9 @@ def run_forever(sched: Scheduler, interval_s: float = 30.0) -> None:
             log.exception("tick_failed", error=str(e))
             sched.pipe.alert("tick_failed", f"{type(e).__name__}: {e}")
         while not stop["flag"] and time.monotonic() - started < interval_s:
-            time.sleep(0.5)
+            if WAKE.wait(0.5):  # "Send now" from the dashboard: tick right away
+                WAKE.clear()
+                break
     log.info("run_stopped")
 
 

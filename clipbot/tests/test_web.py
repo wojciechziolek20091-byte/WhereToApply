@@ -618,3 +618,15 @@ def test_post_anyway_from_not_posted(config_dir: Path) -> None:
     assert "video file is gone" in r.text and clip_state(config_dir, no_file) == "skipped"
     # Only clips that were not posted: a ready clip is not moved.
     assert c.post(f"/clips/{ready}/post-anyway", data={"csrf": token(c)}).status_code == 409
+
+
+def test_send_now_and_turn_off_deploy_buttons(config_dir: Path) -> None:
+    ready = seed_clip(config_dir, "qa_passed")
+    c = client(config_dir)
+    assert "Send Now" in c.get("/clips?video=aaaaaaaaaaa").text
+    r = c.post(f"/clips/{ready}/send-now", data={"csrf": token(c)}, follow_redirects=True)
+    assert "Sending now" in r.text and clip_state(config_dir, ready) == "scheduled"
+    queue = c.get("/clips?tab=ready").text
+    assert "Sending now" in queue and "Turn Off Deploy All" in queue
+    r = c.post("/queue/undeploy", data={"csrf": token(c)}, follow_redirects=True)
+    assert "Deploy turned off for 1 clip" in r.text and clip_state(config_dir, ready) == "qa_passed"

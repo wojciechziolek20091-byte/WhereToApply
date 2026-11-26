@@ -236,9 +236,14 @@ def create_app(
                 if video
                 else None
             )
+            deploy = {}
             if vrow:  # "Go to clips" from a finished video: all its clips
                 states = tuple(sorted(db.CLIP_STATES))
                 items = st.clip_views(conn, states, video_id=vrow["id"])
+                deploy = {
+                    "ready": sum(1 for c in items if c.state in ("qa_passed", "awaiting_approval")),
+                    "deployed": sum(1 for c in items if c.state == "scheduled" and c.deployed),
+                }
             else:
                 items = st.clip_views(conn, st.CLIP_TABS[tab][1])
             queue, pause = None, None
@@ -255,6 +260,7 @@ def create_app(
                 tab_counts=tab_counts,
                 items=items,
                 video=dict(vrow) if vrow else None,
+                deploy=deploy,
                 queue=queue,
                 pause=pause,
             )
@@ -618,6 +624,54 @@ def create_app(
             "Moved to Not posted. Changed your mind? Post it from there with Post Anyway.",
         )
 
+    @app.post("/clips/{clip_id}/send-now", dependencies=post_deps)
+    def send_clip_now(clip_id: str, request: Request) -> RedirectResponse:
+        """Post this clip at the bot's next step, ahead of everything else."""
+        from clipbot.publish import send_now
+        from clipbot.scheduler import WAKE
+
+        cfg = config()
+        to = _return_to(request, "/clips")
+        with database(cfg) as (conn, _):
+            row = conn.execute(
+                "SELECT render_path, post_text FROM clips WHERE id = ?", (clip_id,)
+            ).fetchone()
+            if row is None:
+                raise HTTPException(404, "no such clip")
+            if not row["render_path"] or not Path(row["render_path"]).is_file():
+                return back(to, "This clip's video is missing. Open Edit and save it.", error=True)
+            if not (row["post_text"] or "").strip():
+                return back(to, "This clip has no caption yet. Open Edit, write one and save.",
+                            error=True)  # fmt: skip
+            if not send_now(conn, clip_id, clock()):
+                return back(to, "This clip is already posting or posted.", error=True)
+        WAKE.set()
+        limit = min(cfg.settings.publish.posts_per_day, 8)
+        how = (
+            "It is saved as a practice post (practice mode is on)"
+            if cfg.settings.dry_run
+            else "It goes to TikTok within a few seconds"
+        )
+        return back(to, f"Sending now. {how}, unless the daily limit of {limit} is reached.")
+
+    @app.post("/videos/{video_id}/undeploy", dependencies=post_deps)
+    def undeploy_video(video_id: str, request: Request) -> RedirectResponse:
+        from clipbot.publish import undeploy
+
+        cfg = config()
+        with database(cfg) as (conn, _):
+            n = undeploy(conn, clock(), video_id)
+        return back(_return_to(request, "/upload"), _undeploy_msg(n))
+
+    @app.post("/queue/undeploy", dependencies=post_deps)
+    def undeploy_all(request: Request) -> RedirectResponse:
+        from clipbot.publish import undeploy
+
+        cfg = config()
+        with database(cfg) as (conn, _):
+            n = undeploy(conn, clock())
+        return back(_return_to(request, "/clips?tab=ready"), _undeploy_msg(n))
+
     @app.post("/clips/{clip_id}/post-anyway", dependencies=post_deps)
     def post_anyway(clip_id: str, request: Request) -> RedirectResponse:
         """A clip that was not posted (removed by you, failed a check, approval
@@ -964,6 +1018,15 @@ def account_status(cfg: AppConfig) -> dict[str, Any]:
         "channels": sum(1 for c in cfg.sources if c.enabled),
         "ready": is_configured(cfg),
     }
+
+
+def _undeploy_msg(n: int) -> str:
+    if not n:
+        return "Nothing was deployed."
+    return (
+        f"Deploy turned off for {n} clip{'' if n == 1 else 's'}. "
+        "They wait for the posting windows again."
+    )
 
 
 def greeting(local: datetime) -> str:

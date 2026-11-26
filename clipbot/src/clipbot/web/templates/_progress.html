@@ -33,7 +33,10 @@
       <button class="btn primary" data-busy="Deploying…"><i class="ph ph-rocket-launch" aria-hidden="true"></i>Deploy all ({{ p.deployable }})</button>
     </form>
     {% endif %}
-    <a class="btn" href="/clips?video={{ p.id }}"><i class="ph ph-squares-four" aria-hidden="true"></i>Go to clips</a>
+    {% if p.deployed %}
+    <form method="post" action="/videos/{{ p.id }}/undeploy"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Turning off…"><i class="ph ph-hand-palm" aria-hidden="true"></i>Turn Off Deploy ({{ p.deployed }})</button></form>
+    {% endif %}
+    <a class="btn" href="/clips?video={{ p.id }}"><i class="ph ph-squares-four" aria-hidden="true"></i>Go to Clips</a>
     <p class="note">{% if not p.deployable %}All of these are queued or posted.{% elif s.dry_run %}Practice mode is on: deployed clips are saved as practice posts.{% else %}Edit or reject single clips under Go to clips.{% endif %}</p>
   </div>
   {% endif %}

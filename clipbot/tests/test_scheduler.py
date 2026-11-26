@@ -146,11 +146,13 @@ def test_windows_daily_cap_and_gap_over_three_days(env) -> None:
         assert 12 <= t.hour < 14 or 17 <= t.hour < 21, t
     for i, t in enumerate(times):  # 2. never more than 3 in any rolling 24 h
         assert sum(1 for u in times[: i + 1] if t - u < timedelta(hours=24)) <= 3
-    for a, b in itertools.pairwise(times):  # 3. at least 120 min apart
-        assert b - a >= timedelta(minutes=120)
+    for a, b in itertools.pairwise(times):  # 3. 10 min apart in a window, else 120
+        same_window = a.date() == b.date() and (a.hour < 14) == (b.hour < 14)
+        assert b - a >= timedelta(minutes=10 if same_window else 120)
     assert times[0] == DAY1.replace(hour=12)  # first post as soon as the window opens
     day1 = [t for t in times if t.date() == DAY1.date()]
-    assert [t.hour for t in day1] == [12, 17, 19]
+    # 12 queued: a window takes 3 at once; the daily limit of 3 then waits a day.
+    assert [t.strftime("%H:%M") for t in day1] == ["12:00", "12:10", "12:20"]
     scores = [
         r[0]
         for r in env[2].execute(
@@ -417,9 +419,9 @@ def test_queue_order_and_times_follow_the_posting_rules(env) -> None:
     q = posting_queue(conn, cfg.settings, at8)
     assert [x["id"] for x in q] == list(reversed(ids))  # best score first
     local = [x["eta"].astimezone(WARSAW).strftime("%a %H:%M") for x in q]
-    # 12:00; +120 min gap = 14:00, window closed -> 17:00; 19:00; daily limit of 3
-    # -> next day, once the first post is 24 h old.
-    assert local == ["Mon 12:00", "Mon 17:00", "Mon 19:00", "Tue 12:00"]
+    # 4 queued: 2 in the first window, 10 min apart; then 1 per window; the
+    # daily limit of 3 moves the 4th to the next day.
+    assert local == ["Mon 12:00", "Mon 12:10", "Mon 17:00", "Tue 12:00"]
     assert q[0]["why"] == "next posting window" and "daily limit" in q[3]["why"]
 
     # Deploy all: those clips go first and skip the window.
@@ -440,3 +442,34 @@ def test_queue_tab_lists_clips_in_order(env, config_dir) -> None:
     assert "2 clips queued" in page and page.count('class="q-row') == 2
     assert page.index("q-row") < page.index("Octopus")  # rows, then hooks inside
     assert "Times are estimates" in page
+
+
+def test_send_now_skips_window_and_gap_but_not_the_daily_limit(env) -> None:
+    from clipbot.publish import send_now
+
+    ids = seed_clips(env, 3)
+    sched, poster, _, clock = build(env)
+    clock[0] = DAY1 + timedelta(hours=8)  # outside the windows
+    assert sched.next_clip() is None
+    assert send_now(env[2], ids[0], clock[0])
+    assert sched.next_clip() == ids[0]  # first, at once
+    sched.tick()
+    assert len(poster.submits) == 1
+    # A second one right after: no gap needed.
+    assert send_now(env[2], ids[1], clock[0])
+    clock[0] += timedelta(minutes=1)
+    sched.tick()  # polls the first (published), then sends the second
+    assert len(poster.submits) == 2
+
+
+def test_turn_off_deploy_puts_clips_back(env) -> None:
+    from clipbot.publish import deploy, undeploy
+
+    ids = seed_clips(env, 2)
+    sched, _, _, clock = build(env)
+    clock[0] = DAY1 + timedelta(hours=8)
+    assert deploy(env[2], "aaaaaaaaaaa", clock[0]) == 2
+    assert sched.next_clip() is not None  # deployed: posts outside windows
+    assert undeploy(env[2], clock[0], "aaaaaaaaaaa") == 2
+    states = {r[0] for r in env[2].execute("SELECT state FROM clips WHERE id IN (?, ?)", ids)}
+    assert states == {"qa_passed"} and sched.next_clip() is None  # waits for windows again

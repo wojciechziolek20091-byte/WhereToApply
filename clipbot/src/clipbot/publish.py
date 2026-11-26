@@ -94,6 +94,49 @@ def deploy(conn: sqlite3.Connection, video_id: str, now: datetime) -> int:
     return cur.rowcount
 
 
+# States a clip can be sent from: ready ones, and ones not posted (with a video).
+SENDABLE = ("qa_passed", "awaiting_approval", "scheduled", "qa_rejected", "rejected", "skipped")
+
+
+def send_now(conn: sqlite3.Connection, clip_id: str, now: datetime) -> bool:
+    """ "Send to TikTok now": this clip posts at the bot's next step, before
+    everything else, skipping the posting window and the gap between posts. The
+    daily limit still applies. False if the clip cannot be sent from its state."""
+    with db.tx(conn):
+        cur = conn.execute(
+            "UPDATE clips SET prev_state = CASE WHEN state = 'scheduled' THEN prev_state "
+            "ELSE state END, state = 'scheduled', post_now = 1, "
+            "deploy_at = COALESCE(deploy_at, ?), "
+            "state_reason = 'sent now by you', state_changed_at = ?, updated_at = ?, "
+            f"next_attempt_at = NULL WHERE id = ? AND state IN {SENDABLE}",
+            (db.iso(now), db.iso(now), db.iso(now), clip_id),
+        )
+        if cur.rowcount:
+            db.log_event(conn, "send_now", "sent to TikTok now", clip_id=clip_id)
+    return bool(cur.rowcount)
+
+
+def undeploy(conn: sqlite3.Connection, now: datetime, video_id: str | None = None) -> int:
+    """Turn "Deploy all" off: deployed clips (not yet posting) go back to where
+    they were before (ready, or waiting for approval) and wait for the posting
+    windows again. One video's clips, or every video's. Returns how many."""
+    where = "state = 'scheduled' AND deploy_at IS NOT NULL" + (
+        " AND video_id = ?" if video_id else ""
+    )
+    with db.tx(conn):
+        cur = conn.execute(
+            "UPDATE clips SET state = CASE WHEN prev_state IN ('qa_passed', 'awaiting_approval') "
+            "THEN prev_state ELSE 'qa_passed' END, prev_state = 'scheduled', deploy_at = NULL, "
+            "post_now = 0, state_reason = 'deploy turned off', state_changed_at = ?, "
+            f"updated_at = ? WHERE {where}",
+            (db.iso(now), db.iso(now), *([video_id] if video_id else [])),
+        )
+        if cur.rowcount:
+            db.log_event(conn, "undeploy", f"{cur.rowcount} clip(s) no longer deployed",
+                         video_id=video_id)  # fmt: skip
+    return cur.rowcount
+
+
 class Publisher:
     def __init__(
         self,

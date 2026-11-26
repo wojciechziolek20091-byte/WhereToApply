@@ -230,6 +230,20 @@ is not reachable; that is deliberate.
 
 ---
 
+## How posting is paced
+
+- **Posting windows** take a few clips at once, depending on how many are queued:
+  1 clip while up to 3 wait, 2 while up to 8 wait, then 3, 10 minutes apart. The
+  first post of a window keeps the usual gap (`min_gap_minutes`) from the last one.
+- **Deploy all** clips skip the windows and post one at a time, the usual gap apart.
+  **Turn Off Deploy** (on the video's clips, under a finished video on Upload, or
+  for everything in the Queue) sends them back to waiting for the windows.
+- **Send Now** on a clip posts it at the bot's next step, ahead of everything else,
+  without waiting for a window or a gap.
+- Every post counts against **posts per day** (at most 8 in any 24 hours), whatever
+  route it takes. Raise it in Settings to let bigger bursts through.
+- The **Queue** tab shows the order and the expected time of every queued clip.
+
 ## Going live
 
 1. Run a week with `dry_run: true`. Look at the clips and contact sheets, read the

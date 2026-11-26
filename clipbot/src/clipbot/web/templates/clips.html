@@ -4,7 +4,15 @@
 {% if video %}
 <div class="page-head">
   <div><h1>Clips from “{{ video.title or video.id }}”</h1><p class="muted small">Edit a clip to trim it, change its text or framing. Reject the ones you do not want.</p></div>
-  <a class="btn" href="/clips"><i class="ph ph-arrow-left" aria-hidden="true"></i>All Clips</a>
+  <div class="row-actions">
+    {% if deploy.ready %}
+    <form method="post" action="/videos/{{ video.id }}/deploy" data-confirm="Deploy {{ deploy.ready }} clip{{ '' if deploy.ready == 1 else 's' }}? They post one at a time without waiting for a posting window."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Deploying…"><i class="ph ph-rocket-launch" aria-hidden="true"></i>Deploy All ({{ deploy.ready }})</button></form>
+    {% endif %}
+    {% if deploy.deployed %}
+    <form method="post" action="/videos/{{ video.id }}/undeploy"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn" data-busy="Turning off…"><i class="ph ph-hand-palm" aria-hidden="true"></i>Turn Off Deploy ({{ deploy.deployed }})</button></form>
+    {% endif %}
+    <a class="btn ghost" href="/clips"><i class="ph ph-arrow-left" aria-hidden="true"></i>All Clips</a>
+  </div>
 </div>
 <h2 class="sr-only">{{ items|length }} clips</h2>
 {% else %}

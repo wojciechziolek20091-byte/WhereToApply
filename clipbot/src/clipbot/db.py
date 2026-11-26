@@ -193,6 +193,10 @@ MIGRATIONS: list[str] = [
     );
     CREATE INDEX clip_views_clip ON clip_views(clip_id, ts);
     """,
+    # 4: "Send to TikTok now"
+    """
+    ALTER TABLE clips ADD COLUMN post_now INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 

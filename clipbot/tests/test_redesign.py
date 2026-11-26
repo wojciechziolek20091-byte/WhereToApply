@@ -204,7 +204,7 @@ def test_showcase_and_editor_pages(env, monkeypatch, tmp_path) -> None:
     )
     c = TestClient(app, base_url="http://127.0.0.1:8080")
     frag = c.get("/progress").text
-    assert 'class="showcase"' in frag and "Deploy all (1)" in frag and "Go to clips" in frag
+    assert 'class="showcase"' in frag and "Deploy all (1)" in frag and "Go to Clips" in frag
     cid = p.conn.execute("SELECT id FROM clips").fetchone()[0]
     assert "Edit" in c.get(f"/clips?video={VID}").text
 

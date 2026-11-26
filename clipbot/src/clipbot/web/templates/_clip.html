@@ -12,7 +12,7 @@
   </div>
   <div class="clip-body">
     <div class="clip-meta">
-      <span class="tag st-{{ c.state }}">{{ c.label }}</span>
+      <span><span class="tag st-{{ c.state }}">{{ 'sending now' if c.post_now and c.state == 'scheduled' else c.label }}</span>{% if c.deployed and c.state == 'scheduled' and not c.post_now %} <span class="tag st-scheduled">deployed</span>{% endif %}</span>
       {% if c.views is not none %}<span class="num" title="TikTok views"><i class="ph ph-eye" aria-hidden="true"></i> {{ compact(c.views) }}</span>{% else %}<span class="num muted" title="How likely a viewer watches to the end, according to the AI">Score {{ c.score }}</span>{% endif %}
     </div>
     <h3 id="h-{{ c.id }}" class="clip-hook">{{ c.hook }}</h3>
@@ -35,6 +35,9 @@
     <div class="clip-actions">
       {% if c.state not in ('publishing', 'published', 'rendering') %}
       <a class="btn" href="/clips/{{ c.id }}/edit"><i class="ph ph-pencil-simple" aria-hidden="true"></i>Edit</a>
+      {% endif %}
+      {% if c.state in ('qa_passed', 'awaiting_approval', 'scheduled') and c.has_video and not c.post_now %}
+      <form method="post" action="/clips/{{ c.id }}/send-now" data-confirm="Send this clip to TikTok now? It posts at the bot's next step, ahead of the queue."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Sending…"><i class="ph ph-paper-plane-right" aria-hidden="true"></i>Send Now</button></form>
       {% endif %}
       {% if c.state == 'awaiting_approval' %}
       <form method="post" action="/clips/{{ c.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Approving…"><i class="ph ph-check" aria-hidden="true"></i>Approve</button></form>
