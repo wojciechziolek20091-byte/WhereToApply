@@ -50,6 +50,8 @@ log = get_logger(__name__)
 
 HERE = Path(__file__).parent
 USERNAME = "clipbot"
+# Clips that were not posted but can still be (their video was made).
+POST_ANYWAY_STATES = ("qa_rejected", "rejected", "skipped")
 
 
 class UnsafeBind(RuntimeError):
@@ -603,7 +605,41 @@ def create_app(
         clip_action(
             clip_id, {"awaiting_approval", "qa_passed", "scheduled"}, "rejected", "removed by you"
         )
-        return back(_return_to(request, "/clips"), "Removed. It will not be posted.")
+        return back(
+            _return_to(request, "/clips"),
+            "Moved to Not posted. Changed your mind? Post it from there with Post Anyway.",
+        )
+
+    @app.post("/clips/{clip_id}/post-anyway", dependencies=post_deps)
+    def post_anyway(clip_id: str, request: Request) -> RedirectResponse:
+        """A clip that was not posted (removed by you, failed a check, approval
+        expired) goes into the posting queue after all, like an approved clip."""
+        cfg = config()
+        with database(cfg) as (conn, _):
+            row = conn.execute(
+                "SELECT render_path, post_text FROM clips WHERE id = ?", (clip_id,)
+            ).fetchone()
+        if row is None:
+            raise HTTPException(404, "no such clip")
+        if not row["render_path"] or not Path(row["render_path"]).is_file():
+            return back(
+                _return_to(request, "/clips?tab=rejected"),
+                "This clip's video file is gone. Open Edit and save it to make it again.",
+                error=True,
+            )
+        if not (row["post_text"] or "").strip():
+            return back(
+                _return_to(request, "/clips?tab=rejected"),
+                "This clip has no caption yet. Open Edit, write one and save.",
+                error=True,
+            )
+        clip_action(clip_id, set(POST_ANYWAY_STATES), "scheduled", "posted anyway by you")
+        when = (
+            "as a practice post (practice mode is on)"
+            if cfg.settings.dry_run
+            else ("in the next open posting window")
+        )
+        return back(_return_to(request, "/clips?tab=rejected"), f"Queued. It posts {when}.")
 
     @app.post("/settings", dependencies=post_deps)
     async def save_settings(request: Request) -> RedirectResponse:

@@ -600,3 +600,21 @@ def test_progress_stages_waits_and_outcomes(config_dir: Path) -> None:
     assert jobs["v_ready0001"]["outcome"] == "ready"
     assert jobs["v_ready0001"]["detail"] == "1 clip ready"
     assert jobs["v_failed001"]["outcome"] == "failed"
+
+
+def test_post_anyway_from_not_posted(config_dir: Path) -> None:
+    rejected = seed_clip(config_dir, "rejected")
+    failed_checks = seed_clip(config_dir, "qa_rejected")
+    ready = seed_clip(config_dir, "qa_passed")
+    no_file = seed_clip(config_dir, "skipped", render=False)
+    c = client(config_dir)
+    page = c.get("/clips?tab=rejected").text
+    assert page.count("Post Anyway") == 2  # the clip without a video file has none
+    for cid in (rejected, failed_checks):
+        r = c.post(f"/clips/{cid}/post-anyway", data={"csrf": token(c)}, follow_redirects=True)
+        assert "Queued. It posts as a practice post" in r.text
+        assert clip_state(config_dir, cid) == "scheduled"
+    r = c.post(f"/clips/{no_file}/post-anyway", data={"csrf": token(c)}, follow_redirects=True)
+    assert "video file is gone" in r.text and clip_state(config_dir, no_file) == "skipped"
+    # Only clips that were not posted: a ready clip is not moved.
+    assert c.post(f"/clips/{ready}/post-anyway", data={"csrf": token(c)}).status_code == 409

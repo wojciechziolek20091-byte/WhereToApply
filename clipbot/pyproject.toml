@@ -1,6 +1,6 @@
 [project]
 name = "clipbot"
-version = "0.2.3"
+version = "0.2.4"
 description = "Cut rights-cleared long YouTube videos into captioned vertical clips and post them to one TikTok account."
 readme = "README.md"
 license = "AGPL-3.0-only"

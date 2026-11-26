@@ -40,7 +40,10 @@
       <form method="post" action="/clips/{{ c.id }}/approve"><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Approving…"><i class="ph ph-check" aria-hidden="true"></i>Approve</button></form>
       {% endif %}
       {% if c.state in ('awaiting_approval', 'qa_passed', 'scheduled') %}
-      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Remove this clip? It will never be posted."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" data-busy="Removing…"><i class="ph ph-x" aria-hidden="true"></i>{{ 'Reject' if c.state == 'awaiting_approval' else "Don't Post" }}</button></form>
+      <form method="post" action="/clips/{{ c.id }}/reject" data-confirm="Don't post this clip? It moves to Not posted, where you can still post it later."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" data-busy="Removing…"><i class="ph ph-x" aria-hidden="true"></i>{{ 'Reject' if c.state == 'awaiting_approval' else "Don't Post" }}</button></form>
+      {% endif %}
+      {% if c.state in ('qa_rejected', 'rejected', 'skipped') and c.has_video %}
+      <form method="post" action="/clips/{{ c.id }}/post-anyway" data-confirm="Post this clip after all? It joins the posting queue like an approved clip."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn primary" data-busy="Queuing…"><i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>Post Anyway</button></form>
       {% endif %}
       {% if c.post_url %}<a class="btn ghost" href="{{ c.post_url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open on TikTok</a>{% endif %}
     </div>
