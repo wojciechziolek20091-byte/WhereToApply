@@ -16,7 +16,9 @@
 </nav>
 <h2 class="sr-only">{{ tabs[tab][0] }}</h2>
 {% endif %}
-{% if items %}
+{% if queue is not none %}
+{% include "_queue.html" %}
+{% elif items %}
 <div class="clips">{% for c in items %}{% include "_clip.html" %}{% endfor %}</div>
 {% else %}
 <p class="panel muted">No clips here yet. {% if tab in ('ready', 'review') %}Clips appear once a video is processed and passes its checks.{% endif %}</p>

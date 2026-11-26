@@ -403,3 +403,40 @@ def test_waits_for_setup_without_keys(env) -> None:
     rep = Scheduler(pipe, pub, FakeNotifier()).tick()
     assert any("waiting for setup: add the AI and YouTube key" in a for a in rep.actions)
     assert poster.submits == []
+
+
+# ---------------------------------------------------------------- queue view
+
+
+def test_queue_order_and_times_follow_the_posting_rules(env) -> None:
+    from clipbot.web.status import posting_queue
+
+    cfg, _, conn = env
+    ids = seed_clips(env, 4)  # scores 70..73, all ready to post
+    at8 = DAY1 + timedelta(hours=8)  # 08:00, before the 12-14 window
+    q = posting_queue(conn, cfg.settings, at8)
+    assert [x["id"] for x in q] == list(reversed(ids))  # best score first
+    local = [x["eta"].astimezone(WARSAW).strftime("%a %H:%M") for x in q]
+    # 12:00; +120 min gap = 14:00, window closed -> 17:00; 19:00; daily limit of 3
+    # -> next day, once the first post is 24 h old.
+    assert local == ["Mon 12:00", "Mon 17:00", "Mon 19:00", "Tue 12:00"]
+    assert q[0]["why"] == "next posting window" and "daily limit" in q[3]["why"]
+
+    # Deploy all: those clips go first and skip the window.
+    conn.execute(
+        "UPDATE clips SET state = 'scheduled', deploy_at = ? WHERE id = ?", (db.iso(at8), ids[0])
+    )
+    q = posting_queue(conn, cfg.settings, at8)
+    assert q[0]["id"] == ids[0] and q[0]["eta"] == at8 and q[0]["deployed"]
+    assert q[1]["eta"].astimezone(WARSAW).strftime("%H:%M") == "12:00"
+
+
+def test_queue_tab_lists_clips_in_order(env, config_dir) -> None:
+    from tests.test_web import client, seed_clip
+
+    seed_clip(config_dir, "qa_passed")
+    seed_clip(config_dir, "scheduled")
+    page = client(config_dir).get("/clips?tab=ready").text
+    assert "2 clips queued" in page and page.count('class="q-row') == 2
+    assert page.index("q-row") < page.index("Octopus")  # rows, then hooks inside
+    assert "Times are estimates" in page

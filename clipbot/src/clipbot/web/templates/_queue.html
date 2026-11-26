@@ -1,0 +1,50 @@
+{# The Queue tab: every clip that will post, in order, with an estimated time. #}
+{% set pub = s.publish %}
+{% set timed = queue|selectattr('eta')|list %}
+<section class="queue" aria-labelledby="queue-h">
+  <div class="queue-head">
+    <div>
+      <h2 id="queue-h">{{ timed|length }} clip{{ '' if timed|length == 1 else 's' }} queued</h2>
+      <p class="muted small">
+        {% if timed %}The last one posts <time datetime="{{ timed[-1].eta.isoformat() }}" data-fmt="weekday-time">{{ timed[-1].eta.astimezone(s.tz).strftime('%a %H:%M') }}</time>. {% endif %}
+        Up to {{ [pub.posts_per_day, 8]|min }} a day, at least {{ pub.min_gap_minutes }}&nbsp;min apart, in {% for w in pub.windows %}{{ w.start.strftime('%H:%M') }}-{{ w.end.strftime('%H:%M') }}{{ ', ' if not loop.last }}{% endfor %}.
+        Times are estimates. <a href="/settings">Change in Settings</a>
+      </p>
+    </div>
+  </div>
+  {% if pause and pause.paused %}
+  <p class="notice bad">The bot is paused{% if pause.reason %} ({{ pause.reason }}){% endif %}. {% if pause.until %}Times below start when it resumes.{% else %}Nothing posts until you resume; times below assume you resume now.{% endif %}</p>
+  {% endif %}
+
+  {% if queue %}
+  <ol class="queue-list">
+    {% for q in queue %}
+    <li class="q-row{% if q.state == 'publishing' %} q-now{% endif %}">
+      <span class="q-pos num" aria-label="Number {{ loop.index }}">{{ loop.index }}</span>
+      <a class="q-thumb" href="/clips?video={{ q.video_id }}#clip-{{ q.id }}" tabindex="-1" aria-hidden="true">{% if q.has_video %}<img src="/clips/{{ q.id }}/poster" alt="" width="54" height="96" loading="lazy" decoding="async">{% endif %}</a>
+      <div class="q-text">
+        <a class="q-hook" href="/clips?video={{ q.video_id }}#clip-{{ q.id }}">{{ q.hook }}</a>
+        <p class="muted small clamp">{{ q.video_title }}, {{ '%.0f'|format(q.length) }}&nbsp;s{% if q.deployed %} <span class="tag st-scheduled">Deployed</span>{% elif q.state == 'scheduled' %} <span class="tag">Approved</span>{% endif %}</p>
+      </div>
+      <div class="q-when">
+        {% if q.state == 'publishing' %}
+          <b class="accent">Posting now</b>
+        {% elif q.eta %}
+          <b><time datetime="{{ q.eta.isoformat() }}" data-fmt="weekday-time">{{ q.eta.astimezone(s.tz).strftime('%a %H:%M') }}</time></b>
+          <span class="muted small"><time datetime="{{ q.eta.isoformat() }}" data-fmt="relative">{{ ago(q.eta, now) }}</time>, {{ q.why }}</span>
+        {% else %}
+          <b class="warn-text">Not scheduled</b><span class="muted small">{{ q.why|capitalize }}</span>
+        {% endif %}
+      </div>
+      <div class="q-actions">
+        {% if q.state in ('qa_passed', 'scheduled') %}
+        <form method="post" action="/clips/{{ q.id }}/reject" data-confirm="Take this clip out of the queue? It moves to Not posted, where you can still post it later."><input type="hidden" name="csrf" value="{{ csrf }}"><button class="btn ghost" data-busy="Removing…" aria-label="Don't post {{ q.hook }}"><i class="ph ph-x" aria-hidden="true"></i><span class="hide-sm">Don't Post</span></button></form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p class="panel muted">The queue is empty. Clips join it once they are made and pass their checks, or when you use Deploy all or Post Anyway. <a href="/upload">Upload clips</a></p>
+  {% endif %}
+</section>

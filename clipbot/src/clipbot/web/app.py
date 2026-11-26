@@ -241,6 +241,12 @@ def create_app(
                 items = st.clip_views(conn, states, video_id=vrow["id"])
             else:
                 items = st.clip_views(conn, st.CLIP_TABS[tab][1])
+            queue, pause = None, None
+            if tab == "ready" and not vrow:  # the Queue tab: order and times, not cards
+                pause = db.get_pause(conn, clock())
+                queue = st.posting_queue(
+                    conn, cfg.settings, clock(), pause.until if pause.paused else None
+                )
             return page(
                 request,
                 "clips.html",
@@ -249,6 +255,8 @@ def create_app(
                 tab_counts=tab_counts,
                 items=items,
                 video=dict(vrow) if vrow else None,
+                queue=queue,
+                pause=pause,
             )
 
     @app.get("/videos", response_class=HTMLResponse, dependencies=deps)

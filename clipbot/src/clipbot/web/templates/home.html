@@ -10,7 +10,7 @@
         {%- if bot.paused %}Paused: {{ bot.pause_reason }}{% if bot.pause_until %}, until <time datetime="{{ bot.pause_until.isoformat() }}" data-fmt="relative">{{ ago(bot.pause_until, now) }}</time>{% endif %}. {% endif -%}
         {%- if working %}{{ working }} video{{ '' if working == 1 else 's' }} being clipped. {% endif -%}
         {{ ready_count }} clip{{ '' if ready_count == 1 else 's' }} ready to post.
-        {% if next_why == 'now' %}Next post: now.{% else %}Next post <time datetime="{{ next_post.isoformat() }}" data-fmt="weekday-time">{{ next_post.astimezone(s.tz).strftime('%a %H:%M') }}</time>.{% endif %}
+        {% if next_why == 'now' %}Next post: now.{% else %}Next post <time datetime="{{ next_post.isoformat() }}" data-fmt="weekday-time">{{ next_post.astimezone(s.tz).strftime('%a %H:%M') }}</time>.{% endif %} <a href="/clips?tab=ready">See the queue</a>
       </p>
     </div>
     <div class="bot-chip {{ state }}" data-poll="/api/status" role="status">
