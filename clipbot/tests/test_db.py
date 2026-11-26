@@ -147,3 +147,36 @@ def test_process_lock(tmp_path: Path) -> None:
     p.start()
     p.join(30)
     assert q.get(timeout=5) == "acquired"
+
+
+def test_many_connections_upgrade_an_old_database_at_once(tmp_path: Path) -> None:
+    """After an update, the dashboard, scheduler and workers all open the database
+    at once; the schema upgrade must run exactly once and none of them may fail
+    (this used to show "Internal Server Error")."""
+    import sqlite3
+    import threading
+
+    path = tmp_path / "old.sqlite3"
+    old = sqlite3.connect(path, isolation_level=None)
+    old.executescript(db.MIGRATIONS[0])
+    old.execute("PRAGMA user_version = 1")
+    old.close()
+    go = threading.Barrier(8)
+    errors: list[str] = []
+
+    def open_it() -> None:
+        go.wait()
+        try:
+            db.connect(path).close()
+        except Exception as e:  # pragma: no cover - the failure being tested
+            errors.append(repr(e))
+
+    threads = [threading.Thread(target=open_it) for _ in range(8)]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    assert errors == []
+    conn = db.connect(path)
+    assert db.schema_version(conn) == len(db.MIGRATIONS)
+    assert "post_now" in [r[1] for r in conn.execute("PRAGMA table_info(clips)")]

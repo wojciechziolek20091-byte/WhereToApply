@@ -15,6 +15,8 @@ import json
 import os
 import sqlite3
 import sys
+import threading
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -204,19 +206,50 @@ def schema_version(conn: sqlite3.Connection) -> int:
     return int(conn.execute("PRAGMA user_version").fetchone()[0])
 
 
+def _statements(script: str) -> list[str]:
+    """Split a migration script into single statements (comments may hold ';')."""
+    out, cur = [], ""
+    for line in script.splitlines(keepends=True):
+        cur += line
+        if sqlite3.complete_statement(cur):
+            if cur.strip():
+                out.append(cur.strip())
+            cur = ""
+    if cur.strip() and not all(ln.strip().startswith("--") for ln in cur.strip().splitlines()):
+        out.append(cur.strip())
+    return out
+
+
 def migrate(conn: sqlite3.Connection) -> int:
     """Apply pending migrations. Each one runs in its own transaction together with
-    the user_version bump, so a crash mid-migration leaves the old version intact."""
+    the user_version bump, so a crash mid-migration leaves the old version intact.
+
+    Safe when several connections (dashboard, bot, workers, another clipbot
+    process) open the database at the same moment after an update: each step takes
+    the write lock first and only then checks whether it is still needed, so a
+    migration never runs twice."""
     current = schema_version(conn)
     if current > len(MIGRATIONS):
         raise RuntimeError(
             f"database schema v{current} is newer than this code (v{len(MIGRATIONS)})"
         )
     for version in range(current + 1, len(MIGRATIONS) + 1):
-        script = MIGRATIONS[version - 1]
-        # executescript() commits implicitly, so wrap the whole thing ourselves.
-        conn.executescript(f"BEGIN;\n{script}\nPRAGMA user_version = {version};\nCOMMIT;")
+        conn.execute("BEGIN IMMEDIATE")  # waits (busy_timeout) for other writers
+        try:
+            if schema_version(conn) >= version:  # someone else just did it
+                conn.execute("COMMIT")
+                continue
+            for stmt in _statements(MIGRATIONS[version - 1]):
+                conn.execute(stmt)
+            conn.execute(f"PRAGMA user_version = {version}")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
     return schema_version(conn)
+
+
+_connect_lock = threading.Lock()
 
 
 def connect(path: Path | str) -> sqlite3.Connection:
@@ -225,12 +258,24 @@ def connect(path: Path | str) -> sqlite3.Connection:
     # isolation_level=None: we manage transactions explicitly with `tx()`.
     conn = sqlite3.connect(str(path), isolation_level=None, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA busy_timeout = 30000")
-    if str(path) != ":memory:":
-        conn.execute("PRAGMA journal_mode = WAL")
-        conn.execute("PRAGMA synchronous = NORMAL")
-    migrate(conn)
+    conn.execute("PRAGMA foreign_keys = ON")
+    # Opening and upgrading are done one connection at a time in this process;
+    # across processes the write lock in migrate() and the busy timeout do it.
+    with _connect_lock:
+        for attempt in range(5):
+            try:
+                if str(path) != ":memory:":
+                    conn.execute("PRAGMA journal_mode = WAL")
+                    conn.execute("PRAGMA synchronous = NORMAL")
+                migrate(conn)
+                break
+            except sqlite3.OperationalError as e:
+                retryable = "locked" in str(e) or "busy" in str(e)
+                if not retryable or attempt == 4:
+                    conn.close()
+                    raise
+                time.sleep(0.2 * (attempt + 1))
     return conn
 
 

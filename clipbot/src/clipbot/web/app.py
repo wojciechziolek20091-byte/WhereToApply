@@ -100,6 +100,30 @@ def create_app(
 
     app = FastAPI(title="clip mob", docs_url=None, redoc_url=None, openapi_url=None)
     app.mount("/static", StaticFiles(directory=str(HERE / "static")), name="static")
+
+    @app.exception_handler(Exception)
+    async def unexpected(request: Request, exc: Exception) -> HTMLResponse:
+        """Log what broke and show a page that says what to do, instead of a bare
+        "Internal Server Error"."""
+        log.error(
+            "dashboard_error",
+            path=request.url.path,
+            error=f"{type(exc).__name__}: {exc}",
+            exc_info=exc,
+        )
+        if request.headers.get("x-csrf-token") or request.url.path.endswith(".json"):
+            return JSONResponse({"ok": False, "error": "Something went wrong. Try again."}, 500)
+        body = (
+            "<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+            "<title>clip mob</title><body style='font:16px system-ui;max-width:34rem;"
+            "margin:15vh auto;padding:0 16px;color:#222'><h1 style='font-size:1.4rem'>"
+            "Something went wrong</h1><p>This page hit an error. Reload it in a few seconds; "
+            "if it keeps happening, close clip mob and start it again.</p><p style='color:#666;"
+            "font-size:.9rem'>Details are saved in the log file in the <b>data/logs</b> folder: "
+            f"{type(exc).__name__}.</p><p><a href='/'>Back to home</a></p></body>"
+        )
+        return HTMLResponse(body, 500)
+
     basic = HTTPBasic(auto_error=False)
 
     def config() -> AppConfig:
