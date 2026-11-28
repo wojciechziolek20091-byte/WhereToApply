@@ -48,7 +48,7 @@ publish:
   posts_per_day: null      # daily limit; null = no limit
   min_gap_minutes: 120
   windows: ["12:00-14:00", "17:00-21:00"]
-retention: {raw_days: 3, render_days: 14}
+retention: {raw_days: 3, render_days: 14}  # days to keep downloads / renders once finished
 safety:
   min_free_disk_gb: 5
   strict_qa: false         # true: also hold back clips with quiet audio, pauses, still frames

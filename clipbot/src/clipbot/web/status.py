@@ -437,9 +437,11 @@ def progress(conn: sqlite3.Connection, now: datetime, limit: int = 4) -> list[di
                 item["detail"] = f"{good} clip{'' if good == 1 else 's'} ready"
                 item["clips"] = [
                     {"id": c["id"], "hook": c["hook"], "state": c["state"],
-                     "length": (c["end_ms"] - c["start_ms"]) / 1000}
+                     "length": (c["end_ms"] - c["start_ms"]) / 1000,
+                     "has_video": bool(c["render_path"]) and Path(c["render_path"]).is_file()}
                     for c in conn.execute(
-                        "SELECT id, hook, state, start_ms, end_ms FROM clips WHERE video_id = ? "
+                        "SELECT id, hook, state, start_ms, end_ms, render_path FROM clips "
+                        "WHERE video_id = ? "
                         "AND created_at >= ? AND state IN ('qa_passed', 'awaiting_approval', "
                         "'scheduled', 'publishing', 'published') ORDER BY score DESC",
                         (r["id"], meta.get("round_since", "")),

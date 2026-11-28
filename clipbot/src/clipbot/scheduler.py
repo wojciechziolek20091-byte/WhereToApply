@@ -1,7 +1,8 @@
 """The run loop (brief 4.9 and 7).
 
 Each tick, in order:
-1. safety rails: PAUSE file, disk space, QA rejection rate
+1. once a day, delete old downloads and renders (cleanup.py); then the safety
+   rails: PAUSE file, disk space, QA rejection rate
 2. poll clips that are being published (always, even when paused: polling never posts)
 3. forward new alerts to the notifier; send the daily digest at 20:00
 4. discover new uploads every `poll_minutes`
@@ -24,7 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from clipbot import db, posting, runner, stats
+from clipbot import cleanup, db, posting, runner, stats
 from clipbot.config import AppConfig
 from clipbot.logging import get_logger
 from clipbot.notify import Notifier
@@ -273,6 +274,18 @@ class Scheduler:
             db.log_event(self.conn, "digest", text)
         r.add("digest sent")
 
+    def maybe_cleanup(self, r: TickReport) -> None:
+        """Once a day, delete downloads and renders older than the retention
+        settings. Runs even while paused: it frees disk space and never posts."""
+        today = self.local().date().isoformat()
+        if db.kv_get(self.conn, "last_cleanup") == today:
+            return
+        with db.tx(self.conn):  # set first: a failing cleanup is not retried every tick
+            db.kv_set(self.conn, "last_cleanup", today)
+        res = cleanup.cleanup(self.conn, self.paths, self.cfg.settings.retention, self.now)
+        if res.files:
+            r.add(res.summary())
+
     def maybe_update_ytdlp(self, r: TickReport) -> None:
         """YouTube changes break yt-dlp regularly: update the standalone copy daily."""
         from clipbot.sources.providers.ytdlp import binary_path, ensure_binary, update_binary
@@ -509,6 +522,7 @@ class Scheduler:
             r.add("settings reloaded")
         with db.tx(self.conn):
             db.kv_set(self.conn, "last_tick_at", db.iso(self.now))
+        self.maybe_cleanup(r)
         self.check_rails(r)
         self.poll_publishing(r)
         paused, why = self.paused()
