@@ -52,5 +52,16 @@
       {% for label, url in c.posts %}<a class="btn ghost" href="{{ url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>{{ label }}</a>{% endfor %}
       {% elif c.post_url %}<a class="btn ghost" href="{{ c.post_url }}" target="_blank" rel="noopener"><i class="ph ph-arrow-square-out" aria-hidden="true"></i>Open on TikTok</a>{% endif %}
     </div>
+    {% if c.state == 'published' %}
+    <details class="add-link"{% if not c.post_url and not c.posts %} open{% endif %}>
+      <summary class="small">{% if c.post_url or c.posts %}Add a link from another account{% else %}Add the TikTok link to count its views{% endif %}</summary>
+      <form method="post" action="/clips/{{ c.id }}/tiktok-link" class="link-row">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="sr-only" for="tl-{{ c.id }}">TikTok link</label>
+        <input id="tl-{{ c.id }}" name="url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://www.tiktok.com/@you/video/…" required>
+        <button class="btn" data-busy="Saving…">Save</button>
+      </form>
+    </details>
+    {% endif %}
   </div>
 </article>

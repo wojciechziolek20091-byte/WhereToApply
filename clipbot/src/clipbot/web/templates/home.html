@@ -30,7 +30,9 @@
       <div>
         <p class="stat" title="{{ stats.views }} views">{{ compact(stats.views) }}</p>
         <p class="stat-note">
-          {% if stats.tracked == 0 %}
+          {% if stats.tracked == 0 and stats.untracked %}
+            Views are counted from each clip's TikTok link.
+          {% elif stats.tracked == 0 %}
             Views show up here once clips are posted to TikTok{% if s.dry_run %} (practice mode is on){% endif %}.
           {% elif stats.views_prev %}
             {% set pct = ((stats.views - stats.views_prev) / stats.views_prev * 100)|round|int %}
@@ -38,6 +40,7 @@
           {% else %}
             Gained this month across all {{ stats.tracked }} posted clip{{ '' if stats.tracked == 1 else 's' }}.
           {% endif %}
+          {% if stats.untracked %}<a href="/clips?tab=posted">{{ stats.untracked }} posted clip{{ '' if stats.untracked == 1 else 's' }} without a TikTok link</a> {{ 'is' if stats.untracked == 1 else 'are' }} not counted yet.{% endif %}
           {% if stats.views_read_at %}Updated <time datetime="{{ stats.views_read_at.isoformat() }}" data-fmt="relative">{{ ago(stats.views_read_at, now) }}</time>.{% endif %}
         </p>
       </div>

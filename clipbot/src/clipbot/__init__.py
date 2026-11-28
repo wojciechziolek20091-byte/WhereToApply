@@ -1,6 +1,6 @@
 import os as _os
 
-__version__ = "0.2.10"
+__version__ = "0.2.11"
 
 # Notices from the model downloader that need no action from the user.
 _os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")

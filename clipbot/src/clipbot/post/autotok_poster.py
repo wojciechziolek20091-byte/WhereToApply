@@ -276,6 +276,42 @@ def start_login(home: Path, timeout: float = 600, account: str = ACCOUNT, label:
 # --------------------------------------------------------------------------- poster
 
 
+_POST_ID_KEYS = ("item_id", "itemId", "aweme_id", "awemeId", "post_id", "postId")
+
+
+def public_post_id(result: Any) -> str:
+    """The public TikTok post number (the one in tiktok.com/@user/video/<number>)
+    from what the upload returned, or "" if TikTok did not say.
+
+    autotok's `video_id` is TikTok's storage id for the uploaded file, not the
+    post: views can only be read with the post number, which TikTok puts
+    somewhere in the publish response."""
+
+    def walk(node: Any, depth: int = 0) -> str:
+        if depth > 6:
+            return ""
+        if isinstance(node, dict):
+            for k in _POST_ID_KEYS:
+                v = str(node.get(k) or "")
+                if v.isdigit() and 15 <= len(v) <= 21:
+                    return v
+            for v in node.values():
+                found = walk(v, depth + 1)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for v in node[:20]:
+                found = walk(v, depth + 1)
+                if found:
+                    return found
+        return ""
+
+    direct = str(getattr(result, "video_id", "") or "")
+    if direct.isdigit() and 15 <= len(direct) <= 21:
+        return direct
+    return walk(getattr(result, "response", None) or {})
+
+
 def clip_key(request_id: str) -> str:
     """The part of a request id that names the clip: "cb-<clip>-<attempt>" gives
     "cb-<clip>-", so a retry (a new attempt) still sees what earlier attempts
@@ -378,8 +414,18 @@ class AutotokPoster:
                 if several and err.code == "tiktok_reconnect_required":
                     set_problem(self.home, acct.name, "Signed out of TikTok: log in again")
                 continue
-            video_id = str(getattr(result, "video_id", "") or "")
-            self._write(request_id, {"state": "done", "video_id": video_id}, acct.name)
+            entry: dict[str, Any] = {
+                "state": "done",
+                "video_id": public_post_id(result),  # "" when TikTok did not say
+                "upload_id": str(getattr(result, "video_id", "") or ""),
+            }
+            raw = getattr(result, "response", None)
+            if isinstance(raw, dict):  # kept to find the post number if it moves
+                text = json.dumps(raw)[:20000]
+                entry["response"] = json.loads(text) if len(text) < 20000 else text
+            self._write(request_id, entry, acct.name)
+            if not entry["video_id"]:
+                log.warning("autotok_no_post_id", account=acct.name, keys=sorted(raw or {})[:20])
             if acct.problem:
                 set_problem(self.home, acct.name, "")
         posted = [

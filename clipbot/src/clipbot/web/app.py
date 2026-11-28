@@ -658,6 +658,21 @@ def create_app(
             "Moved to Not posted. Changed your mind? Post it from there with Post Anyway.",
         )
 
+    @app.post("/clips/{clip_id}/tiktok-link", dependencies=post_deps)
+    async def add_tiktok_link(clip_id: str, request: Request) -> RedirectResponse:
+        """Paste the TikTok link of a posted clip, so its views are counted."""
+        form = await request.form()
+        to = _return_to(request, "/clips?tab=posted")
+        cfg = config()
+        with database(cfg) as (conn, _):
+            try:
+                views = stats_mod.add_link(conn, clip_id, str(form.get("url", "")), clock())
+            except ValueError as e:
+                return back(to, str(e), error=True)
+        if views is None:
+            return back(to, "Link saved. Its views are read within the next hour.")
+        return back(to, f"Link saved: {views:,} views so far, counted in Home.")
+
     @app.post("/clips/{clip_id}/send-now", dependencies=post_deps)
     def send_clip_now(clip_id: str, request: Request) -> RedirectResponse:
         """Post this clip at the bot's next step, ahead of everything else."""

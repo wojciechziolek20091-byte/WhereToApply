@@ -121,6 +121,54 @@ def refresh_views(
     return done
 
 
+def add_link(conn: sqlite3.Connection, clip_id: str, url: str, now: datetime,
+             fetch: Any = None) -> int | None:  # fmt: skip
+    """Attach a TikTok post link to a posted clip (for posts made before clip mob
+    could read the post number, or a post on another account) and read its views
+    once. Returns the clip's views now, or None if they could not be read."""
+    vid = tiktok_video_id(url)
+    if vid is None:
+        raise ValueError(
+            "That is not a TikTok video link. Open the video on TikTok and copy its address."
+        )
+    url = f"https://www.tiktok.com/@_/video/{vid}"
+    row = conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+    if row is None or row["state"] != "published":
+        raise ValueError("Only posted clips can get a TikTok link.")
+    if vid in clip_ids(row):
+        raise ValueError("This clip already has that link.")
+    try:
+        posts = json.loads(row["post_urls"] or "[]")
+    except ValueError:
+        posts = []
+    if not isinstance(posts, list):
+        posts = []
+    posts = [p for p in posts if isinstance(p, dict) and tiktok_video_id(p.get("url"))]
+    first = row["post_url"] if tiktok_video_id(row["post_url"]) else None
+    if first and not posts:
+        posts = [{"label": "TikTok", "url": first}]
+    if first:
+        posts.append({"label": f"Account {len(posts) + 1}", "url": url})
+    with db.tx(conn):
+        conn.execute(
+            "UPDATE clips SET post_url = ?, post_urls = ?, views_at = NULL WHERE id = ?",
+            (first or url, json.dumps(posts) if len(posts) > 1 else None, clip_id),
+        )
+    row = conn.execute("SELECT * FROM clips WHERE id = ?", (clip_id,)).fetchone()
+    views = clip_views_now(row, fetch)
+    if views is not None:
+        with db.tx(conn):
+            conn.execute(
+                "UPDATE clips SET views = ?, views_at = ? WHERE id = ?",
+                (views, db.iso(now), clip_id),
+            )
+            conn.execute(
+                "INSERT INTO clip_views(clip_id, ts, views) VALUES (?, ?, ?)",
+                (clip_id, db.iso(now), views),
+            )
+    return views
+
+
 def month_start(now: datetime, tz: Any) -> datetime:
     local = now.astimezone(tz)
     return local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -155,6 +203,10 @@ def home_stats(conn: sqlite3.Connection, now: datetime, tz: Any) -> dict[str, An
         "AND published_at < ?",
         (db.iso(prev), db.iso(start)),
     ).fetchone()[0]
+    untracked = conn.execute(
+        "SELECT COUNT(*) FROM clips WHERE state = 'published' AND (post_url IS NULL OR "
+        "post_url NOT LIKE '%tiktok.com/%/video/%')"
+    ).fetchone()[0]
     tracked = conn.execute(
         "SELECT COUNT(*) FROM clips WHERE state = 'published' AND post_url LIKE "
         "'%tiktok.com/%/video/%'"
@@ -170,6 +222,7 @@ def home_stats(conn: sqlite3.Connection, now: datetime, tz: Any) -> dict[str, An
         "posted_prev": posted_prev,
         "per_post": round(views / posted) if posted else None,
         "tracked": tracked,
+        "untracked": untracked,
         "views_read_at": db.parse_iso(last_read) if last_read else None,
     }
 
